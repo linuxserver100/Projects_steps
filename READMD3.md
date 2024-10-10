@@ -146,3 +146,151 @@ Here's a step-by-step guide to set up a continuous deployment pipeline with GitL
 
 ### Conclusion
 This guide provides a comprehensive setup for a continuous deployment pipeline using GitLab CI/CD on Ubuntu. Adjust the `.gitlab-ci.yml` file as needed for your specific application requirements.
+
+
+
+
+
+
+
+
+😆😁😁😃😃😁😆😆😆😄🔑😁🔑🤩🤩😄🔑🔑👍🤩🤩🤩👍👍🔑🔑🔑🔑💯😔😔😀😀💯🔑😄😄
+
+Setting up a continuous deployment pipeline with GitLab CI/CD on Ubuntu involves several steps. Here’s a step-by-step guide, including an example project.
+
+### Step 1: Prerequisites
+
+1. **GitLab Account**: Ensure you have a GitLab account and a project repository.
+2. **Ubuntu Server**: You need an Ubuntu server where the application will be deployed. Ensure SSH access is available.
+3. **GitLab Runner**: Install GitLab Runner on your server or use a shared runner.
+
+### Step 2: Install GitLab Runner
+
+1. **Add the GitLab Runner Repository**:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y curl
+   curl -L --output /tmp/gitlab-runner.deb https://gitlab-runner-downloads.s3.amazonaws.com/latest/deb/gitlab-runner_amd64.deb
+   sudo dpkg -i /tmp/gitlab-runner.deb
+   ```
+
+2. **Start the GitLab Runner**:
+   ```bash
+   sudo gitlab-runner start
+   ```
+
+### Step 3: Register GitLab Runner
+
+1. **Get the Registration Token**: In your GitLab project, navigate to `Settings` > `CI/CD` > `Runners` and copy the registration token.
+
+2. **Register the Runner**:
+   ```bash
+   sudo gitlab-runner register
+   ```
+   - Enter your GitLab instance URL (e.g., `https://gitlab.com`).
+   - Paste the registration token.
+   - Provide a description for the runner.
+   - Choose tags for the runner (optional).
+   - Select the executor (e.g., `shell` or `docker`).
+
+### Step 4: Create Your Application
+
+For this example, let’s assume we have a simple Node.js application.
+
+1. **Create a Sample Node.js App**:
+   ```bash
+   mkdir my-node-app
+   cd my-node-app
+   npm init -y
+   npm install express
+   ```
+
+2. **Create `app.js`**:
+   ```javascript
+   const express = require('express');
+   const app = express();
+   const PORT = process.env.PORT || 3000;
+
+   app.get('/', (req, res) => {
+       res.send('Hello, World!');
+   });
+
+   app.listen(PORT, () => {
+       console.log(`Server running on port ${PORT}`);
+   });
+   ```
+
+3. **Push the App to GitLab**:
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git remote add origin <your-repo-url>
+   git push -u origin master
+   ```
+
+### Step 5: Create `.gitlab-ci.yml`
+
+In your project root, create a file named `.gitlab-ci.yml` to define the CI/CD pipeline.
+
+```yaml
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  image: node:latest
+  script:
+    - npm install
+    - npm run build # Adjust if you have a build script
+  artifacts:
+    paths:
+      - node_modules/
+
+deploy:
+  stage: deploy
+  script:
+    - ssh user@your-server-ip 'cd /path/to/your/app && git pull origin master && npm install && pm2 restart all'
+  only:
+    - master
+```
+
+### Step 6: Set Up Deployment Server
+
+1. **Install PM2 on the Server**:
+   ```bash
+   sudo npm install -g pm2
+   ```
+
+2. **Clone Your Repository**:
+   ```bash
+   git clone <your-repo-url> /path/to/your/app
+   cd /path/to/your/app
+   npm install
+   pm2 start app.js --name my-node-app
+   ```
+
+### Step 7: Configure SSH Access
+
+1. **Generate SSH Key**:
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+   ```
+
+2. **Add the Public Key to Your Server**:
+   Copy the contents of `~/.ssh/id_rsa.pub` to `~/.ssh/authorized_keys` on your server.
+
+3. **Add SSH Key to GitLab**:
+   - Go to your GitLab project.
+   - Navigate to `Settings` > `CI/CD` > `Variables`.
+   - Add a new variable named `SSH_PRIVATE_KEY` and paste the content of your private key (`~/.ssh/id_rsa`).
+
+### Step 8: Test Your Pipeline
+
+1. **Commit Changes**: Make a change in your application and push it to the `master` branch.
+2. **Check Pipeline**: Go to your GitLab project, click on `CI/CD` > `Pipelines`, and observe the running pipeline.
+
+### Conclusion
+
+You’ve set up a basic continuous deployment pipeline with GitLab CI/CD on Ubuntu. You can expand this setup by adding tests, notifications, and different environments as needed.
