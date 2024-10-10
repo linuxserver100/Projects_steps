@@ -219,7 +219,7 @@ spec:
 
 
 
-Example😃🥹🥹😃🥹🥹🥹🥹😄🔑💯😀💯🔑😀😔😀😀🔑😄😍🥹😃😃🥹🥹😃🥹😃
+Example for Node js Application🥹🥹😃🥹🥹🥹🥹😄🔑💯😀💯🔑😀😔😀😀🔑😄😍🥹😃😃🥹🥹😃🥹😃
 
 Deploying a full-stack Node.js web application to AWS using Amazon EKS and GitHub Actions involves several steps. Here’s a comprehensive guide with example configurations.
 
