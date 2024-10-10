@@ -440,3 +440,220 @@ Deploying a full-stack Node.js web application to AWS using Amazon EKS and GitHu
 This guide provides a complete overview of deploying a full-stack Node.js web application to AWS using Amazon EKS and GitHub Actions. Customize each step based on your application's specific requirements and architecture.
 
 By following these steps, you should be able to deploy your full-stack web application to AWS using Kubernetes and GitHub Actions effectively.
+
+
+
+
+
+
+Example of React.js Application 😃🥹😍😍😄🔑😔😔👍😀😄🥹😃😃🤩😁😁🤩🥹😍😄😍🥹😁😁🤩😃🤩😁😁🥹😍😍🥹🥹😁😁
+
+
+Deploying a full-stack React.js application to AWS using Kubernetes and GitHub Actions involves several steps. Below is a detailed guide with example configurations.
+
+### Overview
+
+1. **Set Up AWS Account**
+2. **Create EKS Cluster**
+3. **Build and Containerize the React.js Application**
+4. **Create Kubernetes Deployment and Service**
+5. **Set Up GitHub Actions for CI/CD**
+6. **Monitor and Test the Deployment**
+
+### Step 1: Set Up AWS Account
+
+1. **Create an AWS Account**: Sign up at [AWS](https://aws.amazon.com).
+2. **Create IAM User**: Create a user with permissions for EKS and ECR. Attach policies like:
+   - `AmazonEKSClusterPolicy`
+   - `AmazonEKSWorkerNodePolicy`
+   - `AmazonEC2ContainerRegistryFullAccess`
+
+### Step 2: Create EKS Cluster
+
+1. **Create EKS Cluster**:
+   - Use the AWS Management Console or AWS CLI. Here’s how to create it using the CLI:
+   ```bash
+   aws eks create-cluster --name my-cluster --role-arn arn:aws:iam::YOUR_ACCOUNT_ID:role/EKS-Cluster-Role --resources-vpc-config subnetIds=subnet-XXXXXXXX,securityGroupIds=sg-XXXXXXXX
+   ```
+
+2. **Update `kubectl` Configuration**:
+   ```bash
+   aws eks update-kubeconfig --name my-cluster
+   ```
+
+### Step 3: Build and Containerize the React.js Application
+
+1. **Create a Simple React.js App**:
+   - Use Create React App to set up a new project:
+   ```bash
+   npx create-react-app my-react-app
+   ```
+
+   - Navigate to the project directory:
+   ```bash
+   cd my-react-app
+   ```
+
+   - Modify `src/App.js` to return a simple message:
+   ```javascript
+   function App() {
+     return (
+       <div>
+         <h1>Hello from React on EKS!</h1>
+       </div>
+     );
+   }
+
+   export default App;
+   ```
+
+2. **Create a Dockerfile**:
+   - Create a `Dockerfile` in the project root:
+   ```dockerfile
+   FROM node:14 AS build
+   WORKDIR /app
+   COPY package.json ./
+   COPY yarn.lock ./
+   RUN yarn install
+   COPY . .
+   RUN yarn build
+
+   FROM nginx:alpine
+   COPY --from=build /app/build /usr/share/nginx/html
+   EXPOSE 80
+   CMD ["nginx", "-g", "daemon off;"]
+   ```
+
+3. **Build and Push to Amazon ECR**:
+   - Authenticate to ECR:
+   ```bash
+   aws ecr get-login-password --region YOUR_REGION | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com
+   ```
+
+   - Build and push the image:
+   ```bash
+   docker build -t my-react-app .
+   docker tag my-react-app:latest YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/my-react-app:latest
+   docker push YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/my-react-app:latest
+   ```
+
+### Step 4: Create Kubernetes Deployment and Service
+
+1. **Create Deployment YAML** (`deployment.yaml`):
+   ```yaml
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: my-react-app
+   spec:
+     replicas: 2
+     selector:
+       matchLabels:
+         app: my-react-app
+     template:
+       metadata:
+         labels:
+           app: my-react-app
+       spec:
+         containers:
+         - name: my-react-app
+           image: YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/my-react-app:latest
+           ports:
+           - containerPort: 80
+   ```
+
+2. **Create Service YAML** (`service.yaml`):
+   ```yaml
+   apiVersion: v1
+   kind: Service
+   metadata:
+     name: my-react-app-service
+   spec:
+     type: LoadBalancer
+     ports:
+       - port: 80
+         targetPort: 80
+     selector:
+       app: my-react-app
+   ```
+
+3. **Deploy to Kubernetes**:
+   ```bash
+   kubectl apply -f deployment.yaml
+   kubectl apply -f service.yaml
+   ```
+
+### Step 5: Set Up GitHub Actions for CI/CD
+
+1. **Create GitHub Actions Workflow**:
+   - Create a `.github/workflows/deploy.yml` file.
+   ```yaml
+   name: CI/CD Pipeline
+
+   on:
+     push:
+       branches:
+         - main
+
+   jobs:
+     build:
+       runs-on: ubuntu-latest
+       steps:
+         - name: Checkout code
+           uses: actions/checkout@v2
+
+         - name: Set up Docker Buildx
+           uses: docker/setup-buildx-action@v1
+
+         - name: Log in to Amazon ECR
+           uses: aws-actions/amazon-ecr-login@v1
+
+         - name: Build and push Docker image
+           run: |
+             docker build -t my-react-app .
+             docker tag my-react-app:latest ${{ secrets.ECR_URI }}:latest
+             docker push ${{ secrets.ECR_URI }}:latest
+
+     deploy:
+       runs-on: ubuntu-latest
+       needs: build
+       steps:
+         - name: Set up kubectl
+           uses: azure/setup-kubectl@v1
+           with:
+             version: 'latest'
+
+         - name: Update kubeconfig
+           run: |
+             aws eks update-kubeconfig --name my-cluster
+
+         - name: Deploy to Kubernetes
+           run: |
+             kubectl apply -f deployment.yaml
+             kubectl apply -f service.yaml
+   ```
+
+### Step 6: Configure Secrets in GitHub
+
+- Navigate to your GitHub repository settings.
+- Under "Secrets and Variables," add:
+  - `ECR_URI`: Your ECR URI (e.g., `YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/my-react-app`).
+
+### Step 7: Monitor and Test
+
+1. **Get the Load Balancer URL**:
+   - Run:
+   ```bash
+   kubectl get svc my-react-app-service
+   ```
+   - Access your application using the external IP or DNS provided.
+
+2. **Check Application Logs**:
+   - Use:
+   ```bash
+   kubectl logs deployment/my-react-app
+   ```
+
+### Conclusion
+
+This guide outlines the steps to deploy a full-stack React.js application to AWS using Amazon EKS and GitHub Actions. Adjust each step based on your specific application requirements and architecture.
