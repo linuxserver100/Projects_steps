@@ -49,17 +49,21 @@ Setting up a Continuous Deployment (CD) pipeline for a Node.js project using Git
 1. **Add a GitLab CI/CD Configuration File**:
    Create a `.gitlab-ci.yml` file in your project root:
 ```yaml
-
 stages:
   - build
   - test
   - deploy
- 
+
 cache:
   paths:
     - node_modules/
 
 before_script:
+  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > id_rsa
+  - chmod 600 id_rsa
+  - ssh-add id_rsa
   - apt-get update && apt-get install -y nodejs npm
   - npm install
   - npm install
@@ -83,9 +87,16 @@ deploy:
     name: production
     url: http://localhost:3000
   script:
-    - ssh ubuntu@3.80.190.143 "cd my-node-app && git pull origin main && npm install && pm2 restart my-node-app"
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H 52.91.161.73 >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    - ssh ubuntu@52.91.161.73 "cd my-node-app && git pull origin main && npm install && pm2 restart my-node-app"
   only:
     - main
+
 
  ```
 
