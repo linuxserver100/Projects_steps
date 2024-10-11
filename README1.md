@@ -68,7 +68,7 @@ Here’s a detailed guide for setting up a continuous deployment (CD) pipeline f
      script:
        - ssh user@your_server_ip 'cd my-node-app && git pull origin master && npm install && pm2 restart my-node-app || pm2 start app.js --name my-node-app'
      only:
-       - master
+       - main
    ```
 
 ### Step 2: Set Up Your Ubuntu Server
