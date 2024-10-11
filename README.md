@@ -65,15 +65,23 @@ stages:
   - build
   - deploy
 
-build:
+build_client:
   image: node:14
   stage: build
   script:
+    - cd client
     - npm install
-    - npm test # Optional: run tests if you have them
+    - npm run build
   artifacts:
     paths:
-      - node_modules/
+      - client/build
+
+build_server:
+  image: node:14
+  stage: build
+  script:
+    - cd server
+    - npm install
 
 deploy:
   stage: deploy
@@ -81,7 +89,7 @@ deploy:
   script:
     - apt-get update -y
     - apt-get install -y sshpass
-    - sshpass -p $DEPLOY_PASSWORD ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /path/to/your/app && git pull origin master && npm install && pm2 restart your-app-name || pm2 start index.js --name your-app-name"
+    - sshpass -p $DEPLOY_PASSWORD ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd my-fullstack-app && git pull origin main && cd server && npm install && pm2 restart my-fullstack-app || npm start & cd .. && if [ -d client ]; then cd client && npm install && npm run build && nm2 restart my-fullstack-app; else echo 'Client directory not found. Skipping client-side deployment'; \fi"
   only:
     - master
 ```
