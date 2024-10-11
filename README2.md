@@ -99,10 +99,10 @@ Setting up a continuous deployment (CD) pipeline for a React project using GitLa
    deploy:
      stage: deploy
      script:
-       - ssh user@your_server_ip "rm -rf /var/www/my-app/build/*"
-       - scp -r build/* user@your_server_ip:/var/www/my-app/build/
+       - ssh ubuntu@98.84.112.138 "rm -rf /var/www/my-app/build/*"
+       - scp -r build/* ubuntu@98.84.112.138:/var/www/my-app/build/
      only:
-       - master
+       - main
    ```
 
    Replace `user` and `your_server_ip` with your actual server username and IP address.
