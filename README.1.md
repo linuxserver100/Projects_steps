@@ -85,7 +85,7 @@ deploy:
     - ssh ubuntu@3.80.190.143 "cd my-node-app && git pull origin main && npm install && pm2 restart my-node-app"
   only:
     - main
-   ```
+ ```
 
 ### Step 4: Set Up SSH Keys
 
