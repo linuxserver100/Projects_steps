@@ -66,7 +66,7 @@ Here’s a detailed guide for setting up a continuous deployment (CD) pipeline f
      image: node:14
      stage: deploy
      script:
-       - ssh user@your_server_ip 'cd /path/to/your/app && git pull origin master && npm install && pm2 restart my-node-app || pm2 start app.js --name my-node-app'
+       - ssh user@your_server_ip 'cd my-node-app && git pull origin master && npm install && pm2 restart my-node-app || pm2 start app.js --name my-node-app'
      only:
        - master
    ```
@@ -159,6 +159,9 @@ Here’s a detailed guide for setting up a continuous deployment (CD) pipeline f
 
    ```bash
    ssh-keygen -t rsa -b 2048
+   ```
+   ```bash
+   cat id_rsa.pub >> ~/.ssh/authorized_key
    ```
 
    Add the public key to your server:
