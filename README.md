@@ -245,8 +245,8 @@ stages:
 build_client:
   image: node:14
   stage: build
-  directory: client
   script:
+    - cd client
     - npm install
     - npm run build
   artifacts:
@@ -256,8 +256,8 @@ build_client:
 build_server:
   image: node:14
   stage: build
-  directory: server
   script:
+    - cd server
     - npm install
 
 deploy:
@@ -266,7 +266,7 @@ deploy:
   script:
     - apt-get update -y
     - apt-get install -y sshpass
-    - sshpass -p $DEPLOY_PASSWORD ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /path/to/your/app && git pull origin master && cd server && npm install && pm2 restart your-server-name || npm start & cd ../client && npm install && npm run build && pm2 restart your-client-name"
+    - sshpass -p $DEPLOY_PASSWORD ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd my-fullstack-app && git pull origin main && cd server && npm install && pm2 restart my-fullstack-app || npm start & cd .. && if [ -d client ]; then cd client && npm install && npm run build && nm2 restart my-fullstack-app; else echo 'Client directory not found. Skipping client-side deployment'; \fi"
   only:
     - master
 ```
