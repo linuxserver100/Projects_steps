@@ -48,8 +48,8 @@ Setting up a Continuous Deployment (CD) pipeline for a Node.js project using Git
 
 1. **Add a GitLab CI/CD Configuration File**:
    Create a `.gitlab-ci.yml` file in your project root:
- ```yaml
-   stages:
+  ```yaml
+stages:
   - build
   - test
   - deploy
