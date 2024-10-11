@@ -65,23 +65,15 @@ stages:
   - build
   - deploy
 
-build_client:
+build:
   image: node:14
   stage: build
   script:
-    - cd client
     - npm install
-    - npm run build
+    - npm test # Optional: run tests if you have them
   artifacts:
     paths:
-      - client/build
-
-build_server:
-  image: node:14
-  stage: build
-  script:
-    - cd server
-    - npm install
+      - node_modules/
 
 deploy:
   stage: deploy
@@ -89,9 +81,9 @@ deploy:
   script:
     - apt-get update -y
     - apt-get install -y sshpass
-    - sshpass -p $DEPLOY_PASSWORD ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd my-fullstack-app && git pull origin main && cd server && npm install && pm2 restart my-fullstack-app || npm start & cd .. && if [ -d client ]; then cd client && npm install && npm run build && nm2 restart my-fullstack-app; else echo 'Client directory not found. Skipping client-side deployment'; \fi"
+    - sshpass -p $DEPLOY_PASSWORD ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd my-node-app && git pull origin main && npm install && pm2 restart my-node-app || pm2 start index.js --name my-node-app"
   only:
-    - master
+    - main
 ```
 
 ### Step 4: Configure CI/CD Variables
