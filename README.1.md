@@ -107,14 +107,20 @@ deploy:
    ```bash
    ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
    ```
+
+   ```bash
+   cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+   ```
+
+   
    Leave the passphrase empty.
 
-2. **Add SSH Key to GitLab**:
-   - Copy the contents of `~/.ssh/id_rsa.pub` and go to your GitLab repository. Under **Settings > CI/CD > Variables**, add a new variable:
+1. **Add SSH Key to GitLab**:
+   - Copy the contents of `~/.ssh/id_rsa` and go to your GitLab repository. Under **Settings > CI/CD > Variables**, add a new variable:
      - **Key**: `SSH_PRIVATE_KEY`
      - **Value**: Paste the private key from `~/.ssh/id_rsa`.
 
-3. **Add the SSH Key to the Server**:
+2. **Add the SSH Key to the Server**:
    - Copy the public key to your server:
    ```bash
    ssh-copy-id user@your-server-ip
