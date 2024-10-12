@@ -195,6 +195,17 @@ To implement a rollback strategy, you can modify the `.gitlab-ci.yml` to include
      - deploy
      - rollback
 
+
+   before_script:
+   - apt-get update -y
+   - apt-get install -y openssh-client
+   - eval $(ssh-agent -s)
+   - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+   - mkdir -p ~/.ssh
+   - chmod 700 ~/.ssh
+   - ssh-keyscan 98.84.112.138 >> ~/.ssh/known_hosts
+  
+
    build:
      stage: build
      script:
