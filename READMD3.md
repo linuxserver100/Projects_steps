@@ -1,27 +1,97 @@
-🔑
 
-Here’s a detailed guide to setting up a continuous deployment pipeline with GitLab CI/CD for a Node.js project on an Ubuntu server. This guide covers setting up the deployer, deployment process, and GitLab Runner.
+Here’s a comprehensive guide on setting up a continuous deployment pipeline using GitLab CI/CD for a Node.js project on an Ubuntu server. This includes SSH private key authentication, variable settings, creating a deployer user, setting up GitLab Runner, and implementing rollback functionality.
 
-### Step 1: Create Your Node.js Project
+### Step 1: Prepare Your Ubuntu Server
 
-1. **Create Project Directory**:
+1. **Update your server:**
    ```bash
-   mkdir my-node-app
-   cd my-node-app
+   sudo apt update && sudo apt upgrade -y
    ```
 
-2. **Initialize the Project**:
+2. **Install Node.js and npm:**
    ```bash
+   curl -sL https://deb.nodesource.com/setup_14.x | sudo -E bash -
+   sudo apt install -y nodejs
+   ```
+
+3. **Install Git:**
+   ```bash
+   sudo apt install -y git
+   ```
+
+### Step 2: Create a Deployer User
+
+1. **Create a new user for deployment:**
+   ```bash
+   sudo adduser deployer
+   ```
+
+2. **Grant the deployer user permission to use `sudo` (optional):**
+   ```bash
+   sudo usermod -aG sudo deployer
+   ```
+
+### Step 3: Set Up SSH Access with Private Key Authentication
+
+1. **Switch to the deployer user:**
+   ```bash
+   su - deployer
+   ```
+
+2. **Generate SSH keys:**
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "deployer@your_server"
+   ```
+   Press Enter to accept the default file location, and enter a passphrase if desired.
+
+3. **Copy the public key to the authorized keys:**
+   ```bash
+   cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+   ```
+
+4. **Set appropriate permissions:**
+   ```bash
+   chmod 700 ~/.ssh
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+
+5. **Test SSH access:**
+   ```bash
+   ssh deployer@your_server_ip
+   ```
+
+### Step 4: Set Up GitLab Runner
+
+1. **Install GitLab Runner:**
+   ```bash
+   sudo curl -L --output /usr/local/bin/gitlab-runner https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-amd64
+   sudo chmod +x /usr/local/bin/gitlab-runner
+   sudo gitlab-runner install
+   ```
+
+2. **Register the GitLab Runner:**
+   ```bash
+   sudo gitlab-runner register
+   ```
+   - Enter your GitLab instance URL and the registration token from your project’s CI/CD settings.
+   - Choose `shell` as the executor.
+
+3. **Start GitLab Runner:**
+   ```bash
+   sudo gitlab-runner start
+   ```
+
+### Step 5: Set Up Your Node.js Project
+
+1. **Create a simple Node.js app (if you haven’t already):**
+   ```bash
+   mkdir ~/my-node-app
+   cd ~/my-node-app
    npm init -y
-   ```
-
-3. **Install Express**:
-   ```bash
    npm install express
    ```
 
-4. **Create Basic Server**:
-   Create a file named `app.js`:
+2. **Create a basic server in `index.js`:**
    ```javascript
    const express = require('express');
    const app = express();
@@ -32,223 +102,111 @@ Here’s a detailed guide to setting up a continuous deployment pipeline with Gi
    });
 
    app.listen(PORT, () => {
-       console.log(`Server running on port ${PORT}`);
+       console.log(`Server is running on port ${PORT}`);
    });
    ```
 
-5. **Test Locally**:
-   Run your application to ensure it works:
-   ```bash
-   node app.js
-   ```
-
-### Step 2: Push the Project to GitLab
-
-1. **Create a New Repository** on GitLab.
-
-2. **Initialize Git and Push**:
+3. **Push your project to GitLab:**
    ```bash
    git init
    git add .
    git commit -m "Initial commit"
-   git remote add origin <your-gitlab-repo-url>
-   git push -u origin main
+   git remote add origin <your_gitlab_repo_url>
+   git push -u origin master
    ```
 
-### Step 3: Set Up the Deployer
+### Step 6: Configure GitLab CI/CD with Environment Variables
 
-1. **Create a Deployer User**:
-   ```bash
-   sudo adduser deployer
-   ```
+1. **Define environment variables in GitLab:**
+   - Go to your project in GitLab.
+   - Navigate to **Settings > CI / CD > Variables**.
+   - Add the following variables:
+     - `DEPLOY_USER` set to `deployer`
+     - `SERVER_IP` set to your server's IP
+     - `PRIVATE_KEY` set to the contents of your private key file (e.g., `~/.ssh/id_rsa`).
 
-2. **Set Up SSH Key for Deployer**:
-   Generate an SSH key for the deployer:
-   ```bash
-   sudo -u deployer ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
-   ```
-
-3. **Copy Public Key to Authorized Keys**:
-   Append the public key to `~/.ssh/authorized_keys`:
-   ```bash
-   cat /home/deployer/.ssh/id_rsa.pub | sudo tee -a /home/deployer/.ssh/authorized_keys
-   ```
-
-4. **Set Permissions**:
-   ```bash
-   sudo chown -R deployer:deployer /home/deployer/.ssh
-   sudo chmod 700 /home/deployer/.ssh
-   sudo chmod 600 /home/deployer/.ssh/authorized_keys
-   ```
-
-5. **Test SSH Access**:
-   Ensure you can SSH into the server using the deployer account:
-   ```bash
-   ssh deployer@your-server-ip
-   ```
-
-### Step 4: Install PM2 for Process Management
-
-1. **Switch to Deployer User**:
-   ```bash
-   sudo su - deployer
-   ```
-
-2. **Install PM2 Globally**:
-   ```bash
-   npm install -g pm2
-   ```
-
-3. **Start Your Application with PM2**:
-   In your application directory:
-   ```bash
-   pm2 start app.js --name my-node-app
-   ```
-
-4. **Save PM2 Process List**:
-   To ensure PM2 restarts your app on server reboot:
-   ```bash
-   pm2 save
-   pm2 startup
-   ```
-
-### Step 5: Set Up GitLab Runner
-
-1. **Install GitLab Runner**:
-   On your server, run:
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y gitlab-runner
-   ```
-
-2. **Register the GitLab Runner**:
-   ```bash
-   sudo gitlab-runner register
-   ```
-   - **GitLab Instance URL**: Enter your GitLab URL (e.g., `https://gitlab.com`).
-   - **Registration Token**: Obtain this from your GitLab project (Settings > CI/CD > Runners).
-   - **Description**: Provide a description (e.g., `My Node.js Runner`).
-   - **Tags**: Add tags if needed (e.g., `node`).
-   - **Executor**: Choose `shell`.
-
-### Step 6: Create `.gitlab-ci.yml` for CI/CD
-
-1. **Create `.gitlab-ci.yml`**:
-   In the root of your project, create a file named `.gitlab-ci.yml`:
+2. **Create a `.gitlab-ci.yml` file in the root of your project:**
    ```yaml
- 
    stages:
-     - build
      - deploy
-
-   before_script:
-     - apt-get update -y
-     - apt-get install -y openssh-client
-     - eval $(ssh-agent -s)
-     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-     - mkdir -p ~/.ssh
-     - chmod 700 ~/.ssh
-     - ssh-keyscan 98.84.112.138 >> ~/.ssh/known_hosts
-  
-
-   build:
-     stage: build
-     script:
-       - npm install
 
    deploy:
      stage: deploy
-     environment:
-       name: production
-       url: http://your-server-ip:3000
      script:
-       - ssh deployer@your-server-ip 'cd /path/to/your/app && git pull origin main && npm install && pm2 restart my-node-app'
+       - echo "$PRIVATE_KEY" > private_key.pem
+       - chmod 600 private_key.pem
+       - ssh -i private_key.pem $DEPLOY_USER@$SERVER_IP "
+           cd /path/to/your/app &&
+           git pull origin master &&
+           npm install &&
+           pm2 restart all
+         "
      only:
-       - main
+       - master
+
+   rollback:
+     stage: deploy
+     script:
+       - echo "$PRIVATE_KEY" > private_key.pem
+       - chmod 600 private_key.pem
+       - ssh -i private_key.pem $DEPLOY_USER@$SERVER_IP "
+           cd /path/to/your/app &&
+           git checkout previous_commit_id &&
+           npm install &&
+           pm2 restart all
+         "
+     only:
+       - rollback-branch
    ```
 
-### Step 7: Commit and Push Your CI/CD Configuration
+### Step 7: Implement Rollback Functionality
 
-1. **Commit Your Changes**:
+1. **Modify the deployment script to save the current commit:**
+   ```yaml
+   deploy:
+     stage: deploy
+     script:
+       - echo "$PRIVATE_KEY" > private_key.pem
+       - chmod 600 private_key.pem
+       - ssh -i private_key.pem $DEPLOY_USER@$SERVER_IP "
+           cd /path/to/your/app &&
+           git rev-parse HEAD > current_commit.txt &&
+           git pull origin master &&
+           npm install &&
+           pm2 restart all
+         "
+     only:
+       - master
+
+   rollback:
+     stage: deploy
+     script:
+       - echo "$PRIVATE_KEY" > private_key.pem
+       - chmod 600 private_key.pem
+       - ssh -i private_key.pem $DEPLOY_USER@$SERVER_IP "
+           cd /path/to/your/app &&
+           git checkout \$(cat current_commit.txt) &&
+           npm install &&
+           pm2 restart all
+         "
+     only:
+       - rollback-branch
+   ```
+
+### Step 8: Finalize and Test
+
+1. **Commit your changes to `.gitlab-ci.yml` and push to GitLab:**
    ```bash
    git add .gitlab-ci.yml
    git commit -m "Add CI/CD configuration"
-   git push origin main
+   git push origin master
    ```
 
-### Step 8: Test Your Pipeline
-
-1. **Check the Pipeline**:
-   Go to your GitLab repository, navigate to **CI/CD > Pipelines**, and ensure the pipeline runs successfully.
-
-2. **Access Your Application**:
-   Open a web browser and visit `http://your-server-ip:3000` to see your Node.js application running.
-
-### Step 9: Rollback Deployment (Optional)
-
-To implement a rollback strategy, you can modify the `.gitlab-ci.yml` to include a rollback job.
-
-1. **Modify `.gitlab-ci.yml`**:
-   ```yaml
-   stages:
-     - build
-     - deploy
-     - rollback
-
-
-   before_script:
-     - apt-get update -y
-     - apt-get install -y openssh-client
-     - eval $(ssh-agent -s)
-     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-     - mkdir -p ~/.ssh
-     - chmod 700 ~/.ssh
-     - ssh-keyscan 98.84.112.138 >> ~/.ssh/known_hosts
-  
-
-   build:
-     stage: build
-     script:
-       - npm install
-
-   deploy:
-     stage: deploy
-     environment:
-       name: production
-       url: http://your-server-ip:3000
-     script:
-       - ssh deployer@your-server-ip 'cd /path/to/your/app && git pull origin main && npm install && pm2 restart my-node-app'
-     only:
-       - main
-
-   rollback:
-     stage: rollback
-     script:
-       - ssh deployer@your-server-ip 'cd /path/to/your/app && git checkout HEAD~1 && npm install && pm2 restart my-node-app'
-     when: manual
-     environment:
-       name: production
-   ```
-
-2. **Commit and Push**:
-   ```bash
-   git add .gitlab-ci.yml
-   git commit -m "Add rollback job"
-   git push origin main
-   ```
-
-### Summary
-
-- **Deployer User**: Configured for deployment using SSH.
-- **PM2**: Manages your Node.js application.
-- **GitLab Runner**: Executes CI/CD jobs.
-- **Continuous Deployment Pipeline**: Automatically deploys updates and includes a rollback option.
+2. **Trigger the pipeline in GitLab and monitor for any issues.**
 
 ### Conclusion
 
-You have successfully set up a continuous deployment pipeline for your Node.js application using GitLab CI/CD on an Ubuntu server. You can deploy updates automatically, manage your application with PM2, and roll back deployments if needed. Adjust configurations as necessary for your specific requirements.
-
-
+You have successfully set up a continuous deployment pipeline for a Node.js project using GitLab CI/CD on an Ubuntu server, with SSH private key authentication and environment variables. The setup also includes rollback functionality. Test your pipeline thoroughly to ensure everything is functioning as expected.
 😄😄🥴😁😃😁🥴🥴😁😃😃🥹💯🤩🚫😍😍🥹😍💙😌💙😌😙🤩😙🚫😆😚😄😚🤩😚✅😙✅😙💙😙✅😙✅😙💙😙🤩🤩😙💙😙✅😙🔐😙🤩😙💯😙✅😙✅😙💯😙🤩😙💙😙💙✅😙✅😙🔐😙💯💙😙✅😙✅😙✅😙🚫😙🚫😙😄😙💙😙💙😙✅😙🤩😙🤩😙😅😙😊😙😭😙😍☺️🚫😙😁😙💯💯😙
 Here's a step-by-step guide to set up a continuous deployment pipeline with GitLab CI/CD on Ubuntu for your project. 
 
