@@ -1,4 +1,233 @@
+🔑
 
+Here’s a detailed guide to setting up a continuous deployment pipeline with GitLab CI/CD for a Node.js project on an Ubuntu server. This guide covers setting up the deployer, deployment process, and GitLab Runner.
+
+### Step 1: Create Your Node.js Project
+
+1. **Create Project Directory**:
+   ```bash
+   mkdir my-node-app
+   cd my-node-app
+   ```
+
+2. **Initialize the Project**:
+   ```bash
+   npm init -y
+   ```
+
+3. **Install Express**:
+   ```bash
+   npm install express
+   ```
+
+4. **Create Basic Server**:
+   Create a file named `app.js`:
+   ```javascript
+   const express = require('express');
+   const app = express();
+   const PORT = process.env.PORT || 3000;
+
+   app.get('/', (req, res) => {
+       res.send('Hello, World!');
+   });
+
+   app.listen(PORT, () => {
+       console.log(`Server running on port ${PORT}`);
+   });
+   ```
+
+5. **Test Locally**:
+   Run your application to ensure it works:
+   ```bash
+   node app.js
+   ```
+
+### Step 2: Push the Project to GitLab
+
+1. **Create a New Repository** on GitLab.
+
+2. **Initialize Git and Push**:
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git remote add origin <your-gitlab-repo-url>
+   git push -u origin main
+   ```
+
+### Step 3: Set Up the Deployer
+
+1. **Create a Deployer User**:
+   ```bash
+   sudo adduser deployer
+   ```
+
+2. **Set Up SSH Key for Deployer**:
+   Generate an SSH key for the deployer:
+   ```bash
+   sudo -u deployer ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+   ```
+
+3. **Copy Public Key to Authorized Keys**:
+   Append the public key to `~/.ssh/authorized_keys`:
+   ```bash
+   cat /home/deployer/.ssh/id_rsa.pub | sudo tee -a /home/deployer/.ssh/authorized_keys
+   ```
+
+4. **Set Permissions**:
+   ```bash
+   sudo chown -R deployer:deployer /home/deployer/.ssh
+   sudo chmod 700 /home/deployer/.ssh
+   sudo chmod 600 /home/deployer/.ssh/authorized_keys
+   ```
+
+5. **Test SSH Access**:
+   Ensure you can SSH into the server using the deployer account:
+   ```bash
+   ssh deployer@your-server-ip
+   ```
+
+### Step 4: Install PM2 for Process Management
+
+1. **Switch to Deployer User**:
+   ```bash
+   sudo su - deployer
+   ```
+
+2. **Install PM2 Globally**:
+   ```bash
+   npm install -g pm2
+   ```
+
+3. **Start Your Application with PM2**:
+   In your application directory:
+   ```bash
+   pm2 start app.js --name my-node-app
+   ```
+
+4. **Save PM2 Process List**:
+   To ensure PM2 restarts your app on server reboot:
+   ```bash
+   pm2 save
+   pm2 startup
+   ```
+
+### Step 5: Set Up GitLab Runner
+
+1. **Install GitLab Runner**:
+   On your server, run:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y gitlab-runner
+   ```
+
+2. **Register the GitLab Runner**:
+   ```bash
+   sudo gitlab-runner register
+   ```
+   - **GitLab Instance URL**: Enter your GitLab URL (e.g., `https://gitlab.com`).
+   - **Registration Token**: Obtain this from your GitLab project (Settings > CI/CD > Runners).
+   - **Description**: Provide a description (e.g., `My Node.js Runner`).
+   - **Tags**: Add tags if needed (e.g., `node`).
+   - **Executor**: Choose `shell`.
+
+### Step 6: Create `.gitlab-ci.yml` for CI/CD
+
+1. **Create `.gitlab-ci.yml`**:
+   In the root of your project, create a file named `.gitlab-ci.yml`:
+   ```yaml
+   stages:
+     - build
+     - deploy
+
+   build:
+     stage: build
+     script:
+       - npm install
+
+   deploy:
+     stage: deploy
+     environment:
+       name: production
+       url: http://your-server-ip:3000
+     script:
+       - ssh deployer@your-server-ip 'cd /path/to/your/app && git pull origin main && npm install && pm2 restart my-node-app'
+     only:
+       - main
+   ```
+
+### Step 7: Commit and Push Your CI/CD Configuration
+
+1. **Commit Your Changes**:
+   ```bash
+   git add .gitlab-ci.yml
+   git commit -m "Add CI/CD configuration"
+   git push origin main
+   ```
+
+### Step 8: Test Your Pipeline
+
+1. **Check the Pipeline**:
+   Go to your GitLab repository, navigate to **CI/CD > Pipelines**, and ensure the pipeline runs successfully.
+
+2. **Access Your Application**:
+   Open a web browser and visit `http://your-server-ip:3000` to see your Node.js application running.
+
+### Step 9: Rollback Deployment (Optional)
+
+To implement a rollback strategy, you can modify the `.gitlab-ci.yml` to include a rollback job.
+
+1. **Modify `.gitlab-ci.yml`**:
+   ```yaml
+   stages:
+     - build
+     - deploy
+     - rollback
+
+   build:
+     stage: build
+     script:
+       - npm install
+
+   deploy:
+     stage: deploy
+     environment:
+       name: production
+       url: http://your-server-ip:3000
+     script:
+       - ssh deployer@your-server-ip 'cd /path/to/your/app && git pull origin main && npm install && pm2 restart my-node-app'
+     only:
+       - main
+
+   rollback:
+     stage: rollback
+     script:
+       - ssh deployer@your-server-ip 'cd /path/to/your/app && git checkout HEAD~1 && npm install && pm2 restart my-node-app'
+     when: manual
+     environment:
+       name: production
+   ```
+
+2. **Commit and Push**:
+   ```bash
+   git add .gitlab-ci.yml
+   git commit -m "Add rollback job"
+   git push origin main
+   ```
+
+### Summary
+
+- **Deployer User**: Configured for deployment using SSH.
+- **PM2**: Manages your Node.js application.
+- **GitLab Runner**: Executes CI/CD jobs.
+- **Continuous Deployment Pipeline**: Automatically deploys updates and includes a rollback option.
+
+### Conclusion
+
+You have successfully set up a continuous deployment pipeline for your Node.js application using GitLab CI/CD on an Ubuntu server. You can deploy updates automatically, manage your application with PM2, and roll back deployments if needed. Adjust configurations as necessary for your specific requirements.
+
+
+😄😄🥴😁😃😁🥴🥴😁😃😃🥹💯🤩🚫😍😍🥹😍💙😌💙😌😙🤩😙🚫😆😚😄😚🤩😚✅😙✅😙💙😙✅😙✅😙💙😙🤩🤩😙💙😙✅😙🔐😙🤩😙💯😙✅😙✅😙💯😙🤩😙💙😙💙✅😙✅😙🔐😙💯💙😙✅😙✅😙✅😙🚫😙🚫😙😄😙💙😙💙😙✅😙🤩😙🤩😙😅😙😊😙😭😙😍☺️🚫😙😁😙💯💯😙
 Here's a step-by-step guide to set up a continuous deployment pipeline with GitLab CI/CD on Ubuntu for your project. 
 
 ### 1. Create GitLab Repository
