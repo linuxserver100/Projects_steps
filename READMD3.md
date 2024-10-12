@@ -142,13 +142,13 @@ Here’s a detailed guide to setting up a continuous deployment pipeline with Gi
      - deploy
 
    before_script:
-    - apt-get update -y
-    - apt-get install -y openssh-client
-    - eval $(ssh-agent -s)
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - ssh-keyscan 98.84.112.138 >> ~/.ssh/known_hosts
+     - apt-get update -y
+     - apt-get install -y openssh-client
+     - eval $(ssh-agent -s)
+     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+     - mkdir -p ~/.ssh
+     - chmod 700 ~/.ssh
+     - ssh-keyscan 98.84.112.138 >> ~/.ssh/known_hosts
   
 
    build:
@@ -197,13 +197,13 @@ To implement a rollback strategy, you can modify the `.gitlab-ci.yml` to include
 
 
    before_script:
-   - apt-get update -y
-   - apt-get install -y openssh-client
-   - eval $(ssh-agent -s)
-   - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-   - mkdir -p ~/.ssh
-   - chmod 700 ~/.ssh
-   - ssh-keyscan 98.84.112.138 >> ~/.ssh/known_hosts
+    - apt-get update -y
+    - apt-get install -y openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan 98.84.112.138 >> ~/.ssh/known_hosts
   
 
    build:
