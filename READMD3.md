@@ -452,7 +452,7 @@ Here’s a comprehensive guide on setting up a continuous deployment pipeline us
      script:
        - echo "$PRIVATE_KEY" > private_key.pem
        - chmod 600 private_key.pem
-       - ssh -i private_key.pem $DEPLOY_USER@$SERVER_IP "
+       - ssh -o StrictHostKeyChecking=no -i private_key.pem $DEPLOY_USER@$SERVER_IP "
            cd /path/to/your/app &&
            git pull origin master &&
            npm install &&
@@ -466,7 +466,7 @@ Here’s a comprehensive guide on setting up a continuous deployment pipeline us
      script:
        - echo "$PRIVATE_KEY" > private_key.pem
        - chmod 600 private_key.pem
-       - ssh -i private_key.pem $DEPLOY_USER@$SERVER_IP "
+       - ssh -o StrictHostKeyChecking=no -i private_key.pem $DEPLOY_USER@$SERVER_IP "
            cd /path/to/your/app &&
            git checkout previous_commit_id &&
            npm install &&
@@ -485,7 +485,7 @@ Here’s a comprehensive guide on setting up a continuous deployment pipeline us
      script:
        - echo "$PRIVATE_KEY" > private_key.pem
        - chmod 600 private_key.pem
-       - ssh -i private_key.pem $DEPLOY_USER@$SERVER_IP "
+       - ssh -o StrictHostKeyChecking=no -i private_key.pem $DEPLOY_USER@$SERVER_IP "
            cd /path/to/your/app &&
            git rev-parse HEAD > current_commit.txt &&
            git pull origin master &&
@@ -500,7 +500,7 @@ Here’s a comprehensive guide on setting up a continuous deployment pipeline us
      script:
        - echo "$PRIVATE_KEY" > private_key.pem
        - chmod 600 private_key.pem
-       - ssh -i private_key.pem $DEPLOY_USER@$SERVER_IP "
+       - ssh -o StrictHostKeyChecking=no -i private_key.pem $DEPLOY_USER@$SERVER_IP "
            cd /path/to/your/app &&
            git checkout \$(cat current_commit.txt) &&
            npm install &&
