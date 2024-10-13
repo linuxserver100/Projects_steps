@@ -1,4 +1,168 @@
 
+Here’s a comprehensive guide to setting up a continuous deployment pipeline using GitLab CI/CD for a React.js fullstack project on an Ubuntu server. This guide includes private key (.pem) authentication, variable settings, creating a deployer user, setting up GitLab Runner, and implementing rollback functionality.
+
+### Step 1: Prepare Your Ubuntu Server
+
+1. **Update the Server:**
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
+
+2. **Install Node.js and npm:**
+   Install Node.js using NodeSource:
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
+   sudo apt install -y nodejs
+   ```
+
+3. **Install Git:**
+   ```bash
+   sudo apt install -y git
+   ```
+
+4. **Install PM2 (Process Manager):**
+   ```bash
+   sudo npm install -g pm2
+   ```
+
+### Step 2: Create a Deployer User
+
+1. **Create the User:**
+   ```bash
+   sudo adduser deployer
+   ```
+
+2. **Grant Necessary Permissions:**
+   (Optional) Add the deployer user to the sudo group:
+   ```bash
+   sudo usermod -aG sudo deployer
+   ```
+
+### Step 3: Set Up SSH Keys
+
+1. **Generate a Private Key:**
+   If you don’t have a private key, create one on your local machine:
+   ```bash
+   ssh-keygen -t rsa -b 4096 -f ~/.ssh/privatekey.pem -C "your_email@example.com"
+   ```
+
+2. **Copy the Public Key to the Server:**
+   Log into the server as the deployer user:
+   ```bash
+   sudo su - deployer
+   mkdir -p ~/.ssh
+   echo "your-public-key-content" >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+
+3. **Test SSH Access:**
+   From your local machine, verify:
+   ```bash
+   ssh -i ~/.ssh/privatekey.pem deployer@your_server_ip
+   ```
+
+### Step 4: Set Up GitLab CI/CD Variables
+
+1. **Navigate to Your GitLab Project:**
+   Go to `Settings > CI/CD > Variables`.
+
+2. **Add Variables:**
+   - **`SSH_PRIVATE_KEY`**: Paste the contents of your private key (e.g., `cat ~/.ssh/privatekey.pem`).
+   - **`DEPLOY_USER`**: Set this to `deployer`.
+   - **`SERVER_IP`**: Your server's IP address (e.g., `192.168.1.10`).
+   - **`APP_DIR`**: Directory for your application (e.g., `/var/www/myapp`).
+
+### Step 5: Install and Configure GitLab Runner
+
+1. **Install GitLab Runner:**
+   ```bash
+   sudo apt install -y curl
+   curl -L https://packages.gitlab.com/install/repositories/gitlab/gitlab-runner/script.deb.sh | sudo bash
+   sudo apt install gitlab-runner
+   ```
+
+2. **Register the Runner:**
+   ```bash
+   sudo gitlab-runner register
+   ```
+   - Enter your GitLab instance URL.
+   - Use the token from your project’s settings.
+   - Choose `shell` as the executor.
+
+### Step 6: Create `.gitlab-ci.yml`
+
+Create a `.gitlab-ci.yml` file in your project’s root directory:
+
+```yaml
+stages:
+  - build
+  - deploy
+  - rollback
+
+build:
+  stage: build
+  script:
+    - npm install
+    - npm run build
+
+deploy:
+  stage: deploy
+  script:
+    - echo "$SSH_PRIVATE_KEY" > privatekey.pem
+    - chmod 600 privatekey.pem
+    - scp -o StrictHostKeyChecking=no -i privatekey.pem -r ./build/* $DEPLOY_USER@$SERVER_IP:$APP_DIR/
+    - ssh -o StrictHostKeyChecking=no -i privatekey.pem $DEPLOY_USER@$SERVER_IP 'pm2 restart your-app-name'
+  only:
+    - main
+
+rollback:
+  stage: rollback
+  script:
+    - ssh -o StrictHostKeyChecking=no -i privatekey.pem $DEPLOY_USER@$SERVER_IP 'pm2 revert your-app-name'
+  when: manual
+```
+
+### Step 7: Implement Rollback Functionality
+
+Using PM2, you can easily revert to the previous version:
+```bash
+pm2 revert your-app-name
+```
+Make sure that your application is managed by PM2.
+
+### Step 8: Test Your Pipeline
+
+1. **Push Changes:**
+   Commit and push your changes to the main branch.
+
+2. **Monitor CI/CD Pipeline:**
+   Go to your GitLab project and navigate to `CI/CD > Pipelines` to check the deployment process.
+
+3. **Manual Rollback:**
+   You can manually trigger the rollback from the pipeline interface as needed.
+
+### Example Directory Structure
+
+Here's an example of how your project directory might look:
+
+```
+my-react-app/
+│
+├── .gitlab-ci.yml
+├── package.json
+├── src/
+│   └── App.js
+└── public/
+    └── index.html
+```
+
+### Conclusion
+
+Following these steps will set up a continuous deployment pipeline for your React.js fullstack application using GitLab CI/CD. Ensure that you monitor your deployments and follow best security practices for your server.
+
+
+
+🙂😉😚😘😍😭😃😃😃😉👇👇👇💙🙂🙏👇😂😊🙂‍↕️😌🙂‍↕️😗🥭😅😌🙂😌😆😍😆😭😉👇💙😊😌😅🥭😊😂👇😂👇😂😆💙😆😭😆🥴🚫👇💙🙂🙏😉🙏🥴🙏👇👇💙😀💙😊💙👇💙😉💙😉💙🥴💙
 Here's a comprehensive guide for setting up a continuous deployment pipeline using GitLab CI/CD for a Node.js project on an Ubuntu server. This guide covers private key (.pem) authentication, variable settings, creating a deployer user, setting up GitLab Runner, and implementing rollback functionality.
 
 ### Step 1: Prepare Your Ubuntu Server
