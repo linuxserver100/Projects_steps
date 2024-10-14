@@ -1,4 +1,158 @@
+😃Here's a detailed guide to setting up a continuous deployment pipeline using GitLab CI/CD for a React.js fullstack application (frontend and backend) on an Ubuntu server. This guide will cover creating a deployer user, setting up private key authentication, managing environment variables, configuring GitLab Runner, and implementing rollback functionality.
 
+### Prerequisites
+
+1. **GitLab Account**: Access to your GitLab project.
+2. **Ubuntu Server**: An Ubuntu server for deployment.
+3. **GitLab Runner**: Installed and registered on your server.
+4. **SSH Access**: SSH access to your server.
+
+### Step 1: Create a Deployer User
+
+1. **SSH into your server**:
+   ```bash
+   ssh username@your_server_ip
+   ```
+
+2. **Create a new user for deployment**:
+   ```bash
+   sudo adduser deployer
+   ```
+
+3. **Optionally grant the user sudo privileges**:
+   ```bash
+   sudo usermod -aG sudo deployer
+   ```
+
+4. **Set up SSH for the deployer user**:
+   ```bash
+   sudo mkdir -p /home/deployer/.ssh
+   sudo chmod 700 /home/deployer/.ssh
+   ```
+
+### Step 2: Generate SSH Keys
+
+1. **On your local machine**, generate a new SSH key:
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+   ```
+   Save it as `id_rsa_deployer`.
+
+2. **Copy the public key to the server**:
+   ```bash
+   ssh-copy-id deployer@your_server_ip
+   ```
+
+3. **Securely store the private key**.
+
+### Step 3: Configure GitLab CI/CD Variables
+
+1. **Go to your GitLab project**.
+2. **Navigate to Settings > CI / CD > Variables** and add the following variables:
+   - `DEPLOY_USER`: `deployer`
+   - `DEPLOY_HOST`: `your_server_ip`
+   - `FRONTEND_PATH`: `/path/to/frontend`
+   - `BACKEND_PATH`: `/path/to/backend`
+   - `SSH_PRIVATE_KEY`: Paste the content of your `id_rsa_deployer` private key.
+
+### Step 4: Set Up GitLab CI/CD Configuration
+
+Create a `.gitlab-ci.yml` file in the root of your repository:
+
+```yaml
+image: node:14
+
+stages:
+  - build
+  - deploy
+  - rollback
+
+before_script:
+  - apt-get update && apt-get install -y ssh
+  - mkdir -p ~/.ssh
+  - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+  - chmod 600 ~/.ssh/id_rsa
+  - ssh-keyscan -H $DEPLOY_HOST >> ~/.ssh/known_hosts
+
+build_frontend:
+  stage: build
+  script:
+    - cd frontend
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/build/
+
+build_backend:
+  stage: build
+  script:
+    - cd backend
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - backend/build/
+
+deploy:
+  stage: deploy
+  script:
+    - ssh $DEPLOY_USER@$DEPLOY_HOST "mkdir -p $FRONTEND_PATH/current && mkdir -p $BACKEND_PATH/current"
+    - ssh $DEPLOY_USER@$DEPLOY_HOST "mv $FRONTEND_PATH/current $FRONTEND_PATH/previous || true"
+    - scp -r frontend/build/* $DEPLOY_USER@$DEPLOY_HOST:$FRONTEND_PATH/current/
+    - ssh $DEPLOY_USER@$DEPLOY_HOST "mv $BACKEND_PATH/current $BACKEND_PATH/previous || true"
+    - scp -r backend/build/* $DEPLOY_USER@$DEPLOY_HOST:$BACKEND_PATH/current/
+  environment:
+    name: production
+    url: http://your_server_ip
+
+rollback:
+  stage: rollback
+  script:
+    - ssh $DEPLOY_USER@$DEPLOY_HOST "mv $FRONTEND_PATH/current $FRONTEND_PATH/previous && mv $FRONTEND_PATH/previous $FRONTEND_PATH/current"
+    - ssh $DEPLOY_USER@$DEPLOY_HOST "mv $BACKEND_PATH/current $BACKEND_PATH/previous && mv $BACKEND_PATH/previous $BACKEND_PATH/current"
+```
+
+### Step 5: Implement Rollback Functionality
+
+1. **Create directories for the application on the server**:
+   ```bash
+   sudo mkdir -p /path/to/frontend/current
+   sudo mkdir -p /path/to/frontend/previous
+   sudo mkdir -p /path/to/backend/current
+   sudo mkdir -p /path/to/backend/previous
+   ```
+
+2. **Ensure the deployer user has the necessary permissions**:
+   ```bash
+   sudo chown -R deployer:deployer /path/to/frontend /path/to/backend
+   ```
+
+### Step 6: Install and Register GitLab Runner
+
+1. **On your server, install GitLab Runner**:
+   ```bash
+   sudo apt-get install gitlab-runner
+   ```
+
+2. **Register the runner**:
+   ```bash
+   sudo gitlab-runner register
+   ```
+   Follow the prompts to enter your GitLab instance URL, registration token, description, tags, and executor (e.g., `shell`).
+
+### Step 7: Test the Pipeline
+
+1. **Push your changes to GitLab**. This should trigger the CI/CD pipeline.
+2. **Monitor the pipeline** in GitLab under CI/CD > Pipelines to ensure it runs without errors.
+3. **Check your application** on the server to confirm the deployment.
+
+### Conclusion
+
+You now have a fully functional CI/CD pipeline set up for your React.js fullstack project using GitLab CI/CD on an Ubuntu server. Customize the `.gitlab-ci.yml` file according to your project’s needs, and follow security best practices for managing SSH keys and access.
+
+
+😃😆😘🔑😘🔑😭🔑🥴🔑😉😍👇🔑😊😉🔑😭🔑😭🔑😘🔑😘🔑😃🔑😃🔑😃🔑😃🔑😘🔑😘🔑😃🔑😘🔑🔑😂🥭🔑😂🔑😭🔑😭🔗😘🔑😂🔗😂🔗😭🔗😭😭🔗😚🔗😂🔗😭🔑😂🔑😉👇😌😌😌👇😍😭😍😭😍😘😍😂😍😂😍😂😄🥭😄🥭😭🔑😘🔑😘🔑😭🔑😭😄😂😄🥭😄😂😄😂
 Here’s a comprehensive guide to setting up a continuous deployment pipeline using GitLab CI/CD for a React.js fullstack project on an Ubuntu server. This guide includes private key (.pem) authentication, variable settings, creating a deployer user, setting up GitLab Runner, and implementing rollback functionality.
 
 ### Step 1: Prepare Your Ubuntu Server
