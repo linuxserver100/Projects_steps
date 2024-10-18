@@ -1594,3 +1594,264 @@ deploy:
 ### Conclusion
 
 You’ve set up a basic continuous deployment pipeline with GitLab CI/CD on Ubuntu. You can expand this setup by adding tests, notifications, and different environments as needed.
+😚😁☺️😗😁☺️😗☺️😁🤩😁🤩🙂🤩😚🤩😆🤩😘😁🤩🥰😌😄😌😙😌😘😌😘😄😌😚😌😚😌😙🤪😚🤪😚🤪😚🤪😁🤪😘😌😘😄😌😙😌😘😌😌😙😍😚😍😗😍😗☺️😚☺️😚☺️😗☺️😚☺️😘☺️😘☺️😚☺️😚😄☺️😚☺️😚☺️😚☺️😚😌😘😌😘😌😘😌😘😌😘😌😘😌😘😘😌
+To set up a **full-stack React and Node.js application** and configure a **continuous deployment pipeline** using **GitLab CI/CD** with **rollback functionality** on an **Ubuntu server**, follow these steps. This guide will cover everything from creating the application, setting up private key authentication, configuring the CI/CD pipeline, deploying to the server, and accessing the app via a web browser.
+
+---
+
+## Step 1: **Create a Full-Stack Application (React Frontend and Node.js Backend)**
+
+### 1.1. **Create the Backend (Node.js + Express)**
+
+1. Initialize a new Node.js project:
+   ```bash
+   mkdir fullstack-app && cd fullstack-app
+   mkdir backend && cd backend
+   npm init -y
+   ```
+
+2. Install necessary dependencies:
+   ```bash
+   npm install express
+   ```
+
+3. Create a simple Express server in `backend/server.js`:
+   ```js
+   const express = require('express');
+   const app = express();
+   const PORT = 5000;
+
+   app.get('/api', (req, res) => {
+     res.json({ message: 'Hello from the backend!' });
+   });
+
+   app.listen(PORT, () => {
+     console.log(`Server running on port ${PORT}`);
+   });
+   ```
+
+4. Add a start script to `backend/package.json`:
+   ```json
+   "scripts": {
+     "start": "node server.js"
+   }
+   ```
+
+### 1.2. **Create the Frontend (React)**
+
+1. Create a React app in the root directory:
+   ```bash
+   cd ..
+   npx create-react-app frontend
+   ```
+
+2. Modify `frontend/src/App.js` to fetch data from the backend:
+   ```js
+   import React, { useEffect, useState } from 'react';
+
+   function App() {
+     const [message, setMessage] = useState('');
+
+     useEffect(() => {
+       fetch('/api')
+         .then(res => res.json())
+         .then(data => setMessage(data.message));
+     }, []);
+
+     return (
+       <div className="App">
+         <h1>Fullstack App</h1>
+         <p>{message}</p>
+       </div>
+     );
+   }
+
+   export default App;
+   ```
+
+3. Add a proxy in `frontend/package.json` to forward API requests to the backend during development:
+   ```json
+   "proxy": "http://localhost:5000"
+   ```
+
+4. Run both the frontend and backend locally to ensure everything works:
+   - **Backend:** Run the backend with `npm start` from the `backend` folder.
+   - **Frontend:** Run the frontend with `npm start` from the `frontend` folder.
+
+   When you visit `http://localhost:3000`, you should see the message from the backend: "Hello from the backend!"
+
+---
+
+## Step 2: **Set Up an Ubuntu Server**
+
+### 2.1. **Set Up the Server Environment**
+1. SSH into your Ubuntu server:
+   ```bash
+   ssh username@your-server-ip
+   ```
+
+2. Install Node.js and Nginx:
+   ```bash
+   sudo apt update
+   sudo apt install nodejs npm nginx git
+   ```
+
+3. Install **PM2** to manage the Node.js processes:
+   ```bash
+   sudo npm install pm2 -g
+   ```
+
+4. Set up a directory for your application:
+   ```bash
+   mkdir -p /var/www/fullstack-app && cd /var/www/fullstack-app
+   git init
+   ```
+
+---
+
+## Step 3: **Set Up Private Key Authentication**
+
+### 3.1. **Generate SSH Keys**
+1. On your local machine, generate SSH keys (if you don't already have them):
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+   ```
+   Save the private key (`~/.ssh/id_rsa`) and public key (`~/.ssh/id_rsa.pub`).
+
+2. **Copy the public key to the server**:
+   ```bash
+   ssh-copy-id username@your-server-ip
+   ```
+
+### 3.2. **Add the Private Key to GitLab**
+1. Go to your GitLab project → **Settings → CI/CD → Variables**.
+2. Add a variable named `SSH_PRIVATE_KEY` and paste the contents of your private key (`~/.ssh/id_rsa`).
+
+---
+
+## Step 4: **Configure GitLab CI/CD Pipeline**
+
+Create the `.gitlab-ci.yml` file in the root directory of your project to define the CI/CD pipeline.
+
+### 4.1. **GitLab CI/CD Configuration for Build, Deploy, and Rollback**
+
+```yaml
+stages:
+  - build
+  - deploy
+  - rollback
+
+before_script:
+  # Install SSH client and set up SSH key authentication
+  - 'which ssh-agent || (apt-get update -y && apt-get install openssh-client -y)'
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - echo -e "Host *\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
+
+build:
+  stage: build
+  image: node:14
+  script:
+    - cd frontend
+    - npm install
+    - npm run build
+    - cd ../backend
+    - npm install
+  artifacts:
+    paths:
+      - frontend/build/
+
+deploy:
+  stage: deploy
+  image: node:14
+  script:
+    - ssh username@your-server-ip << 'EOF'
+      # Set up application directory
+      cd /var/www/fullstack-app || exit 1
+      git pull origin main
+      cd backend && npm install
+      cd ../frontend && npm install
+      npm run build
+      cd ..
+      pm2 start backend/server.js --name fullstack-app-backend
+      pm2 start frontend --name fullstack-app-frontend
+    EOF
+  only:
+    - main
+
+rollback:
+  stage: rollback
+  image: node:14
+  script:
+    - ssh username@your-server-ip << 'EOF'
+      # Rollback to the previous version
+      cd /var/www/fullstack-app
+      git reset --hard HEAD~1
+      pm2 restart fullstack-app-backend
+      pm2 restart fullstack-app-frontend
+    EOF
+  when: on_failure
+```
+
+### Explanation of `.gitlab-ci.yml`:
+- **Build Stage:** Installs dependencies and builds the React frontend.
+- **Deploy Stage:** SSHs into the Ubuntu server, pulls the latest code, installs backend dependencies, builds the frontend, and restarts the application using PM2.
+- **Rollback Stage:** In case of deployment failure, the rollback step resets the Git repository to the previous commit and restarts the application.
+
+---
+
+## Step 5: **Configure Nginx as a Reverse Proxy**
+
+1. Create a new Nginx configuration file:
+   ```bash
+   sudo nano /etc/nginx/sites-available/fullstack-app
+   ```
+
+2. Add the following configuration:
+   ```nginx
+   server {
+     listen 80;
+     server_name your-domain.com;  # Replace with your domain or IP
+
+     location / {
+       proxy_pass http://localhost:3000;  # React frontend port
+       proxy_http_version 1.1;
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection 'upgrade';
+       proxy_set_header Host $host;
+       proxy_cache_bypass $http_upgrade;
+     }
+
+     location /api {
+       proxy_pass http://localhost:5000;  # Node.js backend port
+     }
+   }
+   ```
+
+3. Enable the new site:
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/fullstack-app /etc/nginx/sites-enabled/
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+
+---
+
+## Step 6: **Access the Application**
+
+1. If you have a domain, point the DNS to your server’s IP address.
+2. Access the application through your domain (e.g., `http://your-domain.com`), or use the server's IP address if you don't have a domain.
+
+---
+
+## Step 7: **Test Deployment and Rollback**
+
+1. Push code to the `main` branch of your GitLab repository, which will trigger the CI/CD pipeline.
+2. Verify that the application is deployed and accessible in the browser.
+3. To test rollback, trigger a failure in the deploy stage (e.g., by introducing an error), and the rollback stage will revert the changes automatically.
+
+---
+
+This setup provides a fully automated continuous deployment pipeline for a full-stack React and Node.js application on an Ubuntu server, with the ability to rollback in case of failure.
