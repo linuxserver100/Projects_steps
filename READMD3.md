@@ -911,6 +911,90 @@ You now have a fully functional continuous deployment pipeline for your ReactJS 
 
 
 
+
+#########№####################
+aaasassssasssasasas
+aasssssddsss
+
+To incorporate the commands you provided into your GitLab CI/CD pipeline for a React.js application, you need to ensure that your `.gitlab-ci.yml` file is configured correctly. These commands will help manage the SSH setup, ensure that the correct known hosts are added, clean up the previous deployment directory, and then securely copy the new build files to your server.
+
+Here's an updated example of the `.gitlab-ci.yml` file using the commands you provided:
+
+### Updated `.gitlab-ci.yml`
+
+```yaml
+image: node:latest
+
+stages:
+  - build
+  - deploy
+
+variables:
+  DEPLOY_HOST: "your_server_ip"  # Replace with your server IP or domain
+  DEPLOY_USER: "deployer"         # Replace with your deployer username
+  DEPLOY_PATH: "/home/deployer/my-app"  # Replace with your desired deployment path
+
+build:
+  stage: build
+  script:
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - build/
+
+deploy:
+  stage: deploy
+  before_script:
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+    - ssh-keyscan -H $DEPLOY_HOST >> ~/.ssh/known_hosts
+  script:
+    - ssh $DEPLOY_USER@$DEPLOY_HOST "rm -rf $DEPLOY_PATH/*"
+    - scp -r build/* $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/
+  only:
+    - master
+```
+
+### Breakdown of the `.gitlab-ci.yml` Configuration
+
+- **Image**: Specifies the Docker image used for the job. In this case, it uses the latest Node.js image.
+
+- **Stages**: Defines the stages of the pipeline. Here, we have two stages: `build` and `deploy`.
+
+- **Variables**: You can define variables like `DEPLOY_HOST`, `DEPLOY_USER`, and `DEPLOY_PATH` to make it easy to change configurations without modifying the script.
+
+- **Build Stage**:
+  - Installs dependencies and builds the React application.
+  - The build artifacts (output files) are stored in the `build/` directory.
+
+- **Deploy Stage**:
+  - **Before Script**:
+    - Creates the `~/.ssh` directory if it doesn't exist.
+    - Adds the SSH private key to the SSH agent. The `tr -d '\r'` command removes carriage return characters, which can cause issues.
+    - Uses `ssh-keyscan` to add the host to the `known_hosts` file, preventing SSH from prompting to confirm the host authenticity.
+  - **Script**:
+    - Connects to the server and removes the existing files in the deployment path to clean the previous build.
+    - Copies the contents of the `build/` directory to the server's deployment path using `scp`.
+
+- **Only**: The deploy job will only run on commits to the `master` branch.
+
+### Setting Up GitLab CI/CD Variables
+
+1. **SSH_PRIVATE_KEY**:
+   - Go to your GitLab project, navigate to **Settings > CI/CD > Variables**.
+   - Add a new variable named `SSH_PRIVATE_KEY` and paste the contents of your private key (found in `~/.ssh/id_rsa` on your local machine).
+   - Ensure it's marked as "Protected" if you're using protected branches.
+
+2. **Set Up Other Variables**:
+   - You can also set up `DEPLOY_HOST`, `DEPLOY_USER`, and `DEPLOY_PATH` as variables in GitLab CI/CD settings if you prefer not to hard-code them in the `.gitlab-ci.yml` file.
+
+### Conclusion
+
+With this configuration, your CI/CD pipeline is set up to automatically build your React application and deploy it to your Ubuntu server whenever changes are pushed to the `master` branch. Ensure that the server is properly configured to serve the React application using Nginx or any other web server of your choice. If you have any more questions or need further assistance, feel free to ask!
+
+
+
 🙂😉😚😘😍😭😃😃😃😉👇👇👇💙🙂🙏👇😂😊🙂‍↕️😌🙂‍↕️😗🥭😅😌🙂😌😆😍😆😭😉👇💙😊😌😅🥭😊😂👇😂👇😂😆💙😆😭😆🥴🚫👇💙🙂🙏😉🙏🥴🙏👇👇💙😀💙😊💙👇💙😉💙😉💙🥴💙
 Here’s a comprehensive guide to setting up a continuous deployment pipeline for a React.js application using GitLab CI/CD on an Ubuntu server. This guide will cover private key (.pem) authentication, variable settings, creating a deployer user, setting up GitLab Runner, and implementing rollback functionality. We’ll also use an example project to illustrate the setup.
 
