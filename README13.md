@@ -729,6 +729,152 @@ For rollback functionality, you will deploy the app to timestamped directories a
    🔐😔🔐😔😉😔😉😅🥰😄🥰🥰😄🥰😄🥰😄🤩😄🤩😆🤩😆🤩😆🥰😙🤪😙🙂😙🤪😙🥰😙🤩🤩😙🤩😙😆🥰😆🤪🤪😆🤩😆😆😉😊😉😚☺️😊😉😊😉😊🥰😊🥰😊🤩🤩😆🥰
 
 
+
+Creating and deploying a full-stack React client and server application via a CI/CD pipeline using GitLab CI, with rollback functionality, SSH key authentication, and deployment over Apache involves several steps. Below is a detailed guide:
+
+### Prerequisites
+
+1. **GitLab Repository**: Ensure your code is hosted in a GitLab repository.
+2. **Apache Server**: An Apache server must be set up on the target machine.
+3. **Node.js and npm**: Install Node.js and npm on the server to run your application.
+4. **SSH Access**: Ensure you can access your server via SSH with the necessary permissions.
+5. **GitLab Runner**: Make sure you have a GitLab Runner set up.
+
+### Step 1: Project Structure
+
+Ensure your project has a structure similar to this:
+
+```
+/my-app
+  ├── /client      # React frontend
+  ├── /server      # Express backend
+  ├── .gitlab-ci.yml
+  └── README.md
+```
+
+### Step 2: Configure SSH Key Authentication
+
+1. **Generate SSH Key**: On your local machine, generate an SSH key pair if you haven't already:
+
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+   ```
+
+   Follow the prompts to save the key (default is `~/.ssh/id_rsa`).
+
+2. **Add Public Key to Server**: Copy the public key (`~/.ssh/id_rsa.pub`) to the server's `~/.ssh/authorized_keys`.
+
+3. **Add Private Key to GitLab**: In your GitLab repository, go to **Settings > CI / CD > Variables**, and add a new variable:
+
+   - **Key**: `SSH_PRIVATE_KEY`
+   - **Value**: Paste your private key contents.
+
+   Ensure to mask the variable.
+
+### Step 3: GitLab CI/CD Configuration
+
+Create a `.gitlab-ci.yml` file in the root of your repository with the following content:
+
+```yaml
+image: node:14
+
+stages:
+  - build
+  - deploy
+  - rollback
+
+variables:
+  APP_NAME: "my-app"
+  DEPLOY_PATH: "/var/www/html/my-app" # Change this to your Apache server's path
+
+before_script:
+  - apt-get update && apt-get install -y openssh-client
+  - mkdir -p ~/.ssh
+  - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+  - chmod 600 ~/.ssh/id_rsa
+  - ssh-keyscan -H your-server-ip >> ~/.ssh/known_hosts
+
+build_client:
+  stage: build
+  script:
+    - cd client
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - client/build
+
+build_server:
+  stage: build
+  script:
+    - cd server
+    - npm install
+  artifacts:
+    paths:
+      - server
+
+deploy:
+  stage: deploy
+  script:
+    - ssh user@your-server-ip "mkdir -p $DEPLOY_PATH"
+    - scp -r client/build user@your-server-ip:$DEPLOY_PATH/client
+    - scp -r server user@your-server-ip:$DEPLOY_PATH/server
+    - ssh user@your-server-ip "cd $DEPLOY_PATH && npm install --production && pm2 restart all" # or your preferred process manager
+  only:
+    - main
+
+rollback:
+  stage: rollback
+  script:
+    - ssh user@your-server-ip "cd $DEPLOY_PATH && git checkout HEAD~1"
+    - ssh user@your-server-ip "cd $DEPLOY_PATH && npm install --production && pm2 restart all"
+  when: manual
+  only:
+    - main
+```
+
+### Explanation of the CI/CD Pipeline
+
+- **Stages**: Defines three stages: build, deploy, and rollback.
+- **Variables**: Sets environment variables for the app name and deployment path.
+- **before_script**: Installs SSH client, configures SSH key, and adds server to known hosts.
+- **build_client**: Builds the React client and saves the output in artifacts.
+- **build_server**: Installs server dependencies and saves them as artifacts.
+- **deploy**: Deploys the built React app and server to the specified Apache path.
+- **rollback**: Allows manual rollback to the previous deployment.
+
+### Step 4: Configure Apache Server
+
+Make sure your Apache server is configured to serve your React app and handle API requests. For example, you might need to update the `httpd.conf` or a virtual host configuration:
+
+```apache
+<VirtualHost *:80>
+    DocumentRoot "/var/www/html/my-app/client"
+    <Directory "/var/www/html/my-app/client">
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ProxyPass /api http://localhost:5000/api
+    ProxyPassReverse /api http://localhost:5000/api
+</VirtualHost>
+```
+
+### Step 5: Commit and Push Changes
+
+Once you have everything set up, commit and push your changes to the main branch. This should trigger the pipeline, and your application should be deployed automatically.
+
+### Step 6: Rollback (if needed)
+
+If something goes wrong, you can manually trigger the rollback stage from the GitLab CI/CD interface. This will revert to the previous version of your application.
+
+### Conclusion
+
+With this setup, you have a CI/CD pipeline for deploying a full-stack React application using GitLab CI. This process includes rollback functionality, SSH key authentication, and deployment over Apache, ensuring a smooth deployment experience. Make sure to adjust paths and configurations according to your specific environment.
+
+
+
+
    
 
 
