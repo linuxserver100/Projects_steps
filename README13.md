@@ -862,7 +862,557 @@ With this setup, you have a CI/CD pipeline for deploying a full-stack React appl
 
 
 
-😀😄😁☺️😆😆🤣🤣😄😆🤣😙🤩😙🤩😘🤩🙂🤩🥹🤩😚😌😚😌😘😌😙😌🥹😌🥹😚😌🥰😌😚🙂‍↕️🥰🙂‍↕️🥰🥴😚🙂‍↕️😊☺️🥴😘😄🤩🥹🤩🤩🥲🤩😙🤩🥹😌😙😚😌🥹😌🥲😌🥹😌🥹😌🥲😌😊😌😊😌😊🥹😌😊😌🥹😌🥲😌🥲🙂‍↕️😊🤪😊😛🤪🥲🤪🥹🤪😊🤪🥲🤪🥹😝🤪🥲🤪🥹🤪🥹🤪🥹🤪🥹😌🥹😌😊🥰🤪🥰🤪😘🤪😊🤪😊🤪☺️😊🤪😊🤪😊🤪
+😀😄😁☺️😆😆🤣🤣😄😆🤣😙🤩😙🤩😘🤩😗🤩😁😌😀😀😌😀😌😀😌😚😚😌😀😌🙂🤩🥹🤩😚😌😚😌😘😌😙😌🥹😌🥹😚😌🥰😌😚🙂‍↕️🥰🙂‍↕️🥰🥴😚🙂‍↕️😊☺️🥴😘😄🤩🥹🤩🤩🥲🤩😙🤩🥹😌😙😚😚😚☺️😙☺️😚☺️😙☺️😚☺️😚😙☺️😙☺️😚☺️😙☺️😙😙☺️😙☺️😙☺️😙☺️😙☺️😙😙☺️😌🥹😌🥲
+Creating and deploying a full-stack MERN (MongoDB, Express, React, Node.js) authentication application with password reset functionality, along with setting up a CI/CD pipeline using GitLab CI, involves multiple steps. Below, I’ll break down the entire process into detailed sections, covering backend and frontend development, as well as the CI/CD pipeline setup with rollback functionality.
+
+### Overview
+
+1. **Set up the Project Structure**
+2. **Backend Development**
+   - Create a Node.js and Express backend
+   - Implement MongoDB for user storage
+   - Set up authentication with JWT
+   - Create password reset functionality
+3. **Frontend Development**
+   - Create a React frontend
+   - Implement registration, login, and reset password pages
+4. **Set up CI/CD with GitLab**
+   - Configure GitLab CI/CD pipeline
+   - Set up SSH key authentication
+   - Implement rollback functionality
+5. **Deploy the Application**
+   - Deploy the backend on Apache
+   - Serve the frontend using Apache
+
+### Step 1: Set up the Project Structure
+
+Create a directory for your project and set up two folders: one for the backend and one for the frontend.
+
+```bash
+mkdir mern-auth-app
+cd mern-auth-app
+mkdir backend frontend
+```
+
+### Step 2: Backend Development
+
+#### 2.1 Create a Node.js and Express Backend
+
+1. **Navigate to the backend folder**:
+
+   ```bash
+   cd backend
+   ```
+
+2. **Initialize a Node.js project**:
+
+   ```bash
+   npm init -y
+   ```
+
+3. **Install necessary packages**:
+
+   ```bash
+   npm install express mongoose bcryptjs jsonwebtoken dotenv nodemailer cors
+   ```
+
+4. **Create the following file structure**:
+
+   ```plaintext
+   backend/
+   ├── config/
+   │   └── db.js
+   ├── controllers/
+   │   └── authController.js
+   ├── models/
+   │   └── User.js
+   ├── routes/
+   │   └── authRoutes.js
+   ├── middleware/
+   │   └── authMiddleware.js
+   ├── .env
+   ├── server.js
+   └── package.json
+   ```
+
+#### 2.2 Implement MongoDB for User Storage
+
+- **Connect to MongoDB** (`config/db.js`):
+
+```javascript
+const mongoose = require('mongoose');
+
+const connectDB = async () => {
+    try {
+        await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+        console.log('MongoDB Connected');
+    } catch (error) {
+        console.error(error);
+        process.exit(1);
+    }
+};
+
+module.exports = connectDB;
+```
+
+- **User Model** (`models/User.js`):
+
+```javascript
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+});
+
+module.exports = mongoose.model('User', userSchema);
+```
+
+#### 2.3 Set up Authentication with JWT
+
+- **Authentication Controller** (`controllers/authController.js`):
+
+```javascript
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+// Register user
+exports.register = async (req, res) => {
+    const { username, email, password } = req.body;
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = await User.create({ username, email, password: hashedPassword });
+        res.status(201).json({ message: 'User registered', user });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// Login user
+exports.login = async (req, res) => {
+    const { email, password } = req.body;
+
+    try {
+        const user = await User.findOne({ email });
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(400).json({ message: 'Invalid credentials' });
+        }
+
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        res.json({ token });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// Reset Password
+exports.resetPassword = async (req, res) => {
+    const { email, newPassword } = req.body;
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    try {
+        await User.updateOne({ email }, { password: hashedPassword });
+        res.json({ message: 'Password reset successful' });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+```
+
+#### 2.4 Create Routes
+
+- **Routes** (`routes/authRoutes.js`):
+
+```javascript
+const express = require('express');
+const { register, login, resetPassword } = require('../controllers/authController');
+
+const router = express.Router();
+
+router.post('/register', register);
+router.post('/login', login);
+router.post('/reset-password', resetPassword);
+
+module.exports = router;
+```
+
+#### 2.5 Create the Server
+
+- **Server setup** (`server.js`):
+
+```javascript
+const express = require('express');
+const dotenv = require('dotenv');
+const cors = require('cors');
+const connectDB = require('./config/db');
+const authRoutes = require('./routes/authRoutes');
+
+dotenv.config();
+connectDB();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use('/api/auth', authRoutes);
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+```
+
+#### 2.6 Environment Variables
+
+- Create a `.env` file in the backend folder:
+
+```plaintext
+MONGO_URI=mongodb://your_mongo_uri
+JWT_SECRET=your_jwt_secret
+```
+
+### Step 3: Frontend Development
+
+#### 3.1 Create a React Frontend
+
+1. **Navigate to the frontend folder**:
+
+   ```bash
+   cd ../frontend
+   ```
+
+2. **Create a React app**:
+
+   ```bash
+   npx create-react-app .
+   ```
+
+3. **Install Axios for API calls**:
+
+   ```bash
+   npm install axios react-router-dom
+   ```
+
+#### 3.2 Create Pages
+
+- **Create the following file structure**:
+
+```plaintext
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── Login.js
+│   │   ├── Register.js
+│   │   ├── ResetPassword.js
+│   ├── App.js
+│   └── index.js
+```
+
+#### 3.3 Implement Authentication Pages
+
+- **Login Component** (`components/Login.js`):
+
+```javascript
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const Login = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        try {
+            const response = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+            localStorage.setItem('token', response.data.token);
+            alert('Login successful!');
+        } catch (error) {
+            alert('Login failed: ' + error.response.data.message);
+        }
+    };
+
+    return (
+        <form onSubmit={handleLogin}>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required />
+            <button type="submit">Login</button>
+        </form>
+    );
+};
+
+export default Login;
+```
+
+- **Register Component** (`components/Register.js`):
+
+```javascript
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const Register = () => {
+    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+
+    const handleRegister = async (e) => {
+        e.preventDefault();
+        try {
+            await axios.post('http://localhost:5000/api/auth/register', { username, email, password });
+            alert('Registration successful!');
+        } catch (error) {
+            alert('Registration failed: ' + error.response.data.message);
+        }
+    };
+
+    return (
+        <form onSubmit={handleRegister}>
+            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" required />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required />
+            <button type="submit">Register</button>
+        </form>
+    );
+};
+
+export default Register;
+```
+
+- **Reset Password Component** (`components/ResetPassword.js`):
+
+```javascript
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const ResetPassword = () => {
+    const [email, setEmail] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+
+    const handleReset =
+
+ async (e) => {
+        e.preventDefault();
+        try {
+            await axios.post('http://localhost:5000/api/auth/reset-password', { email, newPassword });
+            alert('Password reset successful!');
+        } catch (error) {
+            alert('Password reset failed: ' + error.response.data.message);
+        }
+    };
+
+    return (
+        <form onSubmit={handleReset}>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
+            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New Password" required />
+            <button type="submit">Reset Password</button>
+        </form>
+    );
+};
+
+export default ResetPassword;
+```
+
+#### 3.4 Configure Routing
+
+- **Update `App.js`**:
+
+```javascript
+import React from 'react';
+import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+import Login from './components/Login';
+import Register from './components/Register';
+import ResetPassword from './components/ResetPassword';
+
+const App = () => {
+    return (
+        <Router>
+            <Switch>
+                <Route path="/login" component={Login} />
+                <Route path="/register" component={Register} />
+                <Route path="/reset-password" component={ResetPassword} />
+            </Switch>
+        </Router>
+    );
+};
+
+export default App;
+```
+
+### Step 4: Set up CI/CD with GitLab
+
+#### 4.1 GitLab CI/CD Pipeline Configuration
+
+1. **Create a `.gitlab-ci.yml` file in the root of your project**:
+
+```yaml
+stages:
+  - build
+  - test
+  - deploy
+
+build_backend:
+  stage: build
+  script:
+    - cd backend
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - backend/build/
+
+build_frontend:
+  stage: build
+  script:
+    - cd frontend
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/build/
+
+deploy_backend:
+  stage: deploy
+  script:
+    - ssh user@your-server "cd /path/to/your/backend && git pull && npm install && pm2 restart server"
+  only:
+    - master
+
+deploy_frontend:
+  stage: deploy
+  script:
+    - ssh user@your-server "cd /path/to/your/frontend && git pull && npm install && pm2 restart frontend"
+  only:
+    - master
+```
+
+#### 4.2 SSH Key Authentication
+
+1. **Generate an SSH key** on your local machine (if you don't have one):
+
+```bash
+ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+```
+
+2. **Copy the public key**:
+
+```bash
+cat ~/.ssh/id_rsa.pub
+```
+
+3. **Add the public key to your server's `~/.ssh/authorized_keys`**.
+
+4. **Add the private key to GitLab CI/CD**:
+   - Go to your project in GitLab.
+   - Navigate to **Settings > CI/CD > Variables**.
+   - Add a new variable called `SSH_PRIVATE_KEY` and paste your private key.
+
+5. **Modify the `.gitlab-ci.yml` to use the SSH key**:
+
+```yaml
+before_script:
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - ssh-keyscan -H your-server >> ~/.ssh/known_hosts
+  - chmod 644 ~/.ssh/known_hosts
+```
+
+#### 4.3 Implement Rollback Functionality
+
+- You can create a rollback stage in the `.gitlab-ci.yml` that will allow you to revert to a previous deployment if the current one fails. Here’s how you might structure that:
+
+```yaml
+rollback:
+  stage: deploy
+  script:
+    - ssh user@your-server "cd /path/to/your/backend && git checkout previous_commit_hash"
+  when: manual
+```
+
+### Step 5: Deploy the Application
+
+#### 5.1 Deploy the Backend on Apache
+
+1. **Install Apache and Node.js on your server** if not already done.
+
+2. **Set up a reverse proxy for your Node.js app**. Create an Apache configuration file (e.g., `backend.conf`):
+
+```apache
+<VirtualHost *:80>
+    ServerName your_domain_or_IP
+
+    ProxyRequests Off
+    ProxyPass /api http://localhost:5000/api
+    ProxyPassReverse /api http://localhost:5000/api
+
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+```
+
+3. **Enable the proxy modules**:
+
+```bash
+sudo a2enmod proxy
+sudo a2enmod proxy_http
+```
+
+4. **Restart Apache**:
+
+```bash
+sudo systemctl restart apache2
+```
+
+#### 5.2 Serve the Frontend Using Apache
+
+1. **Build the React app**:
+
+```bash
+cd frontend
+npm run build
+```
+
+2. **Copy the build files to the Apache server**:
+
+```bash
+scp -r build/* user@your-server:/var/www/html
+```
+
+3. **Create an Apache configuration file for the frontend**:
+
+```apache
+<VirtualHost *:80>
+    ServerName your_domain_or_IP
+
+    DocumentRoot /var/www/html
+
+    <Directory /var/www/html>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+```
+
+4. **Restart Apache**:
+
+```bash
+sudo systemctl restart apache2
+```
+
+### Conclusion
+
+You now have a full-stack MERN authentication application with registration, login, and password reset functionality. The application is deployed using a CI/CD pipeline with GitLab CI, and you’ve implemented rollback functionality for deployments.
+
+Make sure to secure your server, manage secrets properly, and consider further enhancements such as email verification and user roles based on your project requirements. If you have any specific areas you'd like to explore further, let me know!
+
+😌🥹😌🥹😌🥲😌😊😌😊😌😊🥹😌😊😌🥹😌🥲😌🥲🙂‍↕️😊🤪😊😛🤪🥲🤪🥹🤪😊🤪🥲🤪🥹😝🤪🥲🤪🥹🤪🥹🤪🥹🤪🥹😌🥹😌😊🥰🤪🥰🤪😘🤪😊🤪😊🤪☺️😊🤪😊🤪😊🤪
 Creating and deploying a full-stack MERN (MongoDB, Express, React, Node.js) application with authentication and a password reset functionality is a comprehensive task. To accomplish this, we'll detail the entire process step-by-step, covering everything from development to deployment using a CI/CD pipeline with GitLab. This guide will include rollback functionality, SSH key authentication, and deployment using Apache.
 
 ### **1. Project Setup**
