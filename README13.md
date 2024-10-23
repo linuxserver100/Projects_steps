@@ -862,6 +862,326 @@ With this setup, you have a CI/CD pipeline for deploying a full-stack React appl
 
 
 
+😀😄😁☺️😆😆🤣🤣😄😆🤣😙🤩😙🤩😘🤩🙂🤩🥹🤩😚😌😚😌😘😌😙😌🥹😌🥹😚😌🥰😌😚🙂‍↕️🥰🙂‍↕️🥰🥴😚🙂‍↕️😊☺️🥴😘😄🤩🥹🤩🤩🥲🤩😙🤩🥹😌😙😚😌🥹😌🥲😌🥹😌🥹😌🥲😌😊😌😊😌😊🥹😌😊😌🥹😌🥲😌🥲🙂‍↕️😊🤪😊😛🤪🥲🤪🥹🤪😊🤪🥲🤪🥹😝🤪🥲🤪🥹🤪🥹🤪🥹🤪🥹😌🥹😌😊🥰🤪🥰🤪😘🤪😊🤪😊🤪☺️😊🤪😊🤪😊🤪
+Creating and deploying a full-stack MERN (MongoDB, Express, React, Node.js) application with authentication and a password reset functionality is a comprehensive task. To accomplish this, we'll detail the entire process step-by-step, covering everything from development to deployment using a CI/CD pipeline with GitLab. This guide will include rollback functionality, SSH key authentication, and deployment using Apache.
+
+### **1. Project Setup**
+
+#### **1.1. Backend Setup (Node.js + Express)**
+
+1. **Initialize the Backend Project**
+   ```bash
+   mkdir mern-auth-backend
+   cd mern-auth-backend
+   npm init -y
+   npm install express mongoose bcryptjs jsonwebtoken dotenv cors nodemailer
+   ```
+
+2. **Create Directory Structure**
+   ```bash
+   mkdir config controllers models routes middleware
+   ```
+
+3. **Setup Environment Variables**
+   - Create a `.env` file for sensitive configurations.
+   ```plaintext
+   PORT=5000
+   MONGO_URI=mongodb://<user>:<password>@localhost:27017/mydatabase
+   JWT_SECRET=mysecretkey
+   EMAIL_USER=myemail@example.com
+   EMAIL_PASS=mypassword
+   ```
+
+4. **Create Basic Server Setup (`index.js`)**
+   ```javascript
+   const express = require('express');
+   const mongoose = require('mongoose');
+   const cors = require('cors');
+   const authRoutes = require('./routes/auth');
+
+   require('dotenv').config();
+
+   const app = express();
+   app.use(cors());
+   app.use(express.json());
+
+   mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+       .then(() => console.log("MongoDB connected"))
+       .catch(err => console.error(err));
+
+   app.use('/api/auth', authRoutes);
+
+   const PORT = process.env.PORT || 5000;
+   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+   ```
+
+5. **Create User Model (`models/User.js`)**
+   ```javascript
+   const mongoose = require('mongoose');
+   const userSchema = new mongoose.Schema({
+       username: { type: String, required: true, unique: true },
+       password: { type: String, required: true },
+       email: { type: String, required: true, unique: true },
+   });
+   module.exports = mongoose.model('User', userSchema);
+   ```
+
+6. **Setup Authentication Routes (`routes/auth.js`)**
+   ```javascript
+   const express = require('express');
+   const bcrypt = require('bcryptjs');
+   const jwt = require('jsonwebtoken');
+   const User = require('../models/User');
+
+   const router = express.Router();
+
+   // Register route
+   router.post('/register', async (req, res) => {
+       const { username, password, email } = req.body;
+       const hashedPassword = await bcrypt.hash(password, 10);
+       const newUser = new User({ username, password: hashedPassword, email });
+       await newUser.save();
+       res.status(201).json({ message: 'User registered' });
+   });
+
+   // Login route
+   router.post('/login', async (req, res) => {
+       const { username, password } = req.body;
+       const user = await User.findOne({ username });
+       if (!user) return res.status(404).send('User not found');
+       const isMatch = await bcrypt.compare(password, user.password);
+       if (!isMatch) return res.status(400).send('Invalid credentials');
+       const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+       res.json({ token });
+   });
+
+   // Password reset route
+   router.post('/reset-password', async (req, res) => {
+       const { email } = req.body;
+       const user = await User.findOne({ email });
+       if (!user) return res.status(404).send('User not found');
+
+       // Send email logic using nodemailer...
+       // Generate reset link and send via nodemailer
+
+       res.send('Password reset link sent');
+   });
+
+   module.exports = router;
+   ```
+
+#### **1.2. Frontend Setup (React)**
+
+1. **Create the React Application**
+   ```bash
+   npx create-react-app mern-auth-frontend
+   cd mern-auth-frontend
+   npm install axios react-router-dom
+   ```
+
+2. **Setup Directory Structure**
+   ```bash
+   mkdir src/components src/pages src/services
+   ```
+
+3. **Setup Axios for API Requests**
+   - Create `src/services/api.js`:
+   ```javascript
+   import axios from 'axios';
+
+   const api = axios.create({
+       baseURL: 'http://localhost:5000/api/auth',
+   });
+
+   export default api;
+   ```
+
+4. **Create Authentication Pages and Components**
+   - For example, `LoginPage`, `RegisterPage`, `ResetPasswordPage` in `src/pages`.
+
+5. **Routing Setup (`src/App.js`)**
+   ```javascript
+   import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+   import LoginPage from './pages/LoginPage';
+   import RegisterPage from './pages/RegisterPage';
+   import ResetPasswordPage from './pages/ResetPasswordPage';
+
+   function App() {
+       return (
+           <Router>
+               <Switch>
+                   <Route path="/login" component={LoginPage} />
+                   <Route path="/register" component={RegisterPage} />
+                   <Route path="/reset-password" component={ResetPasswordPage} />
+               </Switch>
+           </Router>
+       );
+   }
+
+   export default App;
+   ```
+
+### **2. CI/CD Pipeline Setup with GitLab CI**
+
+#### **2.1. Project Structure in GitLab**
+
+1. **Create a GitLab Repository**
+   - Push both frontend and backend projects into separate folders in the same repository.
+
+2. **Create `.gitlab-ci.yml` File**
+   - This file will define your CI/CD pipeline.
+   ```yaml
+   stages:
+     - build
+     - deploy
+
+   build_backend:
+     stage: build
+     image: node:14
+     script:
+       - cd mern-auth-backend
+       - npm install
+       - npm run build
+     artifacts:
+       paths:
+         - mern-auth-backend/build
+
+   build_frontend:
+     stage: build
+     image: node:14
+     script:
+       - cd mern-auth-frontend
+       - npm install
+       - npm run build
+     artifacts:
+       paths:
+         - mern-auth-frontend/build
+
+   deploy_backend:
+     stage: deploy
+     image: alpine:latest
+     script:
+       - apk add --no-cache openssh-client
+       - ssh -i $SSH_PRIVATE_KEY -o StrictHostKeyChecking=no user@your_server "cd /path/to/your/backend && git pull origin main && npm install && pm2 restart your-app-name"
+     only:
+       - main
+
+   deploy_frontend:
+     stage: deploy
+     image: alpine:latest
+     script:
+       - apk add --no-cache openssh-client
+       - ssh -i $SSH_PRIVATE_KEY -o StrictHostKeyChecking=no user@your_server "cd /path/to/your/frontend && git pull origin main && npm install && npm run build"
+       - ssh -i $SSH_PRIVATE_KEY -o StrictHostKeyChecking=no user@your_server "cp -r /path/to/your/frontend/build/* /var/www/html/"
+     only:
+       - main
+   ```
+
+#### **2.2. Configure SSH Key Authentication**
+
+1. **Generate SSH Key Pair**
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+   ```
+
+2. **Add Public Key to Server**
+   ```bash
+   ssh-copy-id user@your_server
+   ```
+
+3. **Add Private Key to GitLab**
+   - Go to your project settings in GitLab > CI/CD > Variables, and add a variable named `SSH_PRIVATE_KEY` with your private key.
+
+### **3. Rollback Functionality**
+
+For rollback functionality, you can keep track of the last deployment. If a deployment fails, you can revert to the last stable version.
+
+1. **Update `.gitlab-ci.yml` to Create a Backup**
+   ```yaml
+   backup_backend:
+     stage: deploy
+     script:
+       - ssh -i $SSH_PRIVATE_KEY -o StrictHostKeyChecking=no user@your_server "cp -r /path/to/your/backend /path/to/your/backup/backend_backup_$(date +%Y%m%d%H%M%S)"
+     only:
+       - main
+
+   rollback_backend:
+     stage: deploy
+     when: manual
+     script:
+       - ssh -i $SSH_PRIVATE_KEY -o StrictHostKeyChecking=no user@your_server "cp -r /path/to/your/backup/backend_backup_LAST /path/to/your/backend"
+     only:
+       - main
+   ```
+
+### **4. Apache Configuration for Deployment**
+
+1. **Install Apache**
+   ```bash
+   sudo apt update
+   sudo apt install apache2
+   ```
+
+2. **Configure Apache for React App**
+   - Create a new configuration file for your frontend.
+   ```bash
+   sudo nano /etc/apache2/sites-available/mern-auth-frontend.conf
+   ```
+
+   ```apache
+   <VirtualHost *:80>
+       ServerName your_domain.com
+       DocumentRoot /var/www/html
+
+       <Directory /var/www/html>
+           AllowOverride All
+       </Directory>
+
+       ErrorLog ${APACHE_LOG_DIR}/error.log
+       CustomLog ${APACHE_LOG_DIR}/access.log combined
+   </VirtualHost>
+   ```
+
+3. **Enable Rewrite Module and Your Site**
+   ```bash
+   sudo a2
+
+enmod rewrite
+   sudo a2ensite mern-auth-frontend.conf
+   sudo systemctl restart apache2
+   ```
+
+4. **Deploy Backend API**
+   - Ensure the Node.js application runs using a process manager like PM2.
+   ```bash
+   npm install pm2 -g
+   pm2 start mern-auth-backend/index.js --name your-app-name
+   pm2 save
+   ```
+
+### **5. Testing the Application**
+
+1. **Run the Application Locally**
+   - Start the backend:
+   ```bash
+   cd mern-auth-backend
+   node index.js
+   ```
+
+   - Start the frontend:
+   ```bash
+   cd mern-auth-frontend
+   npm start
+   ```
+
+2. **Accessing the Application**
+   - Open your browser and go to `http://localhost:3000` for the frontend and `http://localhost:5000/api/auth` for the backend API.
+
+### **6. Conclusion**
+
+You now have a full-stack MERN application with authentication, password reset functionality, and a CI/CD pipeline configured with GitLab. The application can be deployed using SSH with rollback capabilities through the CI/CD pipeline, ensuring you can quickly revert changes if needed.
+
+Remember to test thoroughly and make adjustments based on your specific environment and needs!
 
    
 
