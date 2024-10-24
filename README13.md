@@ -209,228 +209,191 @@ By setting up SSH key-based authentication, configuring GitHub Actions for CI/CD
 🥲😚😜😚🥹🤪🥭😆🤪😜🤪🥹🤪😜🤪🥲☺️🤩☺️🥹☺️🥹☺️🥹☺️🤩☺️😜☺️😜☺️🥲🤩😘😜😘😜😘🥲😘😜😘🤩😚🥲🥲😚🤩😚😜😚😜l🥰😅😅🤣🤩🤣😅🤣😅🤣😅😍🤣😄🤣😄🤣😍🤣😍🤣😍😅🤣😍🤣😍🤣😍🤣😅🤣😂😂🤣😂🙂‍↕️😂🙂‍↕️😔🙂‍↕️😔🙂‍↕️😔🙂‍↕️😔😅🙂‍↕️😅🙂‍↕️😅🙂‍↕️😅🙂‍↕️😅🙂‍↕️😅😅🙂‍↕️😅🙂‍↕️😅🙂‍↕️😅🙂‍↕️😅🙂‍↕️😅😍🙂‍↕️😅🙂‍↕️😔🙂‍↕️😅🙂‍↕️😅🙂‍↕️
 
 
-Deploying a full-stack React application with a backend, using GitLab CI/CD pipeline for continuous deployment, rollback functionality, SSH key authentication, and deploying via Apache web server involves several steps. Here’s a structured approach to achieve this:
+To deploy a full-stack React application with a backend using GitLab CI/CD pipelines, and ensure continuous deployment, rollback functionality, SSH key authentication, and Apache as the web server for both frontend and backend, follow these detailed steps:
 
-### Steps Overview:
-1. **Set Up Backend and Frontend Applications**  
-2. **Set Up Apache for Backend and Frontend**  
-3. **Set Up GitLab CI/CD Configuration**  
-4. **Configure SSH Key Authentication**  
-5. **Add Rollback Functionality in CI/CD**  
-6. **Use GitLab Artifacts for Reusable Files**  
-7. **Test and Monitor the Deployment**
+### Prerequisites:
+1. **GitLab repository**: Store your full-stack application (React frontend and backend).
+2. **SSH Access to the server**: You'll need SSH access to your server where Apache is running.
+3. **Apache installed**: Ensure that Apache is installed on your server.
+4. **Server configuration**: Set up SSH key authentication and ensure your server is ready for deployment.
+5. **Domain or IP**: You need a domain name or server IP for your application.
 
 ---
 
-### 1. Set Up Backend and Frontend Applications
+### 1. **GitLab SSH Key Setup**
+You'll need to set up SSH key authentication between your GitLab CI pipeline and your remote server.
 
-Assuming you already have a React frontend and a Node.js/Express backend, make sure that:
-- **Frontend** is built using `npm run build`.
-- **Backend** is ready to be deployed (e.g., packaged or Dockerized, if needed).
+1. **Generate SSH Key Pair** on the machine where the pipeline will run (or you can do it on your local machine):
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "gitlab-ci-deploy"
+   ```
+2. **Add Public Key to Remote Server**:
+   Copy the public key to the remote server where the application will be deployed:
+   ```bash
+   ssh-copy-id user@your-server-ip
+   ```
+3. **Add Private Key to GitLab**:
+   - Go to GitLab -> Your Project -> Settings -> CI/CD -> Variables.
+   - Add a new variable `SSH_PRIVATE_KEY` and paste the private key (`~/.ssh/id_rsa`) here.
+   - Make sure to mask this variable.
 
-#### Folder structure:
+### 2. **Configure Apache for Deployment**
+For the frontend and backend, you will create separate Apache configurations.
 
-```
-/app
-    /frontend
-        /src
-        package.json
-    /backend
-        /src
-        package.json
-.gitlab-ci.yml
-```
+- **Frontend**: React app
+- **Backend**: Node.js/Express, Flask, or other backend frameworks
 
----
+#### 2.1 Apache Configuration for React Frontend
+Assume your React app will be deployed at `/var/www/frontend`.
 
-### 2. Set Up Apache for Backend and Frontend
+1. Create a new Apache configuration file, e.g., `/etc/apache2/sites-available/frontend.conf`:
+   ```apache
+   <VirtualHost *:80>
+       ServerName frontend.example.com
+       DocumentRoot /var/www/frontend
 
-Apache can serve both frontend and backend on the same server. You need to configure **Apache Virtual Hosts** for the frontend (React) and reverse proxy for the backend (Node.js).
+       <Directory /var/www/frontend>
+           Options Indexes FollowSymLinks
+           AllowOverride All
+           Require all granted
+       </Directory>
 
-#### Apache Configuration for Frontend (React)
-React is a static build, so configure Apache to serve static files.
+       ErrorLog ${APACHE_LOG_DIR}/frontend-error.log
+       CustomLog ${APACHE_LOG_DIR}/frontend-access.log combined
+   </VirtualHost>
+   ```
 
-```bash
-<VirtualHost *:80>
-    ServerAdmin admin@example.com
-    DocumentRoot /var/www/frontend/build
-    ServerName example.com
-    <Directory /var/www/frontend/build>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-    ErrorLog ${APACHE_LOG_DIR}/error.log
-    CustomLog ${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>
-```
+2. Enable the site:
+   ```bash
+   sudo a2ensite frontend.conf
+   sudo systemctl reload apache2
+   ```
 
-#### Apache Configuration for Backend (Node.js) Reverse Proxy
+#### 2.2 Apache Configuration for Backend
+Assume your backend will be deployed at `/var/www/backend`.
 
-```bash
-<VirtualHost *:80>
-    ServerAdmin admin@example.com
-    ServerName api.example.com
+1. Create a new Apache configuration file, e.g., `/etc/apache2/sites-available/backend.conf`:
+   ```apache
+   <VirtualHost *:80>
+       ServerName backend.example.com
+       ProxyPreserveHost On
+       ProxyPass / http://localhost:5000/
+       ProxyPassReverse / http://localhost:5000/
 
-    ProxyRequests Off
-    ProxyPass / http://localhost:3000/
-    ProxyPassReverse / http://localhost:3000/
-    
-    ErrorLog ${APACHE_LOG_DIR}/api-error.log
-    CustomLog ${APACHE_LOG_DIR}/api-access.log combined
-</VirtualHost>
-```
+       ErrorLog ${APACHE_LOG_DIR}/backend-error.log
+       CustomLog ${APACHE_LOG_DIR}/backend-access.log combined
+   </VirtualHost>
+   ```
 
-Enable modules if needed:
+2. Enable the proxy modules and the backend site:
+   ```bash
+   sudo a2enmod proxy
+   sudo a2enmod proxy_http
+   sudo a2ensite backend.conf
+   sudo systemctl reload apache2
+   ```
 
-```bash
-sudo a2enmod proxy
-sudo a2enmod proxy_http
-sudo systemctl restart apache2
-```
+### 3. **GitLab CI/CD Pipeline Setup**
 
----
+In your GitLab project, create a `.gitlab-ci.yml` file at the root of the repository. This will contain the necessary steps for deployment and rollback.
 
-### 3. Set Up GitLab CI/CD Configuration
-
-Your `.gitlab-ci.yml` will define the pipeline stages: build, test, deploy, and rollback.
-
-#### Basic Structure of `.gitlab-ci.yml`:
+#### 3.1 Define Stages
+Define the stages like `build`, `deploy`, and `rollback`.
 
 ```yaml
 stages:
   - build
-  - test
   - deploy
   - rollback
-
-before_script:
-  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
-  - eval $(ssh-agent -s)
-  - ssh-add <(echo "$SSH_PRIVATE_KEY")
-  - mkdir -p ~/.ssh
-  - chmod 700 ~/.ssh
-  - echo "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-  - chmod 644 ~/.ssh/known_hosts
-
-build:
-  stage: build
-  script:
-    - echo "Building Frontend"
-    - cd frontend && npm install && npm run build
-    - echo "Building Backend"
-    - cd ../backend && npm install
-  artifacts:
-    paths:
-      - frontend/build
-      - backend/
-
-test:
-  stage: test
-  script:
-    - echo "Running tests"
-    - cd frontend && npm run test
-    - cd ../backend && npm run test
-
-deploy:
-  stage: deploy
-  environment:
-    name: production
-    url: http://example.com
-  script:
-    - echo "Deploying Frontend"
-    - scp -r frontend/build/* user@yourserver:/var/www/frontend/
-    - echo "Deploying Backend"
-    - ssh user@yourserver 'cd /var/www/backend && npm install && pm2 restart all'
 ```
 
-#### Artifacts for Build Reuse:
-
-Artifacts are used to reuse the build files across stages (like for deployment or rollback). You can specify paths to artifacts in the `build` job.
+#### 3.2 Build Frontend and Backend
+The build stage will compile the frontend and prepare the backend for deployment.
 
 ```yaml
+build-frontend:
+  stage: build
+  script:
+    - cd frontend
+    - npm install
+    - npm run build
   artifacts:
     paths:
-      - frontend/build
+      - frontend/build/
+
+build-backend:
+  stage: build
+  script:
+    - cd backend
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
       - backend/
-    expire_in: 1 week
 ```
 
----
+#### 3.3 Deploy Frontend and Backend
+The deploy stage will use SSH to copy the built files to the server.
 
-### 4. Configure SSH Key Authentication
+```yaml
+deploy-frontend:
+  stage: deploy
+  script:
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - ssh -o StrictHostKeyChecking=no user@your-server-ip "rm -rf /var/www/frontend/*"
+    - scp -r frontend/build/* user@your-server-ip:/var/www/frontend/
 
-To securely connect to your server for deployment, you need to configure SSH key authentication in GitLab:
+deploy-backend:
+  stage: deploy
+  script:
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - ssh -o StrictHostKeyChecking=no user@your-server-ip "rm -rf /var/www/backend/*"
+    - scp -r backend/* user@your-server-ip:/var/www/backend/
+    - ssh user@your-server-ip "systemctl restart backend.service"
+```
 
-1. **Generate SSH Key**:
-   On your local machine, generate an SSH key if you don’t already have one:
-   ```bash
-   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
-   ```
-
-2. **Add SSH Key to GitLab**:
-   - Go to your GitLab project -> **Settings** -> **CI / CD** -> **Variables**.
-   - Add your private SSH key (`id_rsa`) as `SSH_PRIVATE_KEY`.
-   - Add `known_hosts` for your server’s domain using:
-     ```bash
-     ssh-keyscan -H yourserver.com >> ~/.ssh/known_hosts
-     ```
-   - Add this output as `SSH_KNOWN_HOSTS` variable.
-
----
-
-### 5. Add Rollback Functionality
-
-Rollback can be triggered if the deployment fails. This can be done by keeping the previous deployment as an artifact or using GitLab’s environment feature.
-
-#### Rollback Script Example:
+#### 3.4 Rollback
+In case of a failed deployment, use the rollback stage to revert to a previous version.
 
 ```yaml
 rollback:
   stage: rollback
-  when: on_failure
   script:
-    - echo "Rolling back to the previous version"
-    - ssh user@yourserver 'cd /var/www/frontend && rm -rf build && mv build_backup build'
-    - ssh user@yourserver 'cd /var/www/backend && pm2 restart all'
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - ssh user@your-server-ip "rm -rf /var/www/frontend/* && cp -r /var/www/frontend_backup/* /var/www/frontend/"
+    - ssh user@your-server-ip "rm -rf /var/www/backend/* && cp -r /var/www/backend_backup/* /var/www/backend/"
+    - ssh user@your-server-ip "systemctl restart backend.service"
 ```
 
-This assumes that a previous build is kept as a backup. You can create a backup during the `deploy` stage:
+You may want to adjust your rollback logic based on how you back up your files (e.g., using versioned folders).
+
+### 4. **Add Deployment Conditions**
+You can add conditions to deploy only on specific branches (e.g., `main` or `production`):
 
 ```yaml
-  script:
-    - echo "Backing up current version"
-    - ssh user@yourserver 'cp -r /var/www/frontend/build /var/www/frontend/build_backup'
-    - scp -r frontend/build/* user@yourserver:/var/www/frontend/
+deploy-frontend:
+  stage: deploy
+  only:
+    - main
 ```
 
----
+### 5. **Backup and Rollback Strategies**
+Make sure to include a strategy for keeping backups of previous versions of the frontend and backend in case a rollback is needed. For example:
 
-### 6. Use GitLab Artifacts for Reusable Files
+1. **Backup Before Deployment**:
+   Add a step in the deployment process to back up the existing version before deploying the new one:
+   ```bash
+   ssh user@your-server-ip "cp -r /var/www/frontend /var/www/frontend_backup"
+   ssh user@your-server-ip "cp -r /var/www/backend /var/www/backend_backup"
+   ```
 
-In addition to using artifacts to store built files, you can use them to store logs or backups from previous deployments. This allows for better rollback management and auditability.
-
-For example, to store deployment logs as an artifact:
-
-```yaml
-artifacts:
-  paths:
-    - deploy.log
-  expire_in: 1 week
-```
+2. **Rollback in GitLab**:
+   Trigger a rollback if the deployment fails. You can automatically check for deployment success and proceed to rollback on failure by using GitLab’s `allow_failure` and `when: on_failure` options.
 
 ---
 
-### 7. Test and Monitor the Deployment
-
-- **Test**: Ensure that your CI/CD pipeline successfully builds, tests, and deploys both the backend and frontend.
-- **Monitoring**: Set up monitoring for your server (e.g., using PM2 or a service like New Relic) to ensure smooth performance after deployment.
-
----
-
-### Conclusion
-
-This approach integrates GitLab CI/CD with SSH key authentication, artifacts for build reuse, rollback mechanisms, and deployment via Apache web server. It provides a robust and secure way to deploy a full-stack React application. You can further enhance this with more advanced testing, monitoring, and logging tools.
+### Final Thoughts:
+This setup provides an end-to-end solution for deploying your full-stack React app with GitLab CI/CD pipelines, including continuous deployment, rollback functionality, and Apache server configuration. The process ensures that both the frontend and backend are properly deployed and managed on the server using SSH authentication and GitLab CI variables.
   
 
 
