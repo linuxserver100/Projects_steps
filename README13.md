@@ -244,59 +244,58 @@ For the frontend and backend, you will create separate Apache configurations.
 - **Frontend**: React app
 - **Backend**: Node.js/Express, Flask, or other backend frameworks
 
-Initialize Git Repository:
 
-Create a new GitLab project.
-Clone the GitLab repository to your local machine.
-Setup Frontend (React):
+1. **Initialize Git Repository**:
+   - Create a new GitLab project.
+   - Clone the GitLab repository to your local machine.
 
-Create a React app:
-bash
-Copy code
-npx create-react-app frontend
-Test that the app works locally:
-bash
-Copy code
-cd frontend
-npm start
-Setup Backend (Express):
+2. **Setup Frontend (React)**:
+   - Create a React app:
+     ```bash
+     npx create-react-app frontend
+     ```
+   - Test that the app works locally:
+     ```bash
+     cd frontend
+     npm start
+     ```
 
-In the project root, create a folder for the backend:
-bash
-Copy code
-mkdir backend
-cd backend
-npm init -y
-npm install express
-Create a simple Express server (backend/server.js):
-javascript
-Copy code
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 5000;
+3. **Setup Backend (Express)**:
+   - In the project root, create a folder for the backend:
+     ```bash
+     mkdir backend
+     cd backend
+     npm init -y
+     npm install express
+     ```
+   - Create a simple Express server (`backend/server.js`):
+     ```javascript
+     const express = require('express');
+     const app = express();
+     const PORT = process.env.PORT || 5000;
 
-app.get('/', (req, res) => res.send('Hello from the backend!'));
+     app.get('/', (req, res) => res.send('Hello from the backend!'));
 
-app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
-Add a start script to backend/package.json:
-json
-Copy code
-"scripts": {
-  "start": "node server.js"
-}
-Test the server locally:
-bash
-Copy code
-npm start
-Push Project to GitLab:
+     app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+     ```
+   - Add a `start` script to `backend/package.json`:
+     ```json
+     "scripts": {
+       "start": "node server.js"
+     }
+     ```
+   - Test the server locally:
+     ```bash
+     npm start
+     ```
 
-Add both frontend and backend folders, commit, and push to GitLab:
-bash
-Copy code
-git add .
-git commit -m "Initial commit with frontend and backend"
-git push origin main
-
+4. **Push Project to GitLab**:
+   - Add both frontend and backend folders, commit, and push to GitLab:
+     ```bash
+     git add .
+     git commit -m "Initial commit with frontend and backend"
+     git push origin main
+     ```
 
 
 #### 2.1 Apache Configuration for React Frontend
