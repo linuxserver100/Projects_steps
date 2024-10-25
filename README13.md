@@ -538,7 +538,8 @@ Before setting up the pipeline, make sure you can SSH into your server using SSH
 
 - **Copy the React production build to the backend**:
   ```bash
-  cp -r ../my-app/build ./frontend/build
+  cp -r /path/to/react-app/build /path/to/backend/build
+  
   ```
 
 ---
