@@ -72,7 +72,8 @@ Ensure that the server you are deploying to uses SSH key authentication for secu
   ```
 - Link the frontend’s production build to the backend by copying the React build to the backend directory:
   ```bash
-  cp -r ../my-app/build ./frontend/build
+  cp -r /path/to/react-app/build /path/to/backend/build
+  
   ```
 
 ### 3. **Configuring CI/CD Pipeline**
