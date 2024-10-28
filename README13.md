@@ -1,208 +1,154 @@
-Deploying a full-stack React application via a CI/CD pipeline with rollback functionality and deploying it on a server using Apache and SSH key-based authentication involves several steps. I’ll break down the process into:
+To deploy a full-stack React application with a backend and frontend using a CI/CD pipeline, including rollback functionality and deploying to a server with Apache and SSH key-based authentication, you can follow these steps:
 
-1. **Setting up SSH Key Authentication**
-2. **Setting up a React Full-Stack App**
-3. **Configuring CI/CD Pipeline**
-4. **Deploying the App to a Server via Apache**
-5. **Adding Rollback Functionality**
+### Prerequisites
+1. **Server setup**: A server (e.g., Ubuntu) with Apache installed and SSH key-based authentication configured.
+2. **Git repository**: A repository for the full-stack application (frontend and backend).
+3. **CI/CD tool**: A CI/CD service such as GitHub Actions, GitLab CI, or Jenkins.
+4. **PM2 (optional)**: To manage the Node.js backend and facilitate rolling back deployments.
 
----
+### Step-by-Step Process
 
-### 1. **Setting Up SSH Key Authentication**
-Ensure that the server you are deploying to uses SSH key authentication for secure and automated access.
-
-1. **Generate SSH Key Pair** (on local machine or CI server):
-   ```bash
-   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
-   ```
-
-   This will create two files: 
-   - `id_rsa`: your private key (keep this secure).
-   - `id_rsa.pub`: your public key.
-
-2. **Copy the Public Key to the Server**:
-   ```bash
-   ssh-copy-id username@server_ip_address
-   ```
-   This adds your public key to the `~/.ssh/authorized_keys` file on the server.
-
-3. **Test SSH Authentication**:
-   Verify that you can access the server without being prompted for a password:
-   ```bash
-   ssh username@server_ip_address
-   ```
-
-### 2. **Setting Up a React Full-Stack App**
-
-#### Frontend (React):
-- Create your React app:
-  ```bash
-  npx create-react-app my-app
-  cd my-app
-  ```
-- Build the app for production:
-  ```bash
-  npm run build
-  ```
-  This will create a `build/` directory with a static production-ready bundle.
-
-#### Backend (Node.js/Express):
-- Initialize the backend:
-  ```bash
-  mkdir backend && cd backend
-  npm init -y
-  npm install express
-  ```
-- Set up a basic Express server:
-  ```js
-  const express = require('express');
-  const app = express();
-  const path = require('path');
-
-  app.use(express.static(path.join(__dirname, 'frontend/build')));
-
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend/build', 'index.html'));
-  });
-
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-  ```
-- Link the frontend’s production build to the backend by copying the React build to the backend directory:
-  ```bash
-  cp -r /path/to/react-app/build /path/to/backend/build
-  
-  ```
-
-### 3. **Configuring CI/CD Pipeline**
-
-Let’s assume you’re using GitHub Actions for CI/CD, but this can be adapted to other platforms like GitLab, CircleCI, etc.
-
-#### GitHub Actions Workflow:
-Create a `.github/workflows/deploy.yml` file in your repository.
-
-```yaml
-name: Deploy to Server
-
-on:
-  push:
-    branches:
-      - main
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '16'
-
-    - name: Install dependencies and build frontend
-      run: |
-        cd my-app
-        npm install
-        npm run build
-        cp -r build ../backend/frontend/build
-
-    - name: Set up SSH
-      uses: webfactory/ssh-agent@v0.5.3
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-    - name: Deploy to server
-      run: |
-        scp -r ./backend/* username@server_ip:/var/www/my-app
-        ssh username@server_ip 'cd /var/www/my-app && npm install --production && pm2 restart all'
-```
-
-- You will need to set the `SSH_PRIVATE_KEY` in GitHub Secrets (Settings > Secrets).
-- Adjust the paths as needed based on your app structure.
-- Install [PM2](https://pm2.keymetrics.io/) on your server for process management:
-  ```bash
-  npm install -g pm2
-  ```
-
-### 4. **Deploying the App to a Server via Apache**
-
+#### Step 1: Prepare the Server
 1. **Install Apache**:
-   On the server, install Apache:
    ```bash
-   sudo apt-get update
-   sudo apt-get install apache2
+   sudo apt update
+   sudo apt install apache2
    ```
 
-2. **Enable Reverse Proxy Modules** (if you are using Node.js backend):
-   ```bash
-   sudo a2enmod proxy proxy_http
-   sudo systemctl restart apache2
-   ```
-
-3. **Configure Virtual Host for Domain**:
-   Edit the Apache config to point to your Node.js app:
-   ```bash
-   sudo nano /etc/apache2/sites-available/000-default.conf
-   ```
-
-   Add the following configuration inside `<VirtualHost *:80>`:
-   ```apache
-   ServerName your-domain.com
-   ProxyRequests Off
-   ProxyPass / http://localhost:5000/
-   ProxyPassReverse / http://localhost:5000/
-   ```
-
-4. **Enable Your Virtual Host and Restart Apache**:
-   ```bash
-   sudo a2ensite 000-default.conf
-   sudo systemctl restart apache2
-   ```
-
-5. **Set Up Domain Name**:
-   - Make sure your domain name is properly pointed to your server IP (via DNS settings).
-   - Optionally, install an SSL certificate using [Let's Encrypt](https://letsencrypt.org/):
+2. **Enable necessary Apache modules**:
+   - Enable `proxy` and `proxy_http` modules to act as a reverse proxy for your Node.js backend:
      ```bash
-     sudo apt-get install certbot python3-certbot-apache
-     sudo certbot --apache -d your-domain.com
+     sudo a2enmod proxy
+     sudo a2enmod proxy_http
      ```
 
-### 5. **Adding Rollback Functionality**
-
-To implement a rollback mechanism, you can deploy the app to a timestamped directory and symlink the current version. If deployment fails, you can quickly point back to the previous version.
-
-#### Update CI/CD for Rollbacks:
-
-1. **Deploy to a Timestamped Directory**:
-   In your GitHub Actions workflow, modify the deployment step:
-
-   ```yaml
-   - name: Deploy to server
-     run: |
-       TIMESTAMP=$(date +%s)
-       ssh username@server_ip "mkdir -p /var/www/my-app-$TIMESTAMP"
-       scp -r ./backend/* username@server_ip:/var/www/my-app-$TIMESTAMP
-       ssh username@server_ip "ln -sfn /var/www/my-app-$TIMESTAMP /var/www/my-app"
-       ssh username@server_ip "cd /var/www/my-app && npm install --production && pm2 restart all"
-   ```
-
-2. **Rollback Command**:
-   If the new version fails, you can manually or automatically rollback by pointing the symlink back to the previous deployment:
+3. **Configure Firewall** (if applicable):
    ```bash
-   ln -sfn /var/www/my-app-previous-timestamp /var/www/my-app
-   pm2 restart all
+   sudo ufw allow 'Apache Full'
    ```
 
----
+4. **Generate SSH Keys** (if not already done) and add the public key to your server’s `~/.ssh/authorized_keys` for passwordless access.
 
-### Conclusion
+#### Step 2: Configure Apache as a Reverse Proxy
+1. **Set up virtual host for frontend**:
+   - Edit Apache config file (e.g., `/etc/apache2/sites-available/000-default.conf`) and add the following configuration for your frontend:
+     ```apache
+     <VirtualHost *:80>
+         ServerName yourdomain.com
+         DocumentRoot /var/www/html/frontend
 
-By setting up SSH key-based authentication, configuring GitHub Actions for CI/CD, and using Apache as a reverse proxy, you can deploy a full-stack React app securely. The rollback mechanism with timestamped directories ensures that you can quickly revert to a stable version if the deployment fails
+         <Directory /var/www/html/frontend>
+             AllowOverride All
+             Require all granted
+         </Directory>
+     </VirtualHost>
+     ```
+
+2. **Set up reverse proxy for backend**:
+   - Add the following to the Apache config for your backend API:
+     ```apache
+     <VirtualHost *:80>
+         ServerName api.yourdomain.com
+
+         ProxyRequests Off
+         ProxyPass / http://localhost:3000/
+         ProxyPassReverse / http://localhost:3000/
+     </VirtualHost>
+     ```
+3. **Restart Apache**:
+   ```bash
+   sudo systemctl restart apache2
+   ```
+
+#### Step 3: Set Up CI/CD Pipeline with SSH Deployment
+1. **Configure your CI/CD tool** to:
+   - Build the frontend and backend.
+   - Deploy to the server using SSH and SCP (Secure Copy Protocol).
+
+2. **Add SSH Key to CI/CD Tool**:
+   - Add your private SSH key to the secrets in your CI/CD pipeline configuration.
+
+3. **Example GitHub Actions Workflow** (`.github/workflows/deploy.yml`):
+   ```yaml
+   name: Deploy Full-Stack App
+
+   on:
+     push:
+       branches:
+         - main
+
+   jobs:
+     build-and-deploy:
+       runs-on: ubuntu-latest
+
+       steps:
+       - name: Checkout code
+         uses: actions/checkout@v2
+
+       - name: Install Node.js
+         uses: actions/setup-node@v2
+         with:
+           node-version: '16'
+
+       - name: Install dependencies and build frontend
+         run: |
+           cd frontend
+           npm install
+           npm run build
+
+       - name: Build and package backend
+         run: |
+           cd ../backend
+           npm install
+           npm run build
+
+       - name: Deploy to server
+         env:
+           SSH_KEY: ${{ secrets.SSH_KEY }}
+         run: |
+           mkdir -p ~/.ssh
+           echo "$SSH_KEY" > ~/.ssh/id_rsa
+           chmod 600 ~/.ssh/id_rsa
+
+           # Deploy frontend
+           scp -r frontend/build/* user@yourserver:/var/www/html/frontend
+
+           # Deploy backend
+           scp -r backend/* user@yourserver:/var/www/html/backend
+
+           # Restart the backend server using PM2 or systemd
+           ssh user@yourserver "pm2 reload backend || pm2 start /var/www/html/backend/index.js --name backend"
+   ```
+
+4. **Configure Rollback**:
+   - Store previous versions on the server. You can create a backup script to rename the old directory:
+     ```bash
+     mv /var/www/html/frontend /var/www/html/frontend_backup
+     mv /var/www/html/backend /var/www/html/backend_backup
+     ```
+   - Set up the pipeline to restore from these backups in case of a failed deployment.
+
+#### Step 4: Testing and Monitoring
+1. **Verify the deployment** by accessing `http://yourdomain.com` for the frontend and `http://api.yourdomain.com` for the backend.
+2. **Enable logging** and set up monitoring for both frontend and backend to detect any errors quickly.
+
+#### Step 5: Rollback Functionality
+In case of deployment failure:
+1. **Use PM2** to revert the backend:
+   ```bash
+   pm2 delete backend
+   pm2 start /var/www/html/backend_backup/index.js --name backend
+   ```
+
+2. **Restore Frontend Backup**:
+   ```bash
+   rm -rf /var/www/html/frontend
+   mv /var/www/html/frontend_backup /var/www/html/frontend
+   sudo systemctl restart apache2
+   ```
+
+This setup provides a structured, automated way to deploy and roll back a full-stack application on an Apache server with SSH-based CI/CD.
+
 
 
 😄😁🔑🤪🔑🤪😄😁🤪😁🤪🤩🤪👇🤪😁🤪🙂‍↕️🤪🤩🤪😁🤪🙂‍↕️☺️🙂‍↕️🤪😄😄☺️😁😁🤪🙂‍↕️🙂‍↕️☺️🙂‍↕️☺️🥹☺️🤩😚😚😄👇😅😄😝🤩😝🤩😅🥹😅🥹😄😂🥹😂🥹😂😜😜😚😆😘🥹🥹😘🥲😘😂😘😆😘😜😘🥲😘🙂‍↕️😘🤩😘🤩😘🥲😘😚🔐🥹🤩🔐🤩🔐😄🔐🤩🔐😜🔐🥹🔐🥲🔐😜🔐🥹🤩🔐😜🤩😚😜😚🥹😚🥹😚🤩😚🤩😜😚🥲😚😚😜😚🥲😚🙂‍↕️🙂‍↕️😚😜😚😜😚😜😚😜😚🥹😚🤩🤩😚🤩
