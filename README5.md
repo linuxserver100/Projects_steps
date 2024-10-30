@@ -1,3 +1,138 @@
+😊To set up contact number-based OTP (One-Time Password) login for SSH on an Ubuntu server without using Django or Flask, you can utilize Python along with some libraries to handle OTP generation and sending. Here’s a step-by-step guide to achieve this:
+
+### Prerequisites
+
+1. **Ubuntu Server**: Ensure you have SSH access to your Ubuntu server.
+2. **Python 3**: Python should be installed (Python 3.6 or higher recommended).
+3. **pip**: Ensure `pip` is installed for package management.
+
+### Step 1: Install Required Packages
+
+Install the necessary packages using `pip`. You’ll need `pyotp` for OTP generation and `twilio` or `smtplib` for sending SMS or email.
+
+```bash
+sudo apt update
+sudo apt install python3-pip
+pip3 install pyotp twilio
+```
+
+### Step 2: Configure Twilio for SMS (or use Email)
+
+If you choose to send OTPs via SMS, sign up for a [Twilio account](https://www.twilio.com/) and set up a phone number. Note down your **Account SID**, **Auth Token**, and the **Twilio phone number**.
+
+Alternatively, for email, you can use Python’s built-in `smtplib` to send OTPs via email.
+
+### Step 3: Create the OTP Generation and Sending Script
+
+Create a Python script named `otp_server.py` that will handle OTP generation and sending.
+
+```python
+import pyotp
+import os
+import time
+from twilio.rest import Client
+
+# Twilio configuration
+TWILIO_ACCOUNT_SID = 'your_account_sid'
+TWILIO_AUTH_TOKEN = 'your_auth_token'
+TWILIO_PHONE_NUMBER = 'your_twilio_number'
+client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+def send_otp(phone_number, otp):
+    message = client.messages.create(
+        body=f'Your OTP is: {otp}',
+        from_=TWILIO_PHONE_NUMBER,
+        to=phone_number
+    )
+    return message.sid
+
+def generate_otp(secret):
+    totp = pyotp.TOTP(secret)
+    return totp.now()
+
+if __name__ == '__main__':
+    phone_number = input("Enter your phone number: ")
+    secret = pyotp.random_base32()  # Store this securely for user authentication later
+
+    print("Your OTP secret (store this securely):", secret)
+
+    # Generate and send OTP
+    otp = generate_otp(secret)
+    send_otp(phone_number, otp)
+    print(f"OTP sent to {phone_number}: {otp}")
+
+    # Wait for user input to verify
+    user_otp = input("Enter the OTP you received: ")
+    totp = pyotp.TOTP(secret)
+    if totp.verify(user_otp):
+        print("OTP verified successfully!")
+    else:
+        print("Invalid OTP.")
+```
+
+### Step 4: Configure PAM for SSH
+
+To configure SSH to use PAM for OTP verification, you need to modify the PAM configuration files.
+
+1. **Edit the SSH PAM Configuration**:
+
+   Open the SSH PAM configuration file:
+
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+   Add the following line to the top of the file to include your OTP verification script:
+
+   ```bash
+   auth required pam_exec.so /path/to/your/otp_server.py
+   ```
+
+   Ensure that `pam_exec.so` is pointing to your OTP script. The path must be executable by the SSH service.
+
+2. **Edit the SSH Configuration**:
+
+   Open the SSH configuration file:
+
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Ensure the following lines are present and uncommented:
+
+   ```bash
+   ChallengeResponseAuthentication yes
+   UsePAM yes
+   ```
+
+### Step 5: Restart SSH Service
+
+After making changes, restart the SSH service:
+
+```bash
+sudo systemctl restart ssh
+```
+
+### Step 6: Testing the OTP Login
+
+1. Open a terminal on a different machine and try to SSH into your Ubuntu server.
+   
+   ```bash
+   ssh username@your_server_ip
+   ```
+
+2. You should be prompted to enter your OTP. Follow the instructions in your `otp_server.py` script to enter the OTP sent to your phone.
+
+### Notes:
+
+- Ensure that your script runs properly without errors. You may need to manage where the OTP secret is stored and ensure secure storage.
+- This setup is for basic OTP handling. Consider implementing additional security measures, such as logging, rate limiting, and error handling, for production use.
+- Always test your setup in a safe environment before deploying it on a live server.
+
+With this setup, you should have a basic contact number-based OTP login for SSH configured on your Ubuntu server!
+
+
+😁🤩🙂😂🥰👇😂😍🤩😂👇🥰😗👇🥰😂😍👇😂😍😉😂😍😉😂😍😉😂😍😉😂😍👇😂🥰👇😂🥰👇😂🥰😗🔑😗🔑😀😗🔑😀😗🥰😀😗😀😂😀🥰😗🥰😀😂🥰😀😗😀🥰😗🔑😀😗🥰😀😂🥰😀😗🥰😀😗🥰😀😗🥰😀😗😀😗🥰😀😗🔑😀😗🥰😀😂🥰😀😗🥰😊😂🥰😊😗🥰😊🔑😊😂🥰😊😛🔑😊😗🔑😊😊😂🙂😃😗😃😀😗🔑😀😗🔑😀😗👇😗🔑😀😗🔑😀😂😗🥰😊😗🔑😊😗🔑😊😂🔑😂🔑
 To set up email-based OTP login for SSH on an Ubuntu server, you can follow these steps. We’ll use Python to generate and send OTPs via email, and configure SSH to work with PAM for OTP-based authentication. Here’s how:
 
 ### Step 1: Install Required Packages
