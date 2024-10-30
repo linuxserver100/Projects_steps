@@ -1,144 +1,375 @@
+To set up email-based OTP (One-Time Password) login for SSH on an Ubuntu server, you'll need to set up a combination of tools, like **Flask** (a Python web framework) for generating and sending OTPs via email, and configuring SSH for PAM (Pluggable Authentication Modules) to use OTPs. Here’s a basic guide to help you get started:
 
-Setting up email OTP (One-Time Password) login on an Ubuntu server requires a combination of tools to generate and send OTPs via email. Here’s a step-by-step guide using Python and Postfix for sending emails.
+### Step 1: Install Dependencies
+
+You'll need **Python** and some packages to handle OTP generation and email sending. Start by installing the required packages.
+
+```bash
+sudo apt update
+sudo apt install python3-pip python3-venv libpam-python
+pip3 install flask pyotp smtplib
+```
+
+### Step 2: Create a Flask App for OTP Generation and Email Sending
+
+1. Create a directory for your Flask application, such as `otp-server`.
+   ```bash
+   mkdir otp-server && cd otp-server
+   ```
+2. Create a Python virtual environment.
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+3. Create a Flask app (`otp_server.py`) to generate and send OTPs.
+
+```python
+# otp_server.py
+from flask import Flask, request, jsonify
+import pyotp
+import smtplib
+from email.mime.text import MIMEText
+
+app = Flask(__name__)
+totp = pyotp.TOTP("base32secret3232")  # Replace this with a secure, random secret key
+
+@app.route('/send_otp', methods=['POST'])
+def send_otp():
+    email = request.json.get('email')
+    otp = totp.now()
+
+    msg = MIMEText(f"Your OTP is: {otp}")
+    msg['Subject'] = 'Your OTP Code'
+    msg['From'] = 'your_email@example.com'
+    msg['To'] = email
+
+    try:
+        with smtplib.SMTP('smtp.example.com', 587) as server:
+            server.starttls()
+            server.login("your_email@example.com", "your_email_password")
+            server.sendmail("your_email@example.com", email, msg.as_string())
+        return jsonify({"message": "OTP sent successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/verify_otp', methods=['POST'])
+def verify_otp():
+    otp = request.json.get('otp')
+    if totp.verify(otp):
+        return jsonify({"message": "OTP verified"}), 200
+    else:
+        return jsonify({"error": "Invalid OTP"}), 400
+
+if __name__ == '__main__':
+    app.run(port=5000)
+```
+
+Replace `"base32secret3232"`, SMTP server, and email credentials with your actual information.
+
+### Step 3: Start the Flask App
+
+```bash
+flask run --port 5000
+```
+
+Ensure this is running in the background and accessible on the server.
+
+### Step 4: Configure PAM for SSH
+
+1. Open the PAM SSH configuration file.
+
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+2. Add a PAM script to check OTPs via the Flask API. This requires a custom PAM module.
+
+Create `/usr/share/pam-python/otp_pam.py`:
+
+```python
+# otp_pam.py
+import requests
+
+def pam_sm_authenticate(pamh, flags, argv):
+    try:
+        otp = pamh.conversation(pamh.Message(pamh.PAM_PROMPT_ECHO_OFF, "Enter OTP: ")).resp
+        response = requests.post("http://127.0.0.1:5000/verify_otp", json={"otp": otp})
+        if response.json().get("message") == "OTP verified":
+            return pamh.PAM_SUCCESS
+        else:
+            return pamh.PAM_AUTH_ERR
+    except Exception:
+        return pamh.PAM_AUTH_ERR
+```
+
+3. Add the PAM module to `/etc/pam.d/sshd`:
+
+   ```bash
+   auth required pam_python.so /usr/share/pam-python/otp_pam.py
+   ```
+
+### Step 5: Configure SSH to Use PAM
+
+1. Open the SSH daemon configuration file.
+
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+2. Ensure the following lines are set:
+
+   ```bash
+   ChallengeResponseAuthentication yes
+   UsePAM yes
+   ```
+
+3. Restart SSH:
+
+   ```bash
+   sudo systemctl restart ssh
+   ```
+
+### Step 6: Test OTP Login
+
+1. Connect to your server via SSH. You should be prompted for an OTP after entering your password.
+2. The Flask app should handle the OTP generation and email delivery.
+
+This setup combines **Flask** for generating/sending OTPs, **pyotp** for OTP validation, and PAM scripting for SSH login integration.
+
+🙃😙😘☺️☺️👇🤪👇☺️👇☺️👇😃👇😃☺️👇😀👇😃👇🙃👇😃🥲😙😝☺️🤩😝😙😝😝😃😊😝😙😝🙃😝😊😝😊😝😙😝😃😙😝😊😝😙😝😃😝🙃🥲😃🥲😃🥲😃🥲😁😁🥲😊🥲😊🥲😄🥲😄😄🥲☺️🥲☺️🥲😄🥲😊🥲😊🥲😄🥲😙🥲😙😌😃😌😙😌😙😙😌😙😌😊😌😊😌😙
+To set up email OTP (One-Time Password) login on an Ubuntu server, you can use `PAM (Pluggable Authentication Module)` with a tool like `oathtool` to generate OTPs and send them via email. Here's a step-by-step guide:
+
+### Step 1: Install Necessary Packages
+1. **Install `oathtool`** (for generating OTPs) and **Postfix** (for sending emails). Replace `Postfix` with your preferred mail sending service if needed.
+
+   ```bash
+   sudo apt update
+   sudo apt install libpam-oath oathtool postfix mailutils -y
+   ```
+
+### Step 2: Configure OATH
+1. **Create a directory** for storing user OTP secrets.
+
+   ```bash
+   sudo mkdir /etc/libpam-oath
+   sudo chmod 700 /etc/libpam-oath
+   ```
+
+2. **Create an OATH file** to store user secrets.
+
+   ```bash
+   sudo nano /etc/libpam-oath/users.oath
+   ```
+
+   Inside this file, add each user in this format:
+   ```
+   HOTP/T30/6 username - hex-secret
+   ```
+
+   - Replace `username` with the actual username.
+   - Replace `hex-secret` with a generated secret. To create one, use:
+
+     ```bash
+     oathtool --verbose --totp <your_secret>
+     ```
+
+   This generates a TOTP secret.
+
+3. **Set proper permissions**:
+
+   ```bash
+   sudo chmod 600 /etc/libpam-oath/users.oath
+   sudo chown root:root /etc/libpam-oath/users.oath
+   ```
+
+### Step 3: Configure PAM to Use OTP
+1. **Edit the PAM configuration** file for SSH.
+
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+   Add the following line at the top of the file to enable PAM for OTP:
+
+   ```text
+   auth required pam_oath.so usersfile=/etc/libpam-oath/users.oath window=30 digits=6
+   ```
+
+2. **Edit the SSH configuration** to use password and OTP.
+
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Set these options:
+
+   ```text
+   ChallengeResponseAuthentication yes
+   UsePAM yes
+   ```
+
+   **Restart SSH** for changes to take effect:
+
+   ```bash
+   sudo systemctl restart ssh
+   ```
+
+### Step 4: Set Up an Email Alert Script
+1. **Create a script** to send the OTP to the user’s email.
+
+   ```bash
+   sudo nano /usr/local/bin/send-otp-email.sh
+   ```
+
+   Add the following content (update email settings as needed):
+
+   ```bash
+   #!/bin/bash
+   USER=$1
+   OTP=$2
+   EMAIL="user@example.com"  # Replace with the actual user's email
+
+   echo "Your OTP code is: $OTP" | mail -s "Your OTP Code" $EMAIL
+   ```
+
+2. **Make the script executable**:
+
+   ```bash
+   sudo chmod +x /usr/local/bin/send-otp-email.sh
+   ```
+
+3. **Modify the PAM configuration** to call this script.
+
+   Edit the `/etc/pam.d/sshd` file again, adding the following line below the `pam_oath` line:
+
+   ```text
+   auth optional pam_exec.so /usr/local/bin/send-otp-email.sh
+   ```
+
+### Step 5: Test the Setup
+1. Attempt to SSH into the server. After entering your password, you should receive an OTP via email.
+2. Enter the OTP to complete the login.
+
+### Note
+Make sure to test carefully on a non-production server first, as locking yourself out is possible.
+
+😆😅🥴🥴😅🥴😛😀👇🔑😀🔑🤪😝🔑🤪🤩🔑😘🤩🤩😘😘🤩😘🤩😘🤩👇😉😌😀🔑😌😀🔑😌😀🔑😌🔑😀😌😀🔑😌🔑😌🔑😃☺️😃🔑☺️🥲🔑☺️🔑🥲☺️🔑🥲☺️😃🔑☺️😃🔑☺️😃🔑☺️😃🔑😃😃☺️☺️😃🔑☺️🔑😃☺️😃🔑☺️😃🔑😍😃🔑😍😃🔑🔑🥰😊😉😃😊🔑😃😊😃😉😊😉😃😊😃😉😉😊
+To set up email OTP (One-Time Password) login on an Ubuntu server, you can use tools like `PAM` (Pluggable Authentication Modules), `otpw` (OTP generator), and `ssmtp` (for email sending). Here’s a general guide to get it up and running:
+
+### Prerequisites
+
+1. **Ubuntu server** with administrative privileges.
+2. **SMTP relay** credentials (e.g., Gmail SMTP) for sending OTPs via email.
 
 ### Step 1: Install Required Packages
 
-1. **Update your package list**:
+```bash
+sudo apt update
+sudo apt install libpam-otpw ssmtp mailutils
+```
+
+- **libpam-otpw**: Provides PAM module for OTP-based login.
+- **ssmtp**: A simple mail transfer program to send emails.
+- **mailutils**: Provides the `mail` command-line tool to send email.
+
+### Step 2: Configure `ssmtp` to Send Emails
+
+1. **Edit `ssmtp.conf`:**
+
    ```bash
-   sudo apt update
+   sudo nano /etc/ssmtp/ssmtp.conf
    ```
 
-2. **Install required packages**:
-   ```bash
-   sudo apt install python3 python3-pip postfix
-   ```
+2. **Configure SMTP settings** (example with Gmail):
 
-3. **Install the necessary Python libraries**:
-   ```bash
-   pip3 install Flask Flask-Mail pyotp
-   ```
-
-### Step 2: Configure Postfix for Email Sending
-
-1. **Configure Postfix**:
-   - During installation, you may be prompted for the type of mail configuration. Choose "Internet Site".
-   - Set the system mail name to your server's domain name or hostname.
-
-2. **Edit the Postfix configuration**:
-   ```bash
-   sudo nano /etc/postfix/main.cf
-   ```
-
-   - Ensure the following lines are present and correctly configured:
    ```plaintext
-   myhostname = yourdomain.com
-   mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain
+   mailhub=smtp.gmail.com:587
+   AuthUser=your-email@gmail.com
+   AuthPass=your-email-password
+   UseSTARTTLS=YES
+   FromLineOverride=YES
    ```
 
-3. **Restart Postfix**:
+3. **Test email sending:**
+
    ```bash
-   sudo systemctl restart postfix
+   echo "Test email" | mail -s "Test" recipient@example.com
    ```
 
-### Step 3: Create a Python Script for OTP Generation and Email Sending
+### Step 3: Configure OTPW for OTP Generation
 
-1. **Create a directory for your script**:
+1. **Generate OTP Seeds for a User:**
+
+   As the target user, run the following to create OTP entries:
+
    ```bash
-   mkdir ~/otp_login
-   cd ~/otp_login
+   otpw-gen
    ```
 
-2. **Create a Python script (otp_login.py)**:
+   This will create `~/.otpw` containing OTP seeds. It also generates a list of OTPs, each with a unique number.
+
+2. **Store OTP List Securely:** Save this list for reference, as each OTP can be used only once.
+
+### Step 4: Configure PAM to Use OTP for SSH Login
+
+1. **Edit PAM Configuration for SSH:** Open the SSH PAM configuration:
+
    ```bash
-   nano otp_login.py
+   sudo nano /etc/pam.d/sshd
    ```
 
-3. **Add the following code**:
-   ```python
-   from flask import Flask, request, jsonify
-   from flask_mail import Mail, Message
-   import pyotp
-   import os
+2. **Add PAM OTPW Module:** Add the following line at the top:
 
-   app = Flask(__name__)
-
-   # Configure your email settings
-   app.config['MAIL_SERVER'] = 'smtp.example.com'  # Replace with your SMTP server
-   app.config['MAIL_PORT'] = 587  # or 465 for SSL
-   app.config['MAIL_USERNAME'] = 'your_email@example.com'  # Your email
-   app.config['MAIL_PASSWORD'] = 'your_email_password'  # Your email password
-   app.config['MAIL_USE_TLS'] = True
-   app.config['MAIL_USE_SSL'] = False
-
-   mail = Mail(app)
-
-   @app.route('/login', methods=['POST'])
-   def login():
-       email = request.json.get('email')
-       if not email:
-           return jsonify({'error': 'Email is required!'}), 400
-
-       # Generate OTP
-       totp = pyotp.TOTP('base32secret3232')  # You should store this secret securely
-       otp = totp.now()
-
-       # Send OTP via email
-       msg = Message('Your OTP Code', sender='your_email@example.com', recipients=[email])
-       msg.body = f'Your OTP code is {otp}.'
-       mail.send(msg)
-
-       return jsonify({'message': 'OTP sent to your email!'}), 200
-
-   @app.route('/verify', methods=['POST'])
-   def verify():
-       email = request.json.get('email')
-       otp = request.json.get('otp')
-       if not email or not otp:
-           return jsonify({'error': 'Email and OTP are required!'}), 400
-
-       totp = pyotp.TOTP('base32secret3232')
-       if totp.verify(otp):
-           return jsonify({'message': 'OTP verified successfully!'}), 200
-       else:
-           return jsonify({'error': 'Invalid OTP!'}), 400
-
-   if __name__ == '__main__':
-       app.run(host='0.0.0.0', port=5000)
+   ```plaintext
+   auth required pam_otpw.so
    ```
 
-### Step 4: Run the Python Script
+3. **Restrict SSH to OTP-based Authentication:** 
 
-1. **Run the script**:
    ```bash
-   python3 otp_login.py
+   sudo nano /etc/ssh/sshd_config
    ```
 
-### Step 5: Test the OTP Login
+   Set the following parameters:
 
-1. **Send a login request**:
-   - Use `curl` or Postman to send a POST request to `http://your_server_ip:5000/login` with a JSON body:
-   ```json
-   {
-       "email": "user@example.com"
-   }
+   ```plaintext
+   ChallengeResponseAuthentication yes
+   PasswordAuthentication no
    ```
 
-2. **Check the email** for the OTP and verify it by sending another POST request to `http://your_server_ip:5000/verify`:
-   ```json
-   {
-       "email": "user@example.com",
-       "otp": "your_otp_here"
-   }
+4. **Restart SSH Service:**
+
+   ```bash
+   sudo systemctl restart ssh
    ```
 
-### Step 6: Secure Your Application
+### Step 5: Set Up a Script to Email the OTP
 
-- Consider implementing HTTPS to secure your API.
-- Store sensitive data, such as your email password and TOTP secret, securely (e.g., using environment variables).
+Create a script to email the OTP to users, then add this script to `/etc/otpw-send-mail.sh`:
 
-### Additional Considerations
+```bash
+#!/bin/bash
+OTP=$(head -1 ~/.otpw | cut -d ' ' -f 2)
+echo "Your OTP is: $OTP" | mail -s "OTP Login Code" recipient@example.com
+```
 
-- Ensure your server can send emails and that your SMTP settings are correct.
-- You may need to adjust firewall settings to allow traffic on port 5000.
+Make the script executable:
 
-This guide provides a simple way to implement email OTP login on an Ubuntu server using Flask and Postfix. Adjust the code as necessary to fit your specific requirements.
+```bash
+sudo chmod +x /etc/otpw-send-mail.sh
+```
+
+### Step 6: Test the OTP-Based SSH Login
+
+1. **SSH to the server:**
+
+   ```bash
+   ssh your_user@server_ip
+   ```
+
+2. **Receive an OTP email**, and enter the OTP when prompted.
+
+This setup should now allow you to use email OTPs for SSH logins on your Ubuntu server.
+
+
+
