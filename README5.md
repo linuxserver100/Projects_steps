@@ -1,140 +1,159 @@
-To set up email-based OTP (One-Time Password) login for SSH on an Ubuntu server, you'll need to set up a combination of tools, like **Flask** (a Python web framework) for generating and sending OTPs via email, and configuring SSH for PAM (Pluggable Authentication Modules) to use OTPs. Here’s a basic guide to help you get started:
+To set up email-based OTP login for SSH on an Ubuntu server, you can follow these steps. We’ll use Python to generate and send OTPs via email, and configure SSH to work with PAM for OTP-based authentication. Here’s how:
 
-### Step 1: Install Dependencies
-
-You'll need **Python** and some packages to handle OTP generation and email sending. Start by installing the required packages.
+### Step 1: Install Required Packages
+First, ensure your system has the necessary tools:
 
 ```bash
 sudo apt update
-sudo apt install python3-pip python3-venv libpam-python
-pip3 install flask pyotp smtplib
+sudo apt install python3 python3-pip libpam-python libpam-google-authenticator
 ```
 
-### Step 2: Create a Flask App for OTP Generation and Email Sending
+The `libpam-python` library will allow us to write a custom PAM module in Python, and `libpam-google-authenticator` can be used to generate OTPs.
 
-1. Create a directory for your Flask application, such as `otp-server`.
-   ```bash
-   mkdir otp-server && cd otp-server
-   ```
-2. Create a Python virtual environment.
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-3. Create a Flask app (`otp_server.py`) to generate and send OTPs.
+### Step 2: Set Up Python Script to Generate and Send OTPs
+Create a Python script that will generate and send OTPs to a user’s email. We’ll use Python’s `smtplib` to send the email and `random` to generate OTPs.
 
-```python
-# otp_server.py
-from flask import Flask, request, jsonify
-import pyotp
-import smtplib
-from email.mime.text import MIMEText
-
-app = Flask(__name__)
-totp = pyotp.TOTP("base32secret3232")  # Replace this with a secure, random secret key
-
-@app.route('/send_otp', methods=['POST'])
-def send_otp():
-    email = request.json.get('email')
-    otp = totp.now()
-
-    msg = MIMEText(f"Your OTP is: {otp}")
-    msg['Subject'] = 'Your OTP Code'
-    msg['From'] = 'your_email@example.com'
-    msg['To'] = email
-
-    try:
-        with smtplib.SMTP('smtp.example.com', 587) as server:
-            server.starttls()
-            server.login("your_email@example.com", "your_email_password")
-            server.sendmail("your_email@example.com", email, msg.as_string())
-        return jsonify({"message": "OTP sent successfully"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/verify_otp', methods=['POST'])
-def verify_otp():
-    otp = request.json.get('otp')
-    if totp.verify(otp):
-        return jsonify({"message": "OTP verified"}), 200
-    else:
-        return jsonify({"error": "Invalid OTP"}), 400
-
-if __name__ == '__main__':
-    app.run(port=5000)
-```
-
-Replace `"base32secret3232"`, SMTP server, and email credentials with your actual information.
-
-### Step 3: Start the Flask App
-
-```bash
-flask run --port 5000
-```
-
-Ensure this is running in the background and accessible on the server.
-
-### Step 4: Configure PAM for SSH
-
-1. Open the PAM SSH configuration file.
+1. **Create the Python Script:**
 
    ```bash
-   sudo nano /etc/pam.d/sshd
+   sudo nano /usr/local/bin/send_otp.py
    ```
 
-2. Add a PAM script to check OTPs via the Flask API. This requires a custom PAM module.
+2. **Add the Following Code:**
 
-Create `/usr/share/pam-python/otp_pam.py`:
+   ```python
+   import smtplib
+   import random
+   import sys
+   from email.mime.text import MIMEText
 
-```python
-# otp_pam.py
-import requests
+   # Replace these values with your email provider’s details
+   SMTP_SERVER = "smtp.example.com"
+   SMTP_PORT = 587
+   SMTP_USER = "your_email@example.com"
+   SMTP_PASSWORD = "your_password"
 
-def pam_sm_authenticate(pamh, flags, argv):
-    try:
-        otp = pamh.conversation(pamh.Message(pamh.PAM_PROMPT_ECHO_OFF, "Enter OTP: ")).resp
-        response = requests.post("http://127.0.0.1:5000/verify_otp", json={"otp": otp})
-        if response.json().get("message") == "OTP verified":
-            return pamh.PAM_SUCCESS
-        else:
-            return pamh.PAM_AUTH_ERR
-    except Exception:
-        return pamh.PAM_AUTH_ERR
-```
+   def send_otp(email):
+       otp = str(random.randint(100000, 999999))
+       message = MIMEText(f"Your OTP code is: {otp}")
+       message["Subject"] = "Your One-Time Password"
+       message["From"] = SMTP_USER
+       message["To"] = email
 
-3. Add the PAM module to `/etc/pam.d/sshd`:
+       with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+           server.starttls()
+           server.login(SMTP_USER, SMTP_PASSWORD)
+           server.sendmail(SMTP_USER, email, message.as_string())
+
+       return otp
+
+   if __name__ == "__main__":
+       email = sys.argv[1]
+       otp = send_otp(email)
+       print(otp)
+   ```
+
+3. **Make the Script Executable:**
 
    ```bash
-   auth required pam_python.so /usr/share/pam-python/otp_pam.py
+   sudo chmod +x /usr/local/bin/send_otp.py
    ```
 
-### Step 5: Configure SSH to Use PAM
+### Step 3: Configure PAM to Use the OTP Script
 
-1. Open the SSH daemon configuration file.
+1. **Create a PAM Module Script:**
+
+   Create a script that calls `send_otp.py` and verifies the OTP entered by the user:
+
+   ```bash
+   sudo nano /etc/security/otp_pam.py
+   ```
+
+2. **Add the Following Code:**
+
+   ```python
+   import pam
+   import subprocess
+
+   def pam_sm_authenticate(pamh, flags, argv):
+       user_email = "user_email@example.com"  # Replace with actual email
+
+       otp = subprocess.check_output(["/usr/local/bin/send_otp.py", user_email]).strip()
+       user_input = pamh.conversation(pamh.Message(pamh.PAM_PROMPT_ECHO_ON, "Enter OTP: ")).resp
+
+       if user_input == otp.decode():
+           return pamh.PAM_SUCCESS
+       return pamh.PAM_AUTH_ERR
+
+   def pam_sm_setcred(pamh, flags, argv):
+       return pamh.PAM_SUCCESS
+
+   def pam_sm_acct_mgmt(pamh, flags, argv):
+       return pamh.PAM_SUCCESS
+
+   def pam_sm_open_session(pamh, flags, argv):
+       return pamh.PAM_SUCCESS
+
+   def pam_sm_close_session(pamh, flags, argv):
+       return pamh.PAM_SUCCESS
+
+   def pam_sm_chauthtok(pamh, flags, argv):
+       return pamh.PAM_SUCCESS
+   ```
+
+3. **Make the Script Executable:**
+
+   ```bash
+   sudo chmod +x /etc/security/otp_pam.py
+   ```
+
+### Step 4: Configure SSH to Use PAM
+
+1. **Edit SSH Configuration:**
+
+   Open the SSH configuration file and enable PAM:
 
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-2. Ensure the following lines are set:
+   Find the line:
 
    ```bash
-   ChallengeResponseAuthentication yes
+   #UsePAM no
+   ```
+
+   Change it to:
+
+   ```bash
    UsePAM yes
    ```
 
-3. Restart SSH:
+2. **Edit PAM SSH Configuration:**
+
+   Add your custom PAM module to SSH’s PAM configuration file:
 
    ```bash
-   sudo systemctl restart ssh
+   sudo nano /etc/pam.d/sshd
    ```
 
-### Step 6: Test OTP Login
+   Add the following line at the top:
 
-1. Connect to your server via SSH. You should be prompted for an OTP after entering your password.
-2. The Flask app should handle the OTP generation and email delivery.
+   ```bash
+   auth required pam_python.so /etc/security/otp_pam.py
+   ```
 
-This setup combines **Flask** for generating/sending OTPs, **pyotp** for OTP validation, and PAM scripting for SSH login integration.
+### Step 5: Restart SSH Service
+
+```bash
+sudo systemctl restart ssh
+```
+
+### Step 6: Test the Setup
+
+Now, when you try to SSH into the server, you should receive an OTP to your specified email, which you can then use to log in.
+
+**Note:** This setup sends the OTP to a hardcoded email in the script. In a production environment, you'd likely implement a method to dynamically fetch each user's email. Additionally, for security, avoid storing plaintext credentials in scripts. Instead, use environment variables or other secure methods to store sensitive information.
 
 🙃😙😘☺️☺️👇🤪👇☺️👇☺️👇😃👇😃☺️👇😀👇😃👇🙃👇😃🥲😙😝☺️🤩😝😙😝😝😃😊😝😙😝🙃😝😊😝😊😝😙😝😃😙😝😊😝😙😝😃😝🙃🥲😃🥲😃🥲😃🥲😁😁🥲😊🥲😊🥲😄🥲😄😄🥲☺️🥲☺️🥲😄🥲😊🥲😊🥲😄🥲😙🥲😙😌😃😌😙😌😙😙😌😙😌😊😌😊😌😙
 
