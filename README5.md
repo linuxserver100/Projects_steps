@@ -1,228 +1,402 @@
 
-Setting up an SSH server on Ubuntu that requires users to confirm their login via an email link involves several steps, including installing necessary software, configuring SSH, and setting up email notifications. Here’s a step-by-step guide to achieve this:
+Setting up an Ubuntu SSH server that requires email verification for user logins involves several steps, including configuring the SSH server, installing necessary packages, setting up email verification, and securing the server with Apache. Below is a detailed guide to accomplish this task.
 
 ### Prerequisites
-- An Ubuntu server (18.04 or later).
-- Root or sudo access to the server.
-- A domain name (for email confirmation) and an email service set up (e.g., SMTP server).
+1. **Ubuntu Server**: Ensure you have an Ubuntu server installed and accessible.
+2. **Root Access**: You will need root or sudo privileges.
+3. **Domain Name**: Have a domain name ready for the Apache configuration.
+4. **Email Server**: Set up an email server or use a service like SendGrid or Mailgun for sending verification emails.
 
 ### Step 1: Install SSH Server
-1. **Update Package Lists:**
+1. **Update the Package Index**:
    ```bash
-   sudo apt update
+   sudo apt update && sudo apt upgrade -y
    ```
 
-2. **Install OpenSSH Server:**
+2. **Install OpenSSH Server**:
    ```bash
-   sudo apt install openssh-server
+   sudo apt install openssh-server -y
    ```
 
-3. **Enable and Start SSH Service:**
-   ```bash
-   sudo systemctl enable ssh
-   sudo systemctl start ssh
-   ```
-
-4. **Check SSH Service Status:**
+3. **Check SSH Service**:
    ```bash
    sudo systemctl status ssh
    ```
 
-### Step 2: Set Up User Accounts
-1. **Add a New User:**
+### Step 2: Install Required Packages
+Install the required packages for email sending and web server functionality:
+```bash
+sudo apt install apache2 php libapache2-mod-php php-mysql sendmail -y
+```
+
+### Step 3: Configure Apache
+1. **Enable Required Apache Modules**:
    ```bash
-   sudo adduser username
+   sudo a2enmod rewrite
+   sudo systemctl restart apache2
    ```
 
-   Replace `username` with the desired username. Follow the prompts to set a password and provide additional information.
-
-2. **Add Users to the Sudo Group (Optional):**
+2. **Set Up a Virtual Host**:
+   Create a new configuration file for your domain:
    ```bash
-   sudo usermod -aG sudo username
+   sudo nano /etc/apache2/sites-available/yourdomain.com.conf
+   ```
+   Add the following configuration:
+   ```apache
+   <VirtualHost *:80>
+       ServerAdmin admin@yourdomain.com
+       ServerName yourdomain.com
+       DocumentRoot /var/www/yourdomain.com/public_html
+       <Directory /var/www/yourdomain.com/public_html>
+           AllowOverride All
+       </Directory>
+       ErrorLog ${APACHE_LOG_DIR}/error.log
+       CustomLog ${APACHE_LOG_DIR}/access.log combined
+   </VirtualHost>
    ```
 
-### Step 3: Install and Configure Required Software
-You will need a web server (like Apache or Nginx) to send confirmation emails, as well as a mailing library. Here we will use **Postfix** for sending emails.
-
-1. **Install Postfix:**
+3. **Create the Document Root**:
    ```bash
-   sudo apt install postfix
+   sudo mkdir -p /var/www/yourdomain.com/public_html
    ```
 
-   During installation, you will be prompted to configure Postfix. Select "Internet Site" and set your server’s domain name.
-
-2. **Install PHP and Necessary Modules (if using PHP):**
-   If you choose to create a simple PHP application for email confirmation, install PHP:
+4. **Enable the New Virtual Host**:
    ```bash
-   sudo apt install php libapache2-mod-php
+   sudo a2ensite yourdomain.com.conf
+   sudo systemctl restart apache2
    ```
 
-3. **Install Other Required Software:**
-   If you plan to use a database to manage users, install MySQL or PostgreSQL:
+### Step 4: Create the Email Verification Script
+1. **Create the PHP Verification Script**:
+   Create a new PHP file for handling verification.
    ```bash
-   sudo apt install mysql-server
+   sudo nano /var/www/yourdomain.com/public_html/verify.php
    ```
 
-### Step 4: Create a Confirmation System
-You need a system to generate unique tokens and send email confirmations. This example will create a simple PHP script.
-
-1. **Set Up a Web Directory:**
-   ```bash
-   sudo mkdir /var/www/html/ssh_confirmation
-   sudo chown -R www-data:www-data /var/www/html/ssh_confirmation
-   ```
-
-2. **Create a PHP Script:**
-   Create a file named `confirm.php` in `/var/www/html/ssh_confirmation`:
-   ```bash
-   sudo nano /var/www/html/ssh_confirmation/confirm.php
-   ```
-
-   Add the following code to handle token verification:
+   Add the following code to send an email with a verification link:
    ```php
    <?php
-   $token = $_GET['token'];
+   // Change these variables according to your setup
+   $to = "user@example.com"; // Email address to send the verification link
+   $subject = "Login Verification";
+   $verification_link = "https://yourdomain.com/verify_user.php?token=your_token"; // Generate token dynamically
 
-   // Database connection
-   $conn = new mysqli('localhost', 'db_user', 'db_pass', 'db_name');
+   $message = "Please verify your login by clicking the link: " . $verification_link;
+   $headers = "From: admin@yourdomain.com\r\n";
 
-   if ($conn->connect_error) {
-       die("Connection failed: " . $conn->connect_error);
-   }
-
-   // Check if token is valid
-   $sql = "SELECT * FROM users WHERE token='$token'";
-   $result = $conn->query($sql);
-
-   if ($result->num_rows > 0) {
-       // Token is valid
-       // Update user's status
-       $sql = "UPDATE users SET confirmed=1 WHERE token='$token'";
-       $conn->query($sql);
-       echo "Your email has been confirmed!";
-   } else {
-       echo "Invalid token!";
-   }
-
-   $conn->close();
+   mail($to, $subject, $message, $headers);
    ?>
    ```
 
-3. **Create User Registration and Token Generation Script:**
-   Create another PHP script named `register.php`:
+### Step 5: Generate Verification Tokens
+You will need a way to generate and store verification tokens securely. You can use a database or a file to manage this. Here’s an example using a database.
+
+1. **Install MySQL**:
    ```bash
-   sudo nano /var/www/html/ssh_confirmation/register.php
+   sudo apt install mysql-server -y
    ```
 
-   Add code to register users and send confirmation emails:
-   ```php
-   <?php
-   if ($_SERVER["REQUEST_METHOD"] == "POST") {
-       $email = $_POST['email'];
-       $token = bin2hex(random_bytes(16)); // Generate a token
-
-       // Database connection
-       $conn = new mysqli('localhost', 'db_user', 'db_pass', 'db_name');
-
-       if ($conn->connect_error) {
-           die("Connection failed: " . $conn->connect_error);
-       }
-
-       // Insert user with token
-       $sql = "INSERT INTO users (email, token, confirmed) VALUES ('$email', '$token', 0)";
-       $conn->query($sql);
-
-       // Send confirmation email
-       $to = $email;
-       $subject = "Email Confirmation";
-       $message = "Click the link to confirm your email: http://your_domain.com/ssh_confirmation/confirm.php?token=$token";
-       mail($to, $subject, $message);
-
-       echo "Confirmation email sent!";
-       $conn->close();
-   }
-   ?>
+2. **Create a Database**:
+   ```bash
+   sudo mysql -u root -p
    ```
-
-4. **Create the Users Table in Your Database:**
-   Run the following commands in MySQL to create the users table:
    ```sql
-   CREATE DATABASE db_name;
-   USE db_name;
-
-   CREATE TABLE users (
+   CREATE DATABASE user_verification;
+   USE user_verification;
+   CREATE TABLE tokens (
        id INT AUTO_INCREMENT PRIMARY KEY,
        email VARCHAR(255) NOT NULL,
        token VARCHAR(255) NOT NULL,
-       confirmed TINYINT(1) DEFAULT 0
+       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
    );
    ```
 
-### Step 5: Configure SSH to Require Confirmation
-1. **Install a PAM Module for Authentication:**
-   You can use PAM (Pluggable Authentication Module) to add email confirmation. However, implementing a full PAM solution can be complex.
+3. **Modify the PHP Script**:
+   Update the PHP script to store tokens in the database.
 
-   Alternatively, you could create a custom script that checks user confirmation before allowing SSH access.
-
-2. **Example of a Custom Check:**
-   Create a script that checks the user’s confirmation status before allowing SSH login:
+### Step 6: Configure SSH for Email Verification
+1. **Create a Custom SSH Login Script**:
+   Create a script to handle login attempts and trigger email verification.
    ```bash
-   sudo nano /usr/local/bin/check_confirmation.sh
+   sudo nano /usr/local/bin/ssh_login_verification.sh
    ```
 
-   Add the following:
-   ```bash
-   #!/bin/bash
-   username=$1
-   confirmed=$(mysql -u db_user -p'db_pass' -D db_name -se "SELECT confirmed FROM users WHERE email='$username'")
+   Add logic to send an email verification when a login attempt occurs.
 
-   if [ "$confirmed" != "1" ]; then
-       echo "User not confirmed"
-       exit 1
-   fi
-
-   exit 0
-   ```
-
-   Make it executable:
-   ```bash
-   sudo chmod +x /usr/local/bin/check_confirmation.sh
-   ```
-
-3. **Modify SSHD Configuration:**
-   Edit the SSH daemon configuration:
+2. **Modify the SSH Configuration**:
+   Open the SSH configuration file:
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-   Add the following line to the end:
+   Add or modify the following lines:
    ```bash
-   ForceCommand /usr/local/bin/check_confirmation.sh
+   ForceCommand /usr/local/bin/ssh_login_verification.sh
    ```
 
-4. **Restart SSH Service:**
+3. **Restart SSH**:
    ```bash
    sudo systemctl restart ssh
    ```
 
-### Step 6: Testing
-1. **Register a User:**
-   Access `register.php` through your web browser and enter an email to receive a confirmation link.
+### Step 7: Test the Configuration
+1. **Test SSH Login**: Attempt to log in to the server via SSH. You should receive an email with a verification link.
 
-2. **Confirm the Email:**
-   Click the link in the confirmation email. This should set the user’s confirmation status in the database.
+2. **Verify Email Link**: Clicking the verification link should complete the login process.
 
-3. **Attempt to SSH Login:**
-   Try logging in via SSH with the registered email. If confirmation has not been completed, access should be denied.
+### Step 8: Secure Your Server
+1. **Enable UFW Firewall**:
+   ```bash
+   sudo ufw allow OpenSSH
+   sudo ufw allow 'Apache Full'
+   sudo ufw enable
+   ```
 
-### Notes
-- This is a basic implementation and should be expanded for production use (e.g., add input validation, better error handling, secure the PHP scripts).
-- Ensure your server has proper firewall settings to allow SSH traffic.
-- Regularly update your software and manage user accounts securely.
+2. **Secure SSH Configuration**:
+   Consider changing the default SSH port, disabling root login, and using key-based authentication.
 
-### Conclusion
-You now have an SSH server set up on Ubuntu that requires email confirmation for user logins. Be sure to test and validate the security measures in place.
-Always remember to keep your system updated and regularly review your security practices.
+### Summary
+You have now set up an Ubuntu SSH server that requires email verification for login. This configuration ensures an additional layer of security for SSH access to your server. Always test thoroughly and ensure your email configurations are correct for the verification to work as intended.
+☺️🥴😄😍🤣😘😊🥴😅😅😍😊😍😊😍😊😊😍🤣😊🤣😊😍😊😍😊😍😊😊☺️😊😍👇😍😅😉😊😉😉😊😀😊😊😛😍😊☺️👇👇☺️😍😍😍😉😊😉😅🥲😅🥲😅😌😅😅😅😅😍🥴😍😅😍😅🤣😅🤣😅🤣😅🤣😅🤣😅😄😅😄😅😄😄😊😉😊😉😊😉😅😉😅😉😅😉😅😄😅😄😅😄😅😄😅😄😅😄😅😄😅😉😅😉😅😄😄😅😉😅😉😅😉😅😍😅😍😅😉😅😄😅😄😅😉😅😉😅😉😅😀😅😉😅😉😅😀😅😉😅😄😅
+
+Setting up an Ubuntu SSH server that requires users to confirm their login via secure email link verification, along with configuring Apache2 with a domain URL, involves multiple steps. Here’s a comprehensive guide to achieve this:
+
+### Prerequisites
+
+1. **Ubuntu Server**: Ensure you have an Ubuntu server installed (preferably 20.04 LTS or later).
+2. **Domain Name**: A registered domain name pointing to your server’s IP address.
+3. **Email Server**: A mail server or email-sending service (like SendGrid, Mailgun, etc.) configured.
+4. **Basic Knowledge**: Familiarity with the command line and SSH.
+
+### Step 1: Install OpenSSH Server
+
+1. **Update Packages**:
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
+
+2. **Install OpenSSH Server**:
+   ```bash
+   sudo apt install openssh-server -y
+   ```
+
+3. **Start and Enable SSH**:
+   ```bash
+   sudo systemctl start ssh
+   sudo systemctl enable ssh
+   ```
+
+### Step 2: Install Apache2
+
+1. **Install Apache2**:
+   ```bash
+   sudo apt install apache2 -y
+   ```
+
+2. **Start and Enable Apache2**:
+   ```bash
+   sudo systemctl start apache2
+   sudo systemctl enable apache2
+   ```
+
+3. **Allow Apache through Firewall**:
+   ```bash
+   sudo ufw allow 'Apache Full'
+   ```
+
+### Step 3: Set Up a Domain with Apache
+
+1. **Create a Directory for Your Domain**:
+   ```bash
+   sudo mkdir -p /var/www/yourdomain.com/html
+   ```
+
+2. **Set Permissions**:
+   ```bash
+   sudo chown -R $USER:$USER /var/www/yourdomain.com/html
+   sudo chmod -R 755 /var/www
+   ```
+
+3. **Create a Sample Page**:
+   ```bash
+   echo "<html><head><title>Welcome to Your Domain!</title></head><body><h1>Hello, World!</h1></body></html>" | sudo tee /var/www/yourdomain.com/html/index.html
+   ```
+
+4. **Create a Virtual Host File**:
+   ```bash
+   sudo nano /etc/apache2/sites-available/yourdomain.com.conf
+   ```
+
+   Add the following configuration:
+   ```apache
+   <VirtualHost *:80>
+       ServerAdmin admin@yourdomain.com
+       ServerName yourdomain.com
+       ServerAlias www.yourdomain.com
+       DocumentRoot /var/www/yourdomain.com/html
+
+       <Directory /var/www/yourdomain.com/html>
+           Options Indexes FollowSymLinks
+           AllowOverride All
+           Require all granted
+       </Directory>
+
+       ErrorLog ${APACHE_LOG_DIR}/error.log
+       CustomLog ${APACHE_LOG_DIR}/access.log combined
+   </VirtualHost>
+   ```
+
+5. **Enable the New Site**:
+   ```bash
+   sudo a2ensite yourdomain.com.conf
+   ```
+
+6. **Disable the Default Site** (optional):
+   ```bash
+   sudo a2dissite 000-default.conf
+   ```
+
+7. **Test Apache Configuration**:
+   ```bash
+   sudo apache2ctl configtest
+   ```
+
+8. **Reload Apache**:
+   ```bash
+   sudo systemctl reload apache2
+   ```
+
+### Step 4: Install Required Packages for Email Verification
+
+1. **Install Python and pip**:
+   ```bash
+   sudo apt install python3 python3-pip -y
+   ```
+
+2. **Install Flask and Flask-Mail**:
+   ```bash
+   pip3 install Flask Flask-Mail
+   ```
+
+### Step 5: Set Up Flask Application for Email Verification
+
+1. **Create a New Directory for Your Flask App**:
+   ```bash
+   mkdir ~/flask_app
+   cd ~/flask_app
+   ```
+
+2. **Create `app.py`**:
+   ```bash
+   nano app.py
+   ```
+
+   Add the following code:
+   ```python
+   from flask import Flask, request, redirect, url_for, render_template
+   from flask_mail import Mail, Message
+   import os
+   import random
+   import string
+
+   app = Flask(__name__)
+
+   # Configure Flask-Mail
+   app.config['MAIL_SERVER'] = 'smtp.your-email-provider.com'
+   app.config['MAIL_PORT'] = 587
+   app.config['MAIL_USE_TLS'] = True
+   app.config['MAIL_USERNAME'] = 'your-email@example.com'
+   app.config['MAIL_PASSWORD'] = 'your-email-password'
+   app.config['MAIL_DEFAULT_SENDER'] = 'your-email@example.com'
+
+   mail = Mail(app)
+
+   # Function to generate random token
+   def generate_token(length=16):
+       return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+   @app.route('/send_verification/<email>', methods=['GET'])
+   def send_verification(email):
+       token = generate_token()
+       msg = Message('Login Verification', recipients=[email])
+       link = url_for('verify', token=token, _external=True)
+       msg.body = f'Click the link to verify your login: {link}'
+       mail.send(msg)
+       return 'Verification email sent!'
+
+   @app.route('/verify/<token>', methods=['GET'])
+   def verify(token):
+       # Implement verification logic (e.g., mark user as verified)
+       return 'Your login has been verified!'
+
+   if __name__ == '__main__':
+       app.run(host='0.0.0.0', port=5000)
+   ```
+
+3. **Run the Flask Application**:
+   ```bash
+   python3 app.py
+   ```
+
+### Step 6: Set Up the Email Verification Process
+
+1. **Adjust Your SSH Configuration**:
+   Edit the SSH configuration file to restrict logins to users who have verified their email:
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Add or modify the following lines:
+   ```bash
+   Match User <username>
+       AuthenticationMethods publickey,keyboard-interactive
+   ```
+
+2. **Restart SSH Service**:
+   ```bash
+   sudo systemctl restart ssh
+   ```
+
+### Step 7: Firewall Configuration
+
+Make sure your firewall allows traffic on the necessary ports:
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 'Apache Full'
+sudo ufw allow 5000/tcp
+```
+
+### Step 8: Secure Your Apache Server with SSL (Optional but Recommended)
+
+1. **Install Certbot**:
+   ```bash
+   sudo apt install certbot python3-certbot-apache -y
+   ```
+
+2. **Obtain SSL Certificate**:
+   ```bash
+   sudo certbot --apache -d yourdomain.com -d www.yourdomain.com
+   ```
+
+3. **Follow the Prompts to Set Up SSL**.
+
+### Step 9: Testing
+
+1. **Test Email Sending**: Access the endpoint you set up for sending verification emails by navigating to `http://yourdomain.com:5000/send_verification/your-email@example.com`.
+
+2. **Check Your Email**: You should receive an email with a verification link.
+
+3. **Visit Verification Link**: Clicking the link should confirm the login process.
+
+### Final Notes
+
+- **Testing and Debugging**: Ensure your application is working by testing various scenarios (e.g., correct and incorrect email addresses).
+- **Production Readiness**: Consider securing your Flask application further by using a production-ready server like Gunicorn and setting up a reverse proxy with Apache.
+
+This setup provides a good foundation for an SSH server that uses email verification for user login along with an Apache web server. Adjust the configurations and security settings as needed for your specific use case.
+
+
+
 😁🔗😁😄😍🥰😄🥰😍😍🥰😄😍🥰🙃🥰😍🙃🥰😍🙃😀😍🙃🥰😍🥰😉🙃🙃😍🙃😍🥰🙃😗😛😄🥰😛🙃🥰😍🙃🥰😍🙃😗😛🙃🥰😛🙃😗😛😄😗😛😄😄😗🙃😗🤪🙃🥰🤪🔗😍🔗🙃🥰😛🔗😛🔗😁😝🔗🥰😝🔗😁😝🙃🙃🤪🙃🙃🥰😍😄😍🥰😄🥰😍😄😗😛😄😗😛🙃🥰😛🙃😛🥰🙃🥰😛🙃🥰😛🔗🤪🤣🤩🤪🤣🤪😄🤩🤪🤩🤪🤣🤪🔗😁😝🔗😁🤪🔗🥰😛🙃🥰😛🙃🙃😗😛😗😄😗😛😄🤣😗🙃
 😊To set up contact number-based OTP (One-Time Password) login for SSH on an Ubuntu server without using Django or Flask, you can utilize Python along with some libraries to handle OTP generation and sending. Here’s a step-by-step guide to achieve this:
 
