@@ -1,193 +1,227 @@
 
-Setting up an Ubuntu SSH server that requires users to confirm their login via an email link involves several steps, including installing and configuring the SSH server, setting up an email server, and implementing a method for email-based login confirmation. This process requires some technical knowledge, but I’ll break it down into manageable steps.
+Setting up an SSH server on Ubuntu that requires users to confirm their login via an email link involves several steps, including installing necessary software, configuring SSH, and setting up email notifications. Here’s a step-by-step guide to achieve this:
 
 ### Prerequisites
-1. **Ubuntu Server**: Ensure you have Ubuntu Server installed and running.
-2. **Root Access**: You need to have root or sudo access to perform the installations.
-3. **Domain Name**: Ideally, you should have a domain name for sending emails (optional but recommended).
+- An Ubuntu server (18.04 or later).
+- Root or sudo access to the server.
+- A domain name (for email confirmation) and an email service set up (e.g., SMTP server).
 
 ### Step 1: Install SSH Server
-
-1. **Update your system**:
+1. **Update Package Lists:**
    ```bash
-   sudo apt update && sudo apt upgrade -y
+   sudo apt update
    ```
 
-2. **Install OpenSSH Server**:
+2. **Install OpenSSH Server:**
    ```bash
-   sudo apt install openssh-server -y
+   sudo apt install openssh-server
    ```
 
-3. **Check SSH status**:
+3. **Enable and Start SSH Service:**
+   ```bash
+   sudo systemctl enable ssh
+   sudo systemctl start ssh
+   ```
+
+4. **Check SSH Service Status:**
    ```bash
    sudo systemctl status ssh
    ```
-   Make sure it is running.
 
-### Step 2: Install and Configure a Mail Server
-
-For email confirmation, you can use Postfix as a simple mail server.
-
-1. **Install Postfix**:
+### Step 2: Set Up User Accounts
+1. **Add a New User:**
    ```bash
-   sudo apt install postfix -y
+   sudo adduser username
    ```
 
-   During installation, you will be prompted to choose a configuration type. Select **"Internet Site"** and provide your domain name.
+   Replace `username` with the desired username. Follow the prompts to set a password and provide additional information.
 
-2. **Configure Postfix** (if needed):
-   Edit the Postfix configuration file:
+2. **Add Users to the Sudo Group (Optional):**
    ```bash
-   sudo nano /etc/postfix/main.cf
-   ```
-   Ensure the following settings are configured:
-   ```plaintext
-   myhostname = yourhostname
-   mydomain = yourdomain.com
-   myorigin = /etc/mailname
-   inet_interfaces = all
-   inet_protocols = all
+   sudo usermod -aG sudo username
    ```
 
-   Then restart Postfix:
+### Step 3: Install and Configure Required Software
+You will need a web server (like Apache or Nginx) to send confirmation emails, as well as a mailing library. Here we will use **Postfix** for sending emails.
+
+1. **Install Postfix:**
    ```bash
-   sudo systemctl restart postfix
+   sudo apt install postfix
    ```
 
-3. **Install mailutils for testing**:
+   During installation, you will be prompted to configure Postfix. Select "Internet Site" and set your server’s domain name.
+
+2. **Install PHP and Necessary Modules (if using PHP):**
+   If you choose to create a simple PHP application for email confirmation, install PHP:
    ```bash
-   sudo apt install mailutils -y
+   sudo apt install php libapache2-mod-php
    ```
 
-4. **Test email sending**:
+3. **Install Other Required Software:**
+   If you plan to use a database to manage users, install MySQL or PostgreSQL:
    ```bash
-   echo "Test email from Postfix" | mail -s "Test Email" your_email@example.com
+   sudo apt install mysql-server
    ```
 
-### Step 3: Set Up a User Confirmation System
+### Step 4: Create a Confirmation System
+You need a system to generate unique tokens and send email confirmations. This example will create a simple PHP script.
 
-For user confirmation via email, we can use a script that generates a unique link and sends it to the user.
-
-1. **Create a directory for scripts**:
+1. **Set Up a Web Directory:**
    ```bash
-   mkdir ~/ssh-confirmation
-   cd ~/ssh-confirmation
+   sudo mkdir /var/www/html/ssh_confirmation
+   sudo chown -R www-data:www-data /var/www/html/ssh_confirmation
    ```
 
-2. **Create a confirmation script**:
+2. **Create a PHP Script:**
+   Create a file named `confirm.php` in `/var/www/html/ssh_confirmation`:
    ```bash
-   nano confirm_login.sh
+   sudo nano /var/www/html/ssh_confirmation/confirm.php
    ```
 
-   Paste the following script into the file:
-
-   ```bash
-   #!/bin/bash
-
-   # Variables
-   EMAIL="$1"
-   CONFIRMATION_CODE=$(openssl rand -hex 12)
-   EXPIRY_TIME=$(date -d "+5 minutes" +%s)
-
-   # Store the confirmation code and expiry in a temporary file
-   echo "$CONFIRMATION_CODE $EXPIRY_TIME" > "/tmp/confirm_$CONFIRMATION_CODE"
-
-   # Email content
-   SUBJECT="SSH Login Confirmation"
-   BODY="Click the link to confirm your login: http://yourserver.com/confirm.php?code=$CONFIRMATION_CODE"
-
-   # Send email
-   echo "$BODY" | mail -s "$SUBJECT" "$EMAIL"
-
-   echo "Confirmation email sent to $EMAIL."
-   ```
-
-3. **Make the script executable**:
-   ```bash
-   chmod +x confirm_login.sh
-   ```
-
-### Step 4: Create a Web Interface for Confirmation
-
-To handle email confirmations, you will need a simple web server with PHP support.
-
-1. **Install Apache and PHP**:
-   ```bash
-   sudo apt install apache2 php libapache2-mod-php -y
-   ```
-
-2. **Create a confirmation PHP script**:
-   ```bash
-   sudo nano /var/www/html/confirm.php
-   ```
-
-   Paste the following code:
-
+   Add the following code to handle token verification:
    ```php
    <?php
-   $code = $_GET['code'];
-   $file = "/tmp/confirm_$code";
+   $token = $_GET['token'];
 
-   if (file_exists($file)) {
-       $data = file_get_contents($file);
-       list($confirmation_code, $expiry_time) = explode(" ", $data);
+   // Database connection
+   $conn = new mysqli('localhost', 'db_user', 'db_pass', 'db_name');
 
-       if (time() < $expiry_time) {
-           // Confirmation is valid, proceed to allow SSH access
-           // Implement your logic to grant access
-           echo "Login confirmed! You can now access your account.";
-           unlink($file); // Remove the confirmation file
-       } else {
-           echo "Confirmation link has expired.";
-           unlink($file); // Clean up
-       }
+   if ($conn->connect_error) {
+       die("Connection failed: " . $conn->connect_error);
+   }
+
+   // Check if token is valid
+   $sql = "SELECT * FROM users WHERE token='$token'";
+   $result = $conn->query($sql);
+
+   if ($result->num_rows > 0) {
+       // Token is valid
+       // Update user's status
+       $sql = "UPDATE users SET confirmed=1 WHERE token='$token'";
+       $conn->query($sql);
+       echo "Your email has been confirmed!";
    } else {
-       echo "Invalid confirmation code.";
+       echo "Invalid token!";
+   }
+
+   $conn->close();
+   ?>
+   ```
+
+3. **Create User Registration and Token Generation Script:**
+   Create another PHP script named `register.php`:
+   ```bash
+   sudo nano /var/www/html/ssh_confirmation/register.php
+   ```
+
+   Add code to register users and send confirmation emails:
+   ```php
+   <?php
+   if ($_SERVER["REQUEST_METHOD"] == "POST") {
+       $email = $_POST['email'];
+       $token = bin2hex(random_bytes(16)); // Generate a token
+
+       // Database connection
+       $conn = new mysqli('localhost', 'db_user', 'db_pass', 'db_name');
+
+       if ($conn->connect_error) {
+           die("Connection failed: " . $conn->connect_error);
+       }
+
+       // Insert user with token
+       $sql = "INSERT INTO users (email, token, confirmed) VALUES ('$email', '$token', 0)";
+       $conn->query($sql);
+
+       // Send confirmation email
+       $to = $email;
+       $subject = "Email Confirmation";
+       $message = "Click the link to confirm your email: http://your_domain.com/ssh_confirmation/confirm.php?token=$token";
+       mail($to, $subject, $message);
+
+       echo "Confirmation email sent!";
+       $conn->close();
    }
    ?>
    ```
 
-3. **Set permissions**:
-   ```bash
-   sudo chown -R www-data:www-data /var/www/html
+4. **Create the Users Table in Your Database:**
+   Run the following commands in MySQL to create the users table:
+   ```sql
+   CREATE DATABASE db_name;
+   USE db_name;
+
+   CREATE TABLE users (
+       id INT AUTO_INCREMENT PRIMARY KEY,
+       email VARCHAR(255) NOT NULL,
+       token VARCHAR(255) NOT NULL,
+       confirmed TINYINT(1) DEFAULT 0
+   );
    ```
 
-### Step 5: Configure SSH to Use the Confirmation System
+### Step 5: Configure SSH to Require Confirmation
+1. **Install a PAM Module for Authentication:**
+   You can use PAM (Pluggable Authentication Module) to add email confirmation. However, implementing a full PAM solution can be complex.
 
-1. **Edit the SSH configuration**:
+   Alternatively, you could create a custom script that checks user confirmation before allowing SSH access.
+
+2. **Example of a Custom Check:**
+   Create a script that checks the user’s confirmation status before allowing SSH login:
+   ```bash
+   sudo nano /usr/local/bin/check_confirmation.sh
+   ```
+
+   Add the following:
+   ```bash
+   #!/bin/bash
+   username=$1
+   confirmed=$(mysql -u db_user -p'db_pass' -D db_name -se "SELECT confirmed FROM users WHERE email='$username'")
+
+   if [ "$confirmed" != "1" ]; then
+       echo "User not confirmed"
+       exit 1
+   fi
+
+   exit 0
+   ```
+
+   Make it executable:
+   ```bash
+   sudo chmod +x /usr/local/bin/check_confirmation.sh
+   ```
+
+3. **Modify SSHD Configuration:**
+   Edit the SSH daemon configuration:
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-   Add or modify the following lines:
-   ```plaintext
-   ChallengeResponseAuthentication yes
+   Add the following line to the end:
+   ```bash
+   ForceCommand /usr/local/bin/check_confirmation.sh
    ```
 
-2. **Restart the SSH service**:
+4. **Restart SSH Service:**
    ```bash
    sudo systemctl restart ssh
    ```
 
-### Step 6: User Workflow
+### Step 6: Testing
+1. **Register a User:**
+   Access `register.php` through your web browser and enter an email to receive a confirmation link.
 
-1. **User tries to SSH into the server**:
-   When a user attempts to log in, they will enter their username and password.
+2. **Confirm the Email:**
+   Click the link in the confirmation email. This should set the user’s confirmation status in the database.
 
-2. **Run the confirmation script**:
-   If the password is correct, execute the confirmation script:
-   ```bash
-   ~/ssh-confirmation/confirm_login.sh user@example.com
-   ```
+3. **Attempt to SSH Login:**
+   Try logging in via SSH with the registered email. If confirmation has not been completed, access should be denied.
 
-3. **User receives an email** with the confirmation link.
-
-4. **User clicks the link**, which calls the `confirm.php` script, validating the confirmation code.
+### Notes
+- This is a basic implementation and should be expanded for production use (e.g., add input validation, better error handling, secure the PHP scripts).
+- Ensure your server has proper firewall settings to allow SSH traffic.
+- Regularly update your software and manage user accounts securely.
 
 ### Conclusion
-
-This setup requires further enhancements for security, including input validation, logging, and securing the web interface. You may also consider using tools like Fail2ban to protect your server from brute force attacks. 
-
+You now have an SSH server set up on Ubuntu that requires email confirmation for user logins. Be sure to test and validate the security measures in place.
 Always remember to keep your system updated and regularly review your security practices.
 😁🔗😁😄😍🥰😄🥰😍😍🥰😄😍🥰🙃🥰😍🙃🥰😍🙃😀😍🙃🥰😍🥰😉🙃🙃😍🙃😍🥰🙃😗😛😄🥰😛🙃🥰😍🙃🥰😍🙃😗😛🙃🥰😛🙃😗😛😄😗😛😄😄😗🙃😗🤪🙃🥰🤪🔗😍🔗🙃🥰😛🔗😛🔗😁😝🔗🥰😝🔗😁😝🙃🙃🤪🙃🙃🥰😍😄😍🥰😄🥰😍😄😗😛😄😗😛🙃🥰😛🙃😛🥰🙃🥰😛🙃🥰😛🔗🤪🤣🤩🤪🤣🤪😄🤩🤪🤩🤪🤣🤪🔗😁😝🔗😁🤪🔗🥰😛🙃🥰😛🙃🙃😗😛😗😄😗😛😄🤣😗🙃
 😊To set up contact number-based OTP (One-Time Password) login for SSH on an Ubuntu server without using Django or Flask, you can utilize Python along with some libraries to handle OTP generation and sending. Here’s a step-by-step guide to achieve this:
