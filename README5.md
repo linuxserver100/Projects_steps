@@ -20,7 +20,7 @@ sudo apt update && sudo apt upgrade -y
 You will need a few packages for email sending and script execution. Install the required packages:
 
 ```bash
-sudo apt install postfix mailutils python3 python3-smtp python3-requests -y
+sudo apt install postfix mailutils python3 python3-pip python3-requests -y
 ```
 
 During the Postfix installation, choose the configuration type that fits your needs (e.g., "Internet Site").
