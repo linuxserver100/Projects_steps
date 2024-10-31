@@ -1,185 +1,226 @@
-Setting up an Ubuntu SSH server with email verification for user logins involves several steps. Below is a comprehensive guide that covers configuring the SSH server, setting up email verification, and securing the server with Apache using a domain name. 
 
-### Step 1: Install and Configure OpenSSH Server
+Setting up an Ubuntu SSH server with email verification for user logins, along with securing it with Apache and a domain name, involves several steps. Here's a comprehensive guide to achieve this.
 
-1. **Update the Package Index:**
-   ```bash
-   sudo apt update
-   sudo apt upgrade
-   ```
+### Prerequisites
 
-2. **Install OpenSSH Server:**
-   ```bash
-   sudo apt install openssh-server
-   ```
+1. **Ubuntu Server**: Ensure you have an Ubuntu server installed (preferably a recent version).
+2. **Root Access**: You should have root or sudo privileges on the server.
+3. **Domain Name**: A registered domain name pointing to your server's IP address.
+4. **Email Service**: An email service set up for sending verification emails (you can use services like SendGrid, Mailgun, etc.).
 
-3. **Check SSH Status:**
-   ```bash
-   sudo systemctl status ssh
-   ```
+### Step 1: Update the Server
 
-4. **Configure SSH Settings (optional):**
-   Edit the SSH configuration file to enhance security:
-   ```bash
-   sudo nano /etc/ssh/sshd_config
-   ```
-   - Change the default port (optional for added security):
-     ```plaintext
-     Port 2222
-     ```
-   - Disable root login:
-     ```plaintext
-     PermitRootLogin no
-     ```
-   - Allow only specific users:
-     ```plaintext
-     AllowUsers username
-     ```
-   - Restart SSH service:
-     ```bash
-     sudo systemctl restart ssh
-     ```
+First, update your server's package index and upgrade the installed packages:
 
-### Step 2: Set Up Email Verification
+```bash
+sudo apt update
+sudo apt upgrade
+```
 
-To implement email verification, you can use a package like **Django** or **Flask** to create a web app that sends verification emails upon login attempts. Here’s a basic setup using **Python** and **Flask** with **SMTP** for sending emails.
+### Step 2: Install OpenSSH Server
 
-1. **Install Flask and Required Libraries:**
-   ```bash
-   sudo apt install python3-flask python3-pip
-   pip3 install Flask Flask-Mail
-   ```
+If not already installed, you can install the OpenSSH server:
 
-2. **Create a Simple Flask App:**
-   Create a directory for your Flask app and a file named `app.py`:
+```bash
+sudo apt install openssh-server
+```
+
+### Step 3: Configure SSH
+
+Edit the SSH configuration file for additional security:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Change or add the following lines:
+
+```plaintext
+PermitRootLogin no
+PasswordAuthentication no
+ChallengeResponseAuthentication yes
+UsePAM yes
+```
+
+Restart the SSH service to apply changes:
+
+```bash
+sudo systemctl restart ssh
+```
+
+### Step 4: Install Required Packages
+
+Install the required packages for email verification and web services:
+
+```bash
+sudo apt install python3-pip
+pip3 install Flask Flask-Mail
+```
+
+### Step 5: Create a Flask Application for Email Verification
+
+1. **Set Up Flask App**:
+
+   Create a directory for your Flask app:
+
    ```bash
    mkdir ~/email_verification
    cd ~/email_verification
-   nano app.py
    ```
 
-   Here’s a basic example of the `app.py` code:
+   Create a file named `app.py`:
+
    ```python
-   from flask import Flask, request, render_template
+   from flask import Flask, request, redirect, url_for
    from flask_mail import Mail, Message
+   import os
    import random
    import string
 
    app = Flask(__name__)
 
-   # Configure Flask-Mail
-   app.config['MAIL_SERVER'] = 'smtp.your_email_provider.com'
+   # Configure email settings
+   app.config['MAIL_SERVER'] = 'smtp.example.com'  # Change to your email server
    app.config['MAIL_PORT'] = 587
+   app.config['MAIL_USERNAME'] = 'your-email@example.com'
+   app.config['MAIL_PASSWORD'] = 'your-email-password'
    app.config['MAIL_USE_TLS'] = True
-   app.config['MAIL_USERNAME'] = 'your_email@example.com'
-   app.config['MAIL_PASSWORD'] = 'your_email_password'
+   app.config['MAIL_USE_SSL'] = False
    mail = Mail(app)
 
+   # Store user verification codes
    verification_codes = {}
 
-   @app.route('/send_verification', methods=['POST'])
-   def send_verification():
+   @app.route('/register', methods=['POST'])
+   def register():
        email = request.form['email']
        code = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
        verification_codes[email] = code
-
-       msg = Message('Verification Code', sender='your_email@example.com', recipients=[email])
+       msg = Message('Your Verification Code', sender='your-email@example.com', recipients=[email])
        msg.body = f'Your verification code is {code}'
        mail.send(msg)
+       return 'Verification code sent!'
 
-       return 'Verification email sent!'
+   @app.route('/verify', methods=['POST'])
+   def verify():
+       email = request.form['email']
+       code = request.form['code']
+       if email in verification_codes and verification_codes[email] == code:
+           # Code is valid, proceed with SSH user creation
+           os.system(f'sudo adduser {email}')
+           del verification_codes[email]
+           return 'User created and verified!'
+       return 'Invalid verification code!'
 
    if __name__ == '__main__':
-       app.run(debug=True)
+       app.run(host='0.0.0.0', port=5000)
    ```
 
-3. **Run Your Flask App:**
+2. **Run the Flask App**:
+
+   You can run the Flask app by executing:
+
    ```bash
    python3 app.py
    ```
 
-4. **Send Verification Email:**
-   You’ll need to create a form in your app to collect user email addresses for verification.
+### Step 6: Configure Apache to Serve the Flask App
 
-### Step 3: Secure Apache with Domain Name
+1. **Install Apache**:
 
-1. **Install Apache:**
    ```bash
    sudo apt install apache2
    ```
 
-2. **Enable SSL (HTTPS):**
-   Install `Certbot` for SSL certificates:
+2. **Install mod_wsgi**:
+
    ```bash
-   sudo apt install certbot python3-certbot-apache
+   sudo apt install libapache2-mod-wsgi-py3
    ```
 
-3. **Obtain an SSL Certificate:**
-   Replace `yourdomain.com` with your actual domain:
+3. **Create Apache Configuration for Flask**:
+
+   Create a new configuration file:
+
    ```bash
-   sudo certbot --apache -d yourdomain.com -d www.yourdomain.com
+   sudo nano /etc/apache2/sites-available/email_verification.conf
    ```
 
-4. **Configure Apache Virtual Hosts:**
-   Create a configuration file for your domain:
-   ```bash
-   sudo nano /etc/apache2/sites-available/yourdomain.conf
-   ```
    Add the following configuration:
+
    ```apache
    <VirtualHost *:80>
-       ServerName yourdomain.com
-       ServerAlias www.yourdomain.com
-       Redirect permanent / https://yourdomain.com/
-   </VirtualHost>
+       ServerName your-domain.com
 
-   <VirtualHost *:443>
-       ServerName yourdomain.com
-       ServerAlias www.yourdomain.com
-       DocumentRoot /var/www/html
+       WSGIDaemonProcess email_verification
+       WSGIScriptAlias / /path/to/your/email_verification/app.wsgi
 
-       SSLEngine on
-       SSLCertificateFile /etc/letsencrypt/live/yourdomain.com/fullchain.pem
-       SSLCertificateKeyFile /etc/letsencrypt/live/yourdomain.com/privkey.pem
-
-       <Directory /var/www/html>
-           AllowOverride All
+       <Directory /path/to/your/email_verification>
+           Require all granted
        </Directory>
+
+       ErrorLog ${APACHE_LOG_DIR}/error.log
+       CustomLog ${APACHE_LOG_DIR}/access.log combined
    </VirtualHost>
    ```
 
-5. **Enable the New Virtual Host and Rewrite Module:**
+4. **Create a WSGI File**:
+
+   Create a file named `app.wsgi` in your Flask app directory:
+
+   ```python
+   import sys
+   import os
+
+   # Activate the virtual environment
+   activate_this = '/path/to/your/venv/bin/activate_this.py'
+   exec(open(activate_this).read(), dict(__file__=activate_this))
+
+   # Add your app's directory to the sys.path
+   sys.path.insert(0, '/path/to/your/email_verification')
+
+   from app import app as application
+   ```
+
+5. **Enable the New Site and Restart Apache**:
+
    ```bash
-   sudo a2ensite yourdomain.conf
-   sudo a2enmod rewrite
+   sudo a2ensite email_verification.conf
    sudo systemctl restart apache2
    ```
 
-### Step 4: Additional Security
+### Step 7: Set Up a Domain Name
 
-1. **Use a Firewall:**
-   Install and configure UFW:
+Ensure your domain name points to your server’s IP address. You may need to configure DNS records through your domain registrar.
+
+### Step 8: Secure Your Server
+
+1. **Enable UFW Firewall**:
+
    ```bash
    sudo ufw allow OpenSSH
    sudo ufw enable
-   sudo ufw status
    ```
 
-2. **Install Fail2Ban:**
-   Protect against brute-force attacks:
+2. **Secure Apache with SSL**:
+
+   You can use Let’s Encrypt to secure your Apache server with SSL:
+
    ```bash
-   sudo apt install fail2ban
+   sudo apt install certbot python3-certbot-apache
+   sudo certbot --apache
    ```
 
-3. **Regular Updates:**
-   Keep your system updated:
-   ```bash
-   sudo apt update && sudo apt upgrade
-   ```
+### Step 9: Test the Setup
+
+1. **Register a User**: Send a POST request to `http://your-domain.com/register` with an email to receive the verification code.
+2. **Verify the User**: Send a POST request to `http://your-domain.com/verify` with the email and verification code to create the user.
 
 ### Conclusion
 
-This guide provides a comprehensive setup for an Ubuntu SSH server with email verification and Apache security. Make sure to test each component individually and adjust configurations as necessary for your specific environment and security requirements.
+You now have an SSH server configured with email verification for user logins, secured with Apache and a domain name. Ensure to monitor your server for any unusual activities and keep it updated regularly.
+
+
 😍🥹😘☺️😘☺️🥹😊☺️😁😊😍😘🥹☺️😘🥹😍😘😚😍😚😘☺️😃😍😚😊☺️😃☺️😚🥰☺️😃😚☺️🥰😚☺️😚🥰😍😚🥰☺️😚😃☺️😚🥰☺️☺️😚😊😚🥰☺️😚🥰😚😃☺️😚😃😚☺️😃😚☺️😜😃😜😃😜☺️☺️🥹😌😊😊🥹😊😉😊🥹😊🥹😅🙂😠😊😄😠😊😄😊😠😝😄😠😜😚😠😜😚😠😜😁😠😜😙😜😁🙁😠😜😙🙁😜😚🙁😜😄🙁😙🙁😜😙😠😜😄🙁😜😄🙁😄😜😠😄😝😄🙁😜😄😠😜😄🙁😜😄😠😝😄😠
 Setting up an SSH server on Ubuntu with email verification is a unique and advanced configuration. Although SSH itself doesn't natively support email verification, it can be implemented through custom scripts and external email services. Here’s a general outline of how to set up such a system:
 
