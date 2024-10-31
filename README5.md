@@ -1,129 +1,127 @@
-To set up an Ubuntu SSH server that requires users to confirm their login via an email link, you can follow these steps to create a custom two-factor authentication (2FA) process. This setup will involve SSH, email notifications, and a script to handle the email confirmation. Here's a step-by-step guide:
+Setting up an SSH server on Ubuntu that requires users to confirm their login via an email link involves integrating SSH login with multi-factor authentication (MFA) via email. While SSH servers do not natively support this type of confirmation, you can set it up using a combination of a PAM module (Pluggable Authentication Module) with a custom script that sends a verification email. Here’s how to go about it:
 
-### Prerequisites
-1. **Ubuntu server** with SSH access.
-2. A **mail server** or **SMTP credentials** to send email notifications.
-3. Basic knowledge of **bash scripting** and **Python** (optional for email sending).
-4. **Root or sudo privileges** on the Ubuntu server.
+### Step 1: Install Required Software
+Ensure your system has `sshd` (OpenSSH server) installed. Also, install `mail` or any email client that allows sending emails from the command line.
 
-### Steps
+```bash
+sudo apt update
+sudo apt install openssh-server mailutils
+```
 
-#### Step 1: Install Necessary Packages
-1. **Update and install `sendmail`** (or `ssmtp` or `msmtp` for simpler SMTP configurations):
-    ```bash
-    sudo apt update
-    sudo apt install sendmail
-    ```
-2. **Install `pam_exec`** for PAM scripting if not installed by default:
-    ```bash
-    sudo apt install libpam-exec
-    ```
+### Step 2: Configure SSH Server
+Edit the SSH configuration file to ensure password authentication and PAM are enabled:
 
-#### Step 2: Create the Email Verification Script
-This script will generate a unique token for each login attempt, send an email with a verification link, and store the token for later comparison.
+```bash
+sudo nano /etc/ssh/sshd_config
+```
 
-1. **Create a directory for scripts**:
-    ```bash
-    sudo mkdir /opt/ssh-login-verify
-    sudo chmod 700 /opt/ssh-login-verify
-    ```
-2. **Create the verification script**:
-    ```bash
-    sudo nano /opt/ssh-login-verify/verify_login.sh
-    ```
-3. **Add the following script** (be sure to replace `your_smtp_server` and other placeholders):
-    ```bash
-    #!/bin/bash
+Ensure these lines are set as follows:
 
-    EMAIL_ADDRESS="user@example.com"  # Replace with the user's email address
-    TOKEN_FILE="/tmp/ssh_login_token"
-    TOKEN=$(openssl rand -hex 16)
-    IP=$(echo $PAM_RHOST)
-    USER=$(echo $PAM_USER)
+```bash
+PasswordAuthentication yes
+UsePAM yes
+ChallengeResponseAuthentication yes
+```
 
-    # Store the token for validation
-    echo "$TOKEN" > "$TOKEN_FILE"
+Save and close the file, then restart the SSH server:
 
-    # Create the confirmation link (adjust the server address accordingly)
-    LINK="https://yourserver.com/confirm_login?token=$TOKEN"
+```bash
+sudo systemctl restart ssh
+```
 
-    # Send an email with the confirmation link
-    echo "Subject: SSH Login Confirmation
-    From: ssh-server@yourdomain.com
-    To: $EMAIL_ADDRESS
+### Step 3: Create a PAM Script for Email Verification
+We’ll create a PAM script that sends a verification link to the user’s email. If the user clicks the link, it will allow the login. The process includes generating a one-time link, storing it temporarily, and checking if it was used.
 
-    Login attempt detected for user $USER from IP $IP. 
-    Click the following link to confirm the login:
-    $LINK" | sendmail -t
-    ```
+1. **Create the Verification Script**: This script generates a unique link for each login attempt and sends it via email.
 
-4. **Make the script executable**:
-    ```bash
-    sudo chmod +x /opt/ssh-login-verify/verify_login.sh
-    ```
+   ```bash
+   sudo nano /etc/security/email_verification.sh
+   ```
 
-#### Step 3: Set Up the Confirmation API Endpoint
-You'll need an API endpoint to receive the token and mark it as confirmed. You can implement a simple HTTP server using Python:
+2. **Add the Following Script**:
 
-1. **Install Flask** (optional if you prefer another framework):
-    ```bash
-    sudo apt install python3-flask
-    ```
+   ```bash
+   #!/bin/bash
 
-2. **Create a Python script for the API**:
-    ```python
-    from flask import Flask, request
-    import os
+   EMAIL="user@example.com"  # replace with the user's email or dynamically fetch based on the user
 
-    app = Flask(__name__)
-    token_file = "/tmp/ssh_login_token"
+   # Generate a unique token and link
+   TOKEN=$(openssl rand -hex 16)
+   LINK="http://yourserver.com/verify?token=$TOKEN"
 
-    @app.route("/confirm_login", methods=["GET"])
-    def confirm_login():
-        token = request.args.get("token")
-        with open(token_file, "r") as f:
-            stored_token = f.read().strip()
-        if token == stored_token:
-            # Token matches; proceed with login confirmation
-            os.remove(token_file)
-            return "Login confirmed. You may now access the server.", 200
-        else:
-            return "Invalid or expired token.", 403
+   # Send the email with the link
+   echo "Click the link to verify your SSH login: $LINK" | mail -s "SSH Login Verification" "$EMAIL"
 
-    if __name__ == "__main__":
-        app.run(host="0.0.0.0", port=5000)
-    ```
+   # Store the token with a short TTL
+   echo "$TOKEN" > /tmp/ssh_token_$USER
+   sleep 60  # Give the user 60 seconds to verify
 
-3. **Run the Flask API**:
-    ```bash
-    python3 /opt/ssh-login-verify/confirm_login.py
-    ```
+   # Check if the token file was removed, which means login was confirmed
+   if [ ! -f "/tmp/ssh_token_$USER" ]; then
+       exit 0  # Verification successful
+   else
+       exit 1  # Verification failed
+   fi
+   ```
 
-#### Step 4: Configure PAM to Use the Script
-You can use PAM to trigger the email verification script on SSH login attempts.
+3. **Make the Script Executable**:
 
-1. **Edit the PAM configuration for SSH**:
-    ```bash
-    sudo nano /etc/pam.d/sshd
-    ```
-2. **Add the following line at the top**:
-    ```bash
-    auth required pam_exec.so /opt/ssh-login-verify/verify_login.sh
-    ```
+   ```bash
+   sudo chmod +x /etc/security/email_verification.sh
+   ```
 
-3. **Restart the SSH service** to apply changes:
-    ```bash
-    sudo systemctl restart ssh
-    ```
+### Step 4: Set Up a Verification Endpoint
+You need a simple HTTP server or script that can listen for the verification token and delete the corresponding file in `/tmp/`. You can set up a simple Flask server:
 
-#### Step 5: Test the Configuration
-1. **Try to SSH into the server**:
-    ```bash
-    ssh your_username@your_server_ip
-    ```
-2. You should receive an email with a link to confirm the login. Clicking the link should allow you access to the server.
+   ```bash
+   pip install flask
+   ```
 
-This approach combines PAM, email notifications, and an HTTP API to confirm SSH logins via email, adding a layer of security to your server.
+   Create a script, `verify_server.py`:
+
+   ```python
+   from flask import Flask, request
+   import os
+
+   app = Flask(__name__)
+
+   @app.route('/verify')
+   def verify():
+       token = request.args.get('token')
+       user_file = f"/tmp/ssh_token_{os.environ['USER']}"
+       if token and os.path.isfile(user_file) and open(user_file).read() == token:
+           os.remove(user_file)  # This confirms the verification
+           return "Verification successful!"
+       return "Invalid or expired token."
+
+   if __name__ == '__main__':
+       app.run(host='0.0.0.0', port=5000)
+   ```
+
+Run this verification server in the background.
+
+### Step 5: Integrate the PAM Script with SSH
+Edit the PAM configuration to include the verification step.
+
+```bash
+sudo nano /etc/pam.d/sshd
+```
+
+Add this line at the top:
+
+```bash
+auth required pam_exec.so /etc/security/email_verification.sh
+```
+
+### Step 6: Test the Setup
+1. Try logging into your SSH server.
+2. Check your email for a verification link.
+3. Click the link to confirm the login.
+4. You should be granted access if the setup is successful.
+
+---
+
+This solution provides an added layer of security by requiring email verification for SSH login. However, note that this setup is more experimental and may need adjustments for production use.
 
 😁🔗😁😄😍🥰😄🥰😍😍🥰😄😍🥰🙃🥰😍🙃🥰😍🙃😀😍🙃🥰😍🥰😉🙃🙃😍🙃😍🥰🙃😗😛😄🥰😛🙃🥰😍🙃🥰😍🙃😗😛🙃🥰😛🙃😗😛😄😗😛😄😄😗🙃😗🤪🙃🥰🤪🔗😍🔗🙃🥰😛🔗😛🔗😁😝🔗🥰😝🔗😁😝🙃🙃🤪🙃🙃🥰😍😄😍🥰😄🥰😍😄😗😛😄😗😛🙃🥰😛🙃😛🥰🙃🥰😛🙃🥰😛🔗🤪🤣🤩🤪🤣🤪😄🤩🤪🤩🤪🤣🤪🔗😁😝🔗😁🤪🔗🥰😛🙃🥰😛🙃🙃😗😛😗😄😗😛😄🤣😗🙃
 😊To set up contact number-based OTP (One-Time Password) login for SSH on an Ubuntu server without using Django or Flask, you can utilize Python along with some libraries to handle OTP generation and sending. Here’s a step-by-step guide to achieve this:
