@@ -978,142 +978,145 @@ Now, when you try to SSH into the server, you should receive an OTP to your spec
 **Note:** This setup sends the OTP to a hardcoded email in the script. In a production environment, you'd likely implement a method to dynamically fetch each user's email. Additionally, for security, avoid storing plaintext credentials in scripts. Instead, use environment variables or other secure methods to store sensitive information.
 
 🙃😙😘☺️☺️👇🤪👇☺️👇☺️👇😃👇😃☺️👇😀👇😃👇🙃👇😃🥲😙😝☺️🤩😝😙😝😝😃😊😝😙😝🙃😝😊😝😊😝😙😝😃😙😝😊😝😙😝😃😝🙃🥲😃🥲😃🥲😃🥲😁😁🥲😊🥲😊🥲😄🥲😄😄🥲☺️🥲☺️🥲😄🥲😊🥲😊🥲😄🥲😙🥲😙😌😃😌😙😌😙😙😌😙😌😊😌😊😌😙
+Setting up an email-based OTP (One-Time Password) login on an Ubuntu server without using `oathtool` involves a few steps, including configuring PAM, using an appropriate scripting method to generate OTPs, and setting up an email server or client to send the OTPs to users. Below is a general guide on how to achieve this.
 
-Setting up email-based OTP (One-Time Password) login on an Ubuntu server involves configuring PAM (Pluggable Authentication Module) to use `oathtool` for OTP generation and integrating it with an email tool to send the OTPs to the user's email. Here’s a detailed step-by-step guide:
+### Prerequisites
+- An Ubuntu server (16.04 or later).
+- Access to the server with sudo privileges.
+- An email server or a tool like `sendmail` or `ssmtp` configured for sending emails.
 
-### 1. Install Required Packages
+### Step 1: Install Required Packages
 
-You need `oathtool` for OTP generation and a mail utility (e.g., `mailutils`) to send emails.
+1. **Install Python** (if not already installed):
 
-```bash
-sudo apt update
-sudo apt install oathtool mailutils -y
-```
+   ```bash
+   sudo apt update
+   sudo apt install python3 python3-pip
+   ```
 
-### 2. Create a Script to Send OTP via Email
+2. **Install the required email package**:
 
-You'll need a script that will generate an OTP, send it via email, and log the OTP for verification.
+   You can use Python's built-in `smtplib` for sending emails, or you can install an additional package for more advanced email features, such as `yagmail`.
 
-1. **Create the script**:
+   ```bash
+   pip3 install yagmail
+   ```
 
-    ```bash
-    sudo nano /usr/local/bin/send-otp.sh
-    ```
+### Step 2: Create a Script to Generate and Send OTP
 
-2. **Add the following code** to generate and email the OTP:
+1. **Create the OTP generation script**:
 
-    ```bash
-    #!/bin/bash
+   Create a Python script named `send_otp.py`:
 
-    # Define variables
-    USER_EMAIL="user@example.com"  # Replace with the user's email
-    OTP_LENGTH=6  # Set the length of the OTP
+   ```bash
+   sudo nano /usr/local/bin/send_otp.py
+   ```
 
-    # Generate OTP using oathtool
-    OTP=$(oathtool --totp -d $OTP_LENGTH)
+   Add the following code:
 
-    # Send OTP via email
-    echo "Your OTP for login is: $OTP" | mail -s "Your Login OTP" "$USER_EMAIL"
+   ```python
+   #!/usr/bin/env python3
+   import smtplib
+   import random
+   import string
+   import sys
+   from email.mime.text import MIMEText
 
-    # Log the OTP to a file with restricted permissions (for testing)
-    echo "$OTP" > /tmp/otp.txt
-    chmod 600 /tmp/otp.txt
-    ```
+   def generate_otp(length=6):
+       """Generate a random OTP."""
+       digits = string.digits
+       otp = ''.join(random.choice(digits) for _ in range(length))
+       return otp
 
-    **Replace** `user@example.com` with the actual email address you want to receive the OTP.
+   def send_email(to_email, otp):
+       """Send the OTP to the specified email address."""
+       from_email = 'your_email@example.com'  # Your email address
+       from_password = 'your_email_password'  # Your email password
+       subject = 'Your OTP Code'
+       body = f'Your OTP code is: {otp}'
 
-3. **Make the script executable**:
+       msg = MIMEText(body)
+       msg['Subject'] = subject
+       msg['From'] = from_email
+       msg['To'] = to_email
 
-    ```bash
-    sudo chmod +x /usr/local/bin/send-otp.sh
-    ```
+       with smtplib.SMTP('smtp.example.com', 587) as server:
+           server.starttls()
+           server.login(from_email, from_password)
+           server.sendmail(from_email, to_email, msg.as_string())
 
-### 3. Set Up a Custom PAM Module to Call the Script
+   if __name__ == '__main__':
+       user_email = sys.argv[1]
+       otp = generate_otp()
+       send_email(user_email, otp)
+       print(otp)  # Optionally, print the OTP for debugging
+   ```
 
-1. **Create a new PAM configuration file**:
+   Replace `your_email@example.com` and `your_email_password` with your actual email and password. Replace `smtp.example.com` with your SMTP server address.
 
-    ```bash
-    sudo nano /etc/pam.d/otp-login
-    ```
+2. **Make the script executable**:
 
-2. **Add the following PAM configuration**:
+   ```bash
+   sudo chmod +x /usr/local/bin/send_otp.py
+   ```
 
-    ```plaintext
-    auth required pam_exec.so /usr/local/bin/send-otp.sh
-    auth sufficient pam_exec.so /usr/local/bin/check-otp.sh
-    ```
+### Step 3: Configure PAM
 
-This configuration will:
+1. **Edit the PAM configuration file** for the service you want to protect, for example, SSH:
 
-- Run the `send-otp.sh` script when a user attempts to authenticate.
-- Call `check-otp.sh` (which we’ll create next) to verify the OTP entered by the user.
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
 
-### 4. Create a Script to Check the OTP Entered by the User
+   Add the following line at the beginning of the file:
 
-1. **Create the `check-otp.sh` script**:
+   ```plaintext
+   auth required pam_exec.so /usr/local/bin/send_otp.py
+   ```
 
-    ```bash
-    sudo nano /usr/local/bin/check-otp.sh
-    ```
+2. **Make sure to adjust the PAM configuration for OTP** by including the following lines if they are not present:
 
-2. **Add the following code**:
+   ```plaintext
+   auth required pam_unix.so
+   auth required pam_faildelay.so delay=2000000
+   ```
 
-    ```bash
-    #!/bin/bash
+### Step 4: Configure SSH for Challenge-Response Authentication
 
-    # Prompt the user for the OTP
-    read -p "Enter OTP: " user_otp
+1. **Edit the SSH configuration file**:
 
-    # Read the generated OTP from the file
-    correct_otp=$(cat /tmp/otp.txt)
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
 
-    # Compare user input with generated OTP
-    if [[ "$user_otp" == "$correct_otp" ]]; then
-        exit 0  # Success
-    else
-        echo "Invalid OTP."
-        exit 1  # Failure
-    fi
-    ```
+   Find and change (or add) the following settings:
 
-3. **Make the script executable**:
+   ```plaintext
+   ChallengeResponseAuthentication yes
+   PasswordAuthentication no
+   ```
 
-    ```bash
-    sudo chmod +x /usr/local/bin/check-otp.sh
-    ```
+2. **Restart the SSH service**:
 
-### 5. Apply OTP-based Login to a Specific User or Service
+   ```bash
+   sudo systemctl restart ssh
+   ```
 
-To apply OTP-based login for SSH:
+### Step 5: Test the Setup
 
-1. **Edit the SSH PAM configuration**:
+1. **Attempt to log in via SSH**. You should receive an email with the OTP code. 
+2. **Enter the OTP code** received in your email to complete the login.
 
-    ```bash
-    sudo nano /etc/pam.d/sshd
-    ```
+### Note
 
-2. **Add the following line** at the top of the file to include the OTP module:
+- This setup provides a basic email-based OTP system. For production use, consider implementing additional security measures, such as rate limiting the number of OTP requests, using secure email handling, and ensuring sensitive information is not hardcoded.
+- Depending on your email provider, you may need to enable "less secure apps" or use an app-specific password to allow the script to send emails.
+- It's also recommended to log or store OTPs temporarily to validate the entered OTP against generated ones, possibly using a simple file or database.
 
-    ```plaintext
-    auth required pam_exec.so /etc/pam.d/otp-login
-    ```
+### Conclusion
 
-3. **Restart SSH** to apply the changes:
+By following these steps, you should be able to set up email-based OTP login on your Ubuntu server without using `oathtool`. Adjust the implementation according to your needs, especially regarding security and usability.
 
-    ```bash
-    sudo systemctl restart sshd
-    ```
-
-### 6. Test the OTP Login
-
-1. Attempt to log in via SSH. After entering your username and password, you should receive an OTP email.
-2. Enter the OTP as prompted by the `check-otp.sh` script.
-3. If the OTP is correct, the login should succeed; otherwise, it will deny access.
-
-### Notes and Security Considerations
-
-- **Security**: OTPs should be securely deleted or managed in production. Avoid storing OTPs in plain text.
-- **Permissions**: Ensure only authorized users can modify the PAM scripts and configuration files.
 😆😅🥴🥴😅🥴😛😀👇🔑😀🔑🤪😝🔑🤪🤩🔑😘🤩🤩😘😘🤩😘🤩😘🤩👇😉😌😀🔑😌😀🔑😌😀🔑😌🔑😀😌😀🔑😌🔑😌🔑😃☺️😃🔑☺️🥲🔑☺️🔑🥲☺️🔑🥲☺️😃🔑☺️😃🔑☺️😃🔑☺️😃🔑😃😃☺️☺️😃🔑☺️🔑😃☺️😃🔑☺️😃🔑😍😃🔑😍😃🔑🔑🥰😊😉😃😊🔑😃😊😃😉😊😉😃😊😃😉😉😊
 To set up email OTP (One-Time Password) login on an Ubuntu server, you can use tools like `PAM` (Pluggable Authentication Modules), `otpw` (OTP generator), and `ssmtp` (for email sending). Here’s a general guide to get it up and running:
 
