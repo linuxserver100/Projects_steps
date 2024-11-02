@@ -1,124 +1,173 @@
-To set up email-based OTP (One-Time Password) login verification on an Ubuntu server running on AWS, you’ll need to configure multi-factor authentication (MFA) with email as a factor. Below is a guide to set up email OTP for SSH login. This setup assumes you have sudo access to the server.
+To set up email OTP (One-Time Password) verification for logging into an Ubuntu server on AWS, you can use a combination of tools such as **SSH**, **PAM (Pluggable Authentication Modules)**, and an email service (like **SMTP**) to send the OTP. Here’s a step-by-step guide to achieve this:
 
-### Prerequisites:
-1. **Ubuntu server** on AWS (e.g., EC2 instance) with SSH access.
-2. **Email account** to send OTP codes (either using an SMTP server or a mail relay service).
-3. **Postfix** for sending email via SMTP (or an alternative mail agent).
-4. **OATH Toolkit** or **Google Authenticator PAM module** for OTP generation.
+### Prerequisites
+1. An Ubuntu server running on AWS.
+2. A domain name or email address configured to send emails.
+3. Basic knowledge of SSH and server administration.
 
-### Steps:
+### Step 1: Install Required Packages
 
-#### Step 1: Update and Install Required Packages
-SSH into the server and update the package list.
+Connect to your Ubuntu server using SSH, then update your package list and install the necessary packages:
+
 ```bash
-sudo apt update && sudo apt upgrade -y
+sudo apt update
+sudo apt install libpam-google-authenticator ssmtp
 ```
 
-Then, install the required packages:
+### Step 2: Set Up Google Authenticator
+
+1. Each user who will log in will need to configure the Google Authenticator.
+
 ```bash
-sudo apt install postfix libsasl2-modules google-authenticator pam-mail -y
+google-authenticator
 ```
 
-#### Step 2: Configure Postfix for Email Delivery
-If you want to use Postfix to send email, configure it with the SMTP server details.
+2. Follow the prompts to set up your OTP. This will generate a QR code and a secret key. Make sure to save the backup codes provided.
 
-1. **Configure Postfix** by editing its main configuration file:
-   ```bash
-   sudo nano /etc/postfix/main.cf
-   ```
-2. Update the following settings for your SMTP relay (replace with actual SMTP server details):
+3. Ensure to answer "yes" when asked if you want to update the `~/.google_authenticator` file.
 
-   ```bash
-   relayhost = [smtp.example.com]:587
-   smtp_sasl_auth_enable = yes
-   smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
-   smtp_sasl_security_options = noanonymous
-   smtp_sasl_tls_security_options = noanonymous
-   smtp_tls_security_level = encrypt
-   ```
+### Step 3: Configure PAM
 
-3. **Save and close the file**.
+1. Open the PAM configuration for SSH:
 
-4. **Create the password file**:
-   ```bash
-   sudo nano /etc/postfix/sasl_passwd
-   ```
-   Add your SMTP credentials in this format:
-   ```
-   [smtp.example.com]:587 username:password
-   ```
+```bash
+sudo nano /etc/pam.d/sshd
+```
 
-5. Secure the password file and apply changes:
-   ```bash
-   sudo chmod 600 /etc/postfix/sasl_passwd
-   sudo postmap /etc/postfix/sasl_passwd
-   sudo systemctl restart postfix
-   ```
+2. Add the following line at the top of the file:
 
-#### Step 3: Set Up OTP with Google Authenticator
-1. Run `google-authenticator` for the user account that will use OTP:
-   ```bash
-   google-authenticator
-   ```
+```plaintext
+auth required pam_google_authenticator.so
+```
 
-2. Answer the prompts according to your requirements:
-   - Enable time-based OTP.
-   - Configure the number of tokens.
-   - Record the secret key (or QR code).
-   - Set up backup codes.
+3. Save and exit the editor.
 
-#### Step 4: Configure PAM for OTP and Email Notifications
-1. Open the PAM SSH configuration file:
-   ```bash
-   sudo nano /etc/pam.d/sshd
-   ```
+### Step 4: Configure SSH
 
-2. Add the following lines to require OTP and send an email notification upon login:
-   ```bash
-   auth required pam_google_authenticator.so
-   auth optional pam_exec.so /usr/local/bin/send-email-otp.sh
-   ```
+1. Open the SSH configuration file:
 
-#### Step 5: Create the Email OTP Script
-Create a script to send the OTP code to the user’s email. Use the user's configured email or a central account.
+```bash
+sudo nano /etc/ssh/sshd_config
+```
 
-1. Create a new script:
-   ```bash
-   sudo nano /usr/local/bin/send-email-otp.sh
-   ```
+2. Find the line `ChallengeResponseAuthentication` and set it to `yes`:
+
+```plaintext
+ChallengeResponseAuthentication yes
+```
+
+3. Also ensure that `UsePAM` is set to `yes`:
+
+```plaintext
+UsePAM yes
+```
+
+4. Save and exit the editor.
+
+5. Restart the SSH service for changes to take effect:
+
+```bash
+sudo systemctl restart sshd
+```
+
+### Step 5: Set Up Email Sending for OTP
+
+You'll need to configure `ssmtp` or another mail transfer agent (MTA) to send OTPs via email.
+
+1. Open the `ssmtp` configuration file:
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+2. Configure the SMTP server settings. Here’s an example configuration for Gmail:
+
+```plaintext
+root=your-email@gmail.com
+mailhub=smtp.gmail.com:587
+AuthUser=your-email@gmail.com
+AuthPass=your-email-password
+UseSTARTTLS=YES
+FromLineOverride=YES
+```
+
+Replace `your-email@gmail.com` and `your-email-password` with your actual email and password. For security, consider using an app password for Gmail if you have two-factor authentication enabled.
+
+3. Save and exit the editor.
+
+### Step 6: Modify the OTP Script to Send Email
+
+1. Create a script that will send an OTP via email. For example, create a file called `send_otp.sh`:
+
+```bash
+nano /usr/local/bin/send_otp.sh
+```
 
 2. Add the following content to the script:
-   ```bash
-   #!/bin/bash
-   OTP_CODE=$(google-authenticator -q -d -t | tail -n 1)
-   echo "Your OTP Code: $OTP_CODE" | mail -s "Your SSH OTP Code" your-email@example.com
-   ```
+
+```bash
+#!/bin/bash
+
+EMAIL="recipient-email@example.com"
+OTP=$(cat /dev/urandom | tr -dc '0-9' | fold -w 6 | head -n 1)
+
+echo "Your OTP is: $OTP" | ssmtp $EMAIL
+
+# Save OTP to a temporary file or environment variable for later verification
+echo $OTP > /tmp/otp.txt
+```
+
+Replace `recipient-email@example.com` with the actual recipient email address.
 
 3. Make the script executable:
-   ```bash
-   sudo chmod +x /usr/local/bin/send-email-otp.sh
-   ```
 
-#### Step 6: Enable MFA in SSHD Configuration
-1. Open the SSH configuration file:
-   ```bash
-   sudo nano /etc/ssh/sshd_config
-   ```
+```bash
+sudo chmod +x /usr/local/bin/send_otp.sh
+```
 
-2. Make sure the following lines are set:
-   ```bash
-   ChallengeResponseAuthentication yes
-   AuthenticationMethods publickey,keyboard-interactive
-   ```
+### Step 7: Configure OTP Verification
 
-3. Restart SSH to apply changes:
-   ```bash
-   sudo systemctl restart ssh
-   ```
+You need to modify the OTP verification to check the sent OTP against user input. 
 
-#### Step 7: Test the Configuration
-1. Try logging in via SSH.
-2. After entering the SSH key, you should receive an email with the OTP.
-3. Enter the OTP to complete login.
+1. Edit the `/etc/pam.d/sshd` file again and append:
 
-This setup should allow you to use email OTP as a second factor for SSH login.
+```plaintext
+auth required pam_exec.so /usr/local/bin/verify_otp.sh
+```
+
+2. Create a verification script, e.g., `verify_otp.sh`:
+
+```bash
+nano /usr/local/bin/verify_otp.sh
+```
+
+3. Add the following code:
+
+```bash
+#!/bin/bash
+
+read -p "Enter the OTP sent to your email: " input_otp
+saved_otp=$(cat /tmp/otp.txt)
+
+if [ "$input_otp" == "$saved_otp" ]; then
+    exit 0
+else
+    echo "Invalid OTP"
+    exit 1
+fi
+```
+
+4. Make it executable:
+
+```bash
+sudo chmod +x /usr/local/bin/verify_otp.sh
+```
+
+### Step 8: Testing
+
+1. Disconnect from the SSH session and try to log in again.
+2. You should be prompted for your password and then for the OTP, which should be sent to your email.
+
+### Conclusion
+
+With these steps, you can set up email OTP verification for SSH logins on your Ubuntu server. Be sure to test everything thoroughly and consider the security implications of storing and sending OTPs over email. If your server needs to be more secure, consider additional layers of security, such as fail2ban or a VPN.
