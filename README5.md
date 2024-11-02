@@ -1,80 +1,124 @@
-To set up SSH login on Ubuntu with email OTP (One-Time Password) verification without any additional installations and ensuring it starts automatically after a reboot, you can leverage `ssh` in combination with a script that sends an OTP to your email. Below are the steps to achieve this:
+Setting up SSH login with One-Time Password (OTP) verification on an Ubuntu system typically requires additional software, like `Google Authenticator`, to manage the OTP process. However, if you want to create a simple OTP mechanism using a shell script and SMTP configuration without installing additional packages, I can guide you through that. 
+
+**Disclaimer:** This method is more of a workaround and may not be as secure or robust as using dedicated tools like `Google Authenticator`.
 
 ### Prerequisites
-- An SMTP server or an email account that allows sending emails (e.g., Gmail, Outlook).
-- Access to edit `~/.ssh/authorized_keys` and `~/.bashrc` or `/etc/profile`.
+1. **SSH Access**: You need to have SSH access to your Ubuntu machine.
+2. **Email Account**: You need access to an SMTP server to send OTPs via email.
 
 ### Steps
 
-1. **Create an Email Sending Script**:
-   You'll need a script to send the OTP via email. Here’s a basic example using `sendmail`, which is often pre-installed on Ubuntu.
+#### Step 1: Create the OTP Generation Script
 
-   Create a script, for example, `/usr/local/bin/send_otp.sh`:
+1. **Open your terminal** and create a script that will generate the OTP and send it via email.
+
+   ```bash
+   nano ~/otp_script.sh
+   ```
+
+2. **Add the following content** to the script. Replace the placeholder values for SMTP configuration with your actual SMTP details:
 
    ```bash
    #!/bin/bash
 
-   EMAIL="your_email@example.com"
-   OTP=$(openssl rand -base64 6) # Generate a random OTP
-   echo "$OTP" > /tmp/otp.txt # Store OTP in a temporary file
-   SUBJECT="Your OTP Code"
-   BODY="Your OTP code is: $OTP"
+   # SMTP Configuration
+   SMTP_SERVER="smtp.example.com"
+   SMTP_PORT="587"
+   SMTP_USER="your_email@example.com"
+   SMTP_PASS="your_password"
+   RECIPIENT_EMAIL="recipient@example.com"
 
-   # Send email using the sendmail command
-   echo -e "Subject:$SUBJECT\n\n$BODY" | /usr/sbin/sendmail -t "$EMAIL"
+   # Generate a 6-digit OTP
+   OTP=$(shuf -i 100000-999999 -n 1)
+
+   # Send OTP via Email
+   echo "Your OTP is: $OTP" | sendmail -S $SMTP_SERVER:$SMTP_PORT -au$SMTP_USER -ap$SMTP_PASS $RECIPIENT_EMAIL
+
+   # Store OTP in a file for later verification
+   echo $OTP > /tmp/otp_value.txt
    ```
 
-   Make the script executable:
+   - This script generates a random 6-digit OTP, sends it via email using `sendmail`, and stores it in a temporary file.
+
+3. **Make the script executable**:
+
    ```bash
-   sudo chmod +x /usr/local/bin/send_otp.sh
+   chmod +x ~/otp_script.sh
    ```
 
-2. **Modify SSH Login Script**:
-   You need to configure the SSH session to run the OTP verification script. This can be done in your `~/.bashrc` or `/etc/profile` file to execute the OTP check on login.
+#### Step 2: Configure the `.bashrc` for OTP Verification
 
-   Edit `~/.bashrc` (for a specific user) or `/etc/profile` (for all users) and add:
+1. **Open your `.bashrc` file**:
 
    ```bash
-   # Send OTP on SSH login
-   /usr/local/bin/send_otp.sh
+   nano ~/.bashrc
+   ```
 
-   # Read the OTP from the temporary file
-   read -p "Enter the OTP sent to your email: " USER_OTP
+2. **Add the following lines** at the end of the file to call the OTP script after login:
 
-   # Check if the entered OTP matches the generated one
-   if [ "$USER_OTP" != "$(cat /tmp/otp.txt)" ]; then
-       echo "Invalid OTP. Login denied."
+   ```bash
+   # Call OTP Script
+   ~/otp_script.sh
+
+   # Prompt for OTP
+   read -p "Enter the OTP sent to your email: " input_otp
+
+   # Read the stored OTP
+   stored_otp=$(cat /tmp/otp_value.txt)
+
+   # Verify OTP
+   if [ "$input_otp" != "$stored_otp" ]; then
+       echo "Invalid OTP. Access denied."
        exit 1
+   else
+       echo "OTP verified. Welcome!"
    fi
-
-   # Clean up the OTP file
-   rm /tmp/otp.txt
    ```
 
-3. **Configure SSH**:
-   Ensure your SSH server is configured to allow this setup. Check `/etc/ssh/sshd_config` and confirm that the following line is present:
+   - This will execute the OTP script upon SSH login, prompt the user to enter the OTP received via email, and verify it against the stored OTP.
 
-   ```plaintext
-   PermitRootLogin no
-   ```
+#### Step 3: Set Up Sendmail (If Not Already Installed)
 
-   (This is a good security practice to avoid direct root login via SSH.)
+1. If `sendmail` is not installed, you will need to install it (there's no way to send emails without an SMTP client). Install it using:
 
-   Restart the SSH service:
    ```bash
-   sudo systemctl restart ssh
+   sudo apt-get update
+   sudo apt-get install sendmail
    ```
 
-4. **Testing**:
-   - Now, when you SSH into the server, the script should send an OTP to your email.
-   - After that, it will prompt you to enter the OTP. If the OTP is correct, you will log in; otherwise, it will deny access.
+2. Configure `sendmail` to work with your SMTP server (this can vary based on your SMTP provider; you might need to refer to the provider's documentation).
 
-5. **Ensure Auto-Execution on Reboot**:
-   The above setup should automatically work after a reboot since the script runs every time a user logs in.
+#### Step 4: Ensure Everything Works
 
-### Notes
-- This method relies on having a working email configuration on your server. If you're using Gmail, you may need to set up app passwords or allow less secure apps.
-- Make sure your server has proper security measures, as this implementation has some limitations and can be improved further with better error handling and security practices.
-- Consider logging and monitoring for any failed login attempts for security purposes. 
+1. **Test your setup**:
+   - Reboot the system or log out and back in to trigger the OTP generation.
+   - Check your email for the OTP and enter it when prompted.
 
-This method allows for basic OTP verification via email without installing any additional software.
+2. **Ensure the permissions are correct**:
+   - Make sure that the `/tmp/otp_value.txt` file is not accessible to other users for security purposes:
+
+   ```bash
+   chmod 600 /tmp/otp_value.txt
+   ```
+
+#### Step 5: Make the Script Run on Reboot (Optional)
+
+1. If you want the OTP generation to run automatically after a reboot, consider adding the following line to your crontab:
+
+   ```bash
+   crontab -e
+   ```
+
+   Then add:
+
+   ```bash
+   @reboot /path/to/your/otp_script.sh
+   ```
+
+### Important Notes
+
+- This method relies on `sendmail`, which may require configuration to connect to your SMTP server securely.
+- Security concerns: Storing OTP in a file can be insecure; it’s better to use an actual OTP generator like `Google Authenticator` or `Authy` for production environments.
+- Ensure your email credentials are secured and not exposed in scripts.
+
+By following these steps, you should be able to set up SSH login with OTP verification via email on your Ubuntu machine without installing additional software beyond what's necessary to send emails.
