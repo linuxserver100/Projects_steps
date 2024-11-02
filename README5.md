@@ -1,144 +1,149 @@
-Setting up SSH login with email OTP (One-Time Password) verification on Ubuntu without installing any additional software can be a complex process, especially if you want it to start automatically after a reboot. The typical way to achieve OTP functionality usually involves using additional packages like `oath-toolkit`, `libpam-google-authenticator`, or similar. However, since you requested a method without installations, we can leverage existing tools with a focus on scripting and automation.
+To set up SSH login on Ubuntu with email OTP (One-Time Password) verification using SMTP configuration without installing additional packages, you can use the built-in tools of Ubuntu along with a script that sends an OTP via email. Here’s a step-by-step guide to achieve this.
 
-Here’s a detailed guide on how to configure SSH to use email OTP verification with minimal installations:
+### Prerequisites
+1. **Ubuntu Server**: Ensure you have an Ubuntu server set up and SSH installed.
+2. **Email Server**: You need access to an SMTP server to send emails.
+3. **User Privileges**: You should have root or sudo access.
 
-### Step 1: Configure SSH Server
+### Steps to Configure Email OTP for SSH
 
-1. **Open the SSH Configuration File:**
+#### Step 1: Configure SSH
+1. **Edit SSH Configuration**:
+   Open the SSH configuration file using a text editor.
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
-   
-2. **Edit Configuration:**
-   Make sure the following lines are set (you may need to uncomment them):
+
+2. **Disable Password Authentication**:
+   Ensure the following lines are set to:
    ```bash
-   PermitRootLogin no
    PasswordAuthentication no
    ChallengeResponseAuthentication yes
-   UsePAM yes
    ```
 
-3. **Save and Exit:**
-   Press `CTRL + X`, then `Y`, and `Enter` to save and exit the editor.
-
-4. **Restart SSH Service:**
+3. **Restart SSH Service**:
+   After making changes, restart the SSH service.
    ```bash
-   sudo systemctl restart ssh
+   sudo systemctl restart sshd
    ```
 
-### Step 2: Set Up Email Sending
-
-1. **Configure a Mail Transfer Agent (MTA):**
-   For simplicity, we can use `sendmail` (which is commonly pre-installed).
-   Ensure that your MTA is set up correctly to send emails. This step will vary based on your environment, but here’s a simple way to test:
-
+#### Step 2: Create a Script for OTP Generation and Email Sending
+1. **Create a Script**:
+   Create a new script to generate an OTP and send it via email.
    ```bash
-   echo "Test Email" | sendmail your_email@example.com
+   sudo nano /usr/local/bin/ssh-otp.sh
    ```
 
-   Check your email to confirm that it works.
-
-### Step 3: Generate and Store OTP
-
-1. **Create an OTP Generation Script:**
-   Create a shell script to generate and send OTP to your email.
-
-   ```bash
-   sudo nano /usr/local/bin/otp_send.sh
-   ```
-
-   **Add the following script:**
+2. **Add the Following Code**:
+   Replace the SMTP settings with your own email credentials and settings.
    ```bash
    #!/bin/bash
 
-   # Generate a random OTP
-   OTP=$(shuf -i 100000-999999 -n 1)
+   EMAIL="your_email@example.com"      # Change this to your email
+   SMTP_SERVER="smtp.example.com"       # Change to your SMTP server
+   SMTP_PORT="587"                      # Change if necessary
+   SMTP_USER="your_smtp_user"          # SMTP username
+   SMTP_PASS="your_smtp_password"      # SMTP password
+   OTP=$(shuf -i 100000-999999 -n 1)    # Generate a 6-digit OTP
+   echo "Your OTP is: $OTP" | mail -s "Your SSH OTP" -S smtp="$SMTP_SERVER:$SMTP_PORT" -S smtp-auth=login -S smtp-auth-user="$SMTP_USER" -S smtp-auth-password="$SMTP_PASS" -S ssl-verify=ignore "$EMAIL"
 
-   # Send OTP to the user's email
-   echo "Your OTP is: $OTP" | sendmail your_email@example.com
-
-   # Save OTP to a temporary file
-   echo $OTP > /tmp/otp.txt
-
-   # Optional: set a timer to remove the OTP after some time
-   sleep 300 && rm /tmp/otp.txt &
+   # Store the OTP temporarily
+   echo "$OTP" > /tmp/otp.txt
    ```
 
-2. **Make the Script Executable:**
+3. **Make the Script Executable**:
    ```bash
-   sudo chmod +x /usr/local/bin/otp_send.sh
+   sudo chmod +x /usr/local/bin/ssh-otp.sh
    ```
 
-### Step 4: Configure PAM (Pluggable Authentication Module)
-
-1. **Edit the PAM Configuration for SSH:**
+#### Step 3: Configure PAM for OTP
+1. **Edit the PAM SSH Configuration**:
+   Open the PAM SSH configuration file.
    ```bash
    sudo nano /etc/pam.d/sshd
    ```
 
-   **Add the following lines at the end:**
+2. **Add OTP Verification**:
+   Add the following line at the top of the file:
    ```bash
-   auth required pam_exec.so /usr/local/bin/otp_send.sh
-   auth required pam_exec.so /usr/local/bin/otp_verify.sh
+   auth required pam_exec.so /usr/local/bin/ssh-otp.sh
    ```
 
-### Step 5: Create OTP Verification Script
-
-1. **Create the OTP Verification Script:**
+3. **Add a Line for OTP Verification**:
+   Add the following line to allow OTP verification:
    ```bash
-   sudo nano /usr/local/bin/otp_verify.sh
+   auth required pam_unix.so nullok
    ```
 
-   **Add the following script:**
+#### Step 4: Modify User Authentication to Check OTP
+1. **Create a New Script for OTP Verification**:
+   Create a script to verify the OTP entered by the user.
+   ```bash
+   sudo nano /usr/local/bin/otp-verify.sh
+   ```
+
+2. **Add the Following Code**:
    ```bash
    #!/bin/bash
 
    read -p "Enter the OTP sent to your email: " user_otp
+   stored_otp=$(cat /tmp/otp.txt)
 
-   # Read the OTP from the temporary file
-   stored_otp=$(cat /tmp/otp.txt 2>/dev/null)
-
-   # Check if OTP is correct
-   if [[ "$user_otp" == "$stored_otp" ]]; then
+   if [ "$user_otp" == "$stored_otp" ]; then
+       echo "OTP Verified."
        exit 0
    else
+       echo "Invalid OTP."
        exit 1
    fi
    ```
 
-2. **Make the Script Executable:**
+3. **Make the Script Executable**:
    ```bash
-   sudo chmod +x /usr/local/bin/otp_verify.sh
+   sudo chmod +x /usr/local/bin/otp-verify.sh
    ```
 
-### Step 6: Testing the Setup
+#### Step 5: Configure SSH to Use OTP Verification
+1. **Modify PAM Again**:
+   Open the PAM SSH configuration again.
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
 
-1. **Reboot the System:**
+2. **Add the OTP Verification Line**:
+   Add the following line after the existing lines:
+   ```bash
+   auth required pam_exec.so /usr/local/bin/otp-verify.sh
+   ```
+
+#### Step 6: Ensure Everything Starts Automatically
+1. **Ensure SMTP and Mail Utilities are Installed**:
+   If not already installed, install `mailutils` for the `mail` command:
+   ```bash
+   sudo apt-get install mailutils
+   ```
+
+2. **Enable the SSH Service on Boot**:
+   This should already be enabled, but check with:
+   ```bash
+   sudo systemctl enable ssh
+   ```
+
+### Step 7: Testing the Setup
+1. **Reboot the Server**:
    ```bash
    sudo reboot
    ```
 
-2. **Attempt to SSH:**
-   From a remote machine, try to SSH into your Ubuntu server:
-   ```bash
-   ssh username@your-server-ip
-   ```
+2. **SSH into Your Server**:
+   When you SSH into your server, you should receive an OTP via email. After entering your username and password (if applicable), you will be prompted for the OTP.
 
-3. **Check Email for OTP:**
-   After initiating the SSH connection, check your email for the OTP.
+3. **Enter the OTP**:
+   When prompted, enter the OTP sent to your email.
 
-4. **Enter OTP:**
-   When prompted for the OTP, enter the code received in your email.
+### Important Notes
+- Ensure your SMTP server settings are correct and that you can send emails from the command line.
+- You might need to allow less secure apps if you're using services like Gmail.
+- Always test thoroughly to ensure the setup works as expected.
 
-### Step 7: Automation after Reboot
-
-The scripts you created will run automatically upon SSH login due to the PAM configuration. Ensure that the MTA is correctly configured to send emails on startup.
-
-### Important Notes:
-
-- **Security Concerns:** This method does not use encryption for the OTP in transit. Consider using a more secure method for production environments, such as two-factor authentication with Google Authenticator.
-- **Dependencies:** Ensure that your MTA (e.g., `sendmail`, `postfix`) is properly configured to send emails, and that necessary permissions are granted to the scripts.
-- **OTP Lifetime:** The OTP generated is stored temporarily; adjust the sleep time in the `otp_send.sh` as needed.
-- **Testing:** Be sure to test this configuration thoroughly in a secure environment before deploying it in production.
-
-This configuration uses existing tools and should work on a standard Ubuntu installation without any additional software installation.
+This configuration provides an additional layer of security to your SSH login process by requiring a valid OTP sent to your email.
