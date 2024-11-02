@@ -1,153 +1,172 @@
-Setting up SSH login on Ubuntu with email OTP (One-Time Password) verification can enhance security significantly. Here’s a step-by-step guide on how to configure this without requiring further installations.
+To set up SSH login on Ubuntu with email OTP (One-Time Password) verification, we can use a method that involves a combination of SSH configuration and a simple script to send an OTP via email. Here’s a detailed guide, step by step:
 
 ### Prerequisites
-1. **An Ubuntu Server**: Ensure you have SSH access to your Ubuntu server.
-2. **Email Account**: You’ll need an email account to send OTPs. This guide assumes you will use a simple script to send emails via the command line using the `mail` command.
 
-### Step 1: Enable SSH
-1. Make sure SSH is installed and running. If it's not installed, you can typically install it using:
-   ```bash
-   sudo apt update
-   sudo apt install openssh-server
-   ```
-2. Start and enable the SSH service:
-   ```bash
-   sudo systemctl start ssh
-   sudo systemctl enable ssh
-   ```
+1. **Ubuntu server** (with SSH access).
+2. **Email account**: An email account configured to send emails via SMTP. This could be a Gmail account or any other email provider.
+3. **Python 3**: The system should have Python 3 installed (most Ubuntu installations have it by default).
 
-### Step 2: Set Up Email Configuration
-1. You need to configure email sending capabilities. You can use `mail` for this. Install it if necessary:
-   ```bash
-   sudo apt install mailutils
-   ```
-   During the installation, you will be prompted to configure the email system; choose **"Internet Site"**.
+### Steps to Set Up Email OTP Verification for SSH
 
-2. Configure `/etc/ssmtp/ssmtp.conf` (assuming `ssmtp` is available):
-   ```bash
-   sudo nano /etc/ssmtp/ssmtp.conf
-   ```
-   Add or modify the following lines to reflect your email account:
-   ```
-   root=your_email@example.com
-   mailhub=smtp.example.com:587
-   AuthUser=your_email@example.com
-   AuthPass=your_password
-   UseSTARTTLS=YES
-   ```
-   Replace `smtp.example.com`, `your_email@example.com`, and `your_password` with your SMTP server's details and your email credentials.
+#### Step 1: Configure SSH
 
-### Step 3: Generate an OTP
-1. Create a script to generate and send the OTP:
-   ```bash
-   sudo nano /usr/local/bin/otp_script.sh
-   ```
-2. Add the following script content:
-   ```bash
-   #!/bin/bash
-
-   EMAIL="your_email@example.com"
-   OTP=$(shuf -i 100000-999999 -n 1)  # Generate a 6-digit OTP
-   echo "Your OTP is: $OTP" | mail -s "Your OTP Code" $EMAIL
-
-   # Store the OTP in a temporary file with a timestamp
-   echo "$OTP" > /tmp/otp.txt
-   echo "$(date +%s)" >> /tmp/otp.txt
-   ```
-
-   Replace `your_email@example.com` with your actual email address.
-
-3. Make the script executable:
-   ```bash
-   sudo chmod +x /usr/local/bin/otp_script.sh
-   ```
-
-### Step 4: Modify SSH Configuration
-1. Open the SSH configuration file:
+1. **Open SSH Configuration**:
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
-
-2. Add the following lines at the end:
-   ```bash
-   Match User your_username
-       ForceCommand /usr/local/bin/otp_script.sh
-       PermitTunnel no
-       AllowTcpForwarding no
+   
+2. **Modify SSH Settings**:
+   Ensure the following lines are present and uncommented:
+   ```plaintext
+   PasswordAuthentication yes
+   ChallengeResponseAuthentication yes
    ```
 
-   Replace `your_username` with your actual username.
-
-3. Ensure you disable password authentication (if desired):
-   ```bash
-   PasswordAuthentication no
-   ```
-
-4. Restart the SSH service to apply the changes:
+3. **Restart SSH Service**:
    ```bash
    sudo systemctl restart ssh
    ```
 
-### Step 5: Create a Verification Script
-1. Create another script to verify the OTP:
+#### Step 2: Create an OTP Generation and Email Script
+
+1. **Install Required Packages** (if not installed):
+   Make sure you have `mailutils` for sending emails:
    ```bash
-   sudo nano /usr/local/bin/verify_otp.sh
-   ```
-2. Add the following content:
-   ```bash
-   #!/bin/bash
-
-   if [ ! -f /tmp/otp.txt ]; then
-       echo "No OTP found. Please request a new one."
-       exit 1
-   fi
-
-   read -p "Enter your OTP: " USER_OTP
-   OTP=$(head -n 1 /tmp/otp.txt)
-   TIMESTAMP=$(tail -n 1 /tmp/otp.txt)
-   CURRENT_TIME=$(date +%s)
-
-   # Check if OTP is valid for 5 minutes
-   if [ "$USER_OTP" == "$OTP" ] && [ $((CURRENT_TIME - TIMESTAMP)) -le 300 ]; then
-       echo "OTP is valid. You are logged in."
-       rm /tmp/otp.txt  # Remove the OTP file
-   else
-       echo "Invalid OTP or OTP expired."
-       exit 1
-   fi
+   sudo apt-get install mailutils
    ```
 
-3. Make this script executable:
+2. **Create a Script**:
+   Create a script that generates an OTP and sends it via email. Create a new file:
    ```bash
-   sudo chmod +x /usr/local/bin/verify_otp.sh
+   sudo nano /usr/local/bin/send_otp.py
    ```
 
-### Step 6: Modify SSH Login to Use OTP Verification
-1. Modify your `.bashrc` file to run the OTP verification script after login:
-   ```bash
-   nano ~/.bashrc
-   ```
-2. Add the following line at the end:
-   ```bash
-   /usr/local/bin/verify_otp.sh
+3. **Add the Following Python Script**:
+   ```python
+   #!/usr/bin/env python3
+
+   import smtplib
+   from email.mime.text import MIMEText
+   import random
+   import sys
+
+   # Email Configuration
+   EMAIL_ADDRESS = 'your_email@gmail.com'  # Change this to your email
+   EMAIL_PASSWORD = 'your_email_password'   # Change this to your email password
+   TO_EMAIL = 'recipient_email@example.com'  # Change this to the recipient's email (for OTP)
+
+   # Generate OTP
+   otp = random.randint(100000, 999999)
+
+   # Send Email
+   msg = MIMEText(f'Your OTP is: {otp}')
+   msg['Subject'] = 'Your OTP Code'
+   msg['From'] = EMAIL_ADDRESS
+   msg['To'] = TO_EMAIL
+
+   try:
+       with smtplib.SMTP('smtp.gmail.com', 587) as server:
+           server.starttls()
+           server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+           server.sendmail(EMAIL_ADDRESS, TO_EMAIL, msg.as_string())
+           print(otp)  # Print OTP for later verification
+   except Exception as e:
+       print(f"Error sending email: {e}")
+       sys.exit(1)
    ```
 
-3. Save the file and exit.
+   Replace:
+   - `your_email@gmail.com` with your email address.
+   - `your_email_password` with your email password (consider using an app password if using Gmail).
+   - `recipient_email@example.com` with the email where you want to receive the OTP.
 
-### Step 7: Testing
-1. Open a new terminal and attempt to SSH into your server:
+4. **Make the Script Executable**:
    ```bash
-   ssh your_username@your_server_ip
+   sudo chmod +x /usr/local/bin/send_otp.py
    ```
-2. You should receive an OTP email. Enter the OTP when prompted to verify.
 
-### Notes
-- This method requires that your email sending works correctly. Test sending an email using the command:
-  ```bash
-  echo "Test email" | mail -s "Test" your_email@example.com
-  ```
-- Make sure to secure your email credentials as necessary.
-- The OTP is valid for 5 minutes; adjust the timing in the `verify_otp.sh` script as needed.
+#### Step 3: Create the OTP Verification Mechanism
+
+1. **Create a Verification Script**:
+   Create another script to handle the OTP verification. 
+   ```bash
+   sudo nano /usr/local/bin/verify_otp.py
+   ```
+
+2. **Add the Following Python Script**:
+   ```python
+   #!/usr/bin/env python3
+
+   import sys
+
+   # The OTP should be stored in a temporary file or some state
+   with open('/tmp/otp.txt', 'r') as f:
+       otp = f.read().strip()
+
+   # Input from the user
+   user_input = input('Enter the OTP sent to your email: ')
+
+   if user_input == otp:
+       print("OTP Verified Successfully!")
+       sys.exit(0)
+   else:
+       print("Invalid OTP!")
+       sys.exit(1)
+   ```
+
+3. **Make the Script Executable**:
+   ```bash
+   sudo chmod +x /usr/local/bin/verify_otp.py
+   ```
+
+#### Step 4: Modify SSH to Use the OTP System
+
+1. **Create a PAM Configuration File**:
+   Create a new PAM module configuration file:
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+2. **Add the Following Lines**:
+   ```plaintext
+   auth required pam_exec.so /usr/local/bin/send_otp.py
+   auth required pam_exec.so /usr/local/bin/verify_otp.py
+   ```
+
+#### Step 5: Store OTP in a Temporary File
+
+Modify the `send_otp.py` script to store the OTP in a temporary file:
+
+```python
+# After generating the OTP
+with open('/tmp/otp.txt', 'w') as f:
+    f.write(str(otp))
+```
+
+Add this line right after generating the OTP (just before sending the email).
+
+#### Step 6: Testing the Setup
+
+1. **Reboot the System**:
+   ```bash
+   sudo reboot
+   ```
+
+2. **Log in via SSH**:
+   - Connect to your server via SSH.
+   - You should receive an email with the OTP.
+   - Enter the OTP when prompted.
+
+### Step 7: Make the System Start Automatically After Reboot
+
+The above scripts will run automatically due to their configuration in PAM and the SSH service. The scripts do not need to be run on startup because PAM handles the execution during the SSH login process.
+
+### Important Notes
+
+- **Security**: Make sure to secure your email credentials and consider using environment variables or a more secure method for storing them.
+- **Email Configuration**: If you're using Gmail, you might need to allow "less secure apps" or set up an App Password for better security.
+- **File Permissions**: Ensure that the `/tmp/otp.txt` file is secured properly, as it contains sensitive information.
 
 ### Final Thoughts
-This method provides a basic implementation of email-based OTP verification for SSH login on Ubuntu. Depending on your security needs, consider using a more robust solution like a dedicated OTP application (e.g., Google Authenticator) or a dedicated two-factor authentication (2FA) service.
+
+This setup provides a basic method for OTP verification via email for SSH logins on Ubuntu. Depending on your security needs, consider further enhancements such as rate limiting, logging attempts, and possibly implementing a more robust OTP system using libraries or services designed for this purpose.
