@@ -1,139 +1,171 @@
-
-To set up email-based authentication for SSH on an Ubuntu server, you can create a system that sends a one-time password (OTP) to users via email when they attempt to log in. This method typically involves a combination of PAM (Pluggable Authentication Modules) and a mail server. Below are the steps to achieve this:
+Configuring email-based One-Time Passwords (OTP) for SSH login on an Ubuntu server involves several steps. Below is a guide to help you set it up:
 
 ### Prerequisites
+- An Ubuntu server with SSH access.
+- An email account that will be used to send the OTPs (e.g., Gmail).
+- `sendmail` or another MTA (Mail Transfer Agent) installed for sending emails.
 
-1. **An Ubuntu Server**: Ensure you have administrative access to the server.
-2. **Mail Transfer Agent (MTA)**: Install a mail server like `Postfix` or `Sendmail` to send emails.
-3. **Python**: Install Python and necessary libraries to generate and send the OTP.
+### Step 1: Install Required Packages
+First, ensure that you have the necessary packages installed. Open a terminal and run:
 
-### Step 1: Install Postfix
+```bash
+sudo apt update
+sudo apt install mailutils python3-pip
+```
 
-1. **Install Postfix**:
+### Step 2: Install `oathtool`
+You’ll need `oathtool` to generate the OTPs:
+
+```bash
+sudo apt install oathtool
+```
+
+### Step 3: Create a Python Script to Send OTP
+Create a Python script that will generate and send the OTP via email.
+
+1. Create a new directory for the script:
+
    ```bash
-   sudo apt update
-   sudo apt install postfix mailutils
+   mkdir ~/otp
+   cd ~/otp
    ```
 
-2. **Configure Postfix**:
-   - During installation, you'll be prompted to configure Postfix. Choose "Internet Site" and set the system mail name to your domain name or server IP.
+2. Create the script `send_otp.py`:
 
-### Step 2: Install Required Packages
-
-You need Python and some libraries for OTP generation and sending emails.
-
-1. **Install Python and Required Libraries**:
-   ```bash
-   sudo apt install python3 python3-pip
-   pip3 install pyotp
-   ```
-
-### Step 3: Create the OTP Script
-
-Create a Python script to generate an OTP and send it via email.
-
-1. **Create a Directory for the Script**:
-   ```bash
-   mkdir ~/otp_auth
-   cd ~/otp_auth
-   ```
-
-2. **Create the OTP Script**:
    ```bash
    nano send_otp.py
    ```
 
-3. **Add the Following Code**:
+   Paste the following code into the file:
+
    ```python
-   import os
-   import sys
+   #!/usr/bin/env python3
+
    import smtplib
-   import pyotp
    from email.mime.text import MIMEText
+   from email.mime.multipart import MIMEMultipart
+   import secrets
+   import sys
 
-   # Configuration
-   EMAIL_FROM = 'your-email@example.com'  # Change to your email
-   EMAIL_PASSWORD = 'your-email-password'  # Change to your email password
-   SMTP_SERVER = 'smtp.example.com'  # Change to your SMTP server
-   SMTP_PORT = 587  # Port number (587 for TLS)
-
-   # Generate OTP
-   totp = pyotp.TOTP('base32secret3232')  # Change this secret for each user
-   otp = totp.now()
-
-   # Send OTP via Email
    def send_email(to_email, otp):
-       msg = MIMEText(f'Your OTP is: {otp}')
-       msg['Subject'] = 'Your OTP Code'
-       msg['From'] = EMAIL_FROM
-       msg['To'] = to_email
+       from_email = 'your_email@gmail.com'
+       password = 'your_email_password'
+       
+       subject = "Your OTP Code"
+       body = f"Your OTP code is: {otp}"
 
-       with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+       msg = MIMEMultipart()
+       msg['From'] = from_email
+       msg['To'] = to_email
+       msg['Subject'] = subject
+
+       msg.attach(MIMEText(body, 'plain'))
+
+       try:
+           server = smtplib.SMTP('smtp.gmail.com', 587)
            server.starttls()
-           server.login(EMAIL_FROM, EMAIL_PASSWORD)
-           server.sendmail(EMAIL_FROM, to_email, msg.as_string())
+           server.login(from_email, password)
+           server.sendmail(from_email, to_email, msg.as_string())
+           server.quit()
+           print("OTP sent successfully")
+       except Exception as e:
+           print(f"Failed to send OTP: {e}")
 
    if __name__ == "__main__":
        if len(sys.argv) != 2:
-           print("Usage: python send_otp.py <user_email>")
+           print("Usage: send_otp.py <email>")
            sys.exit(1)
 
-       user_email = sys.argv[1]
-       send_email(user_email, otp)
-       print(f"OTP sent to {user_email}")
+       email = sys.argv[1]
+       otp = secrets.token_hex(4)  # Generate a 8-character OTP
+       send_email(email, otp)
+       print(otp)  # Print OTP for verification
    ```
 
-4. **Save and Exit** (`Ctrl + X`, then `Y`, then `Enter`).
+3. Replace `your_email@gmail.com` and `your_email_password` with your actual email credentials. If you're using Gmail, make sure to allow "Less secure apps" or use an App Password if you have 2FA enabled.
 
-### Step 4: Modify SSH Configuration
+4. Make the script executable:
 
-1. **Edit the SSH Configuration**:
+   ```bash
+   chmod +x send_otp.py
+   ```
+
+### Step 4: Configure SSH
+1. Open the SSH configuration file:
+
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-2. **Add or Modify the Following Lines**:
+2. Add the following line to enable challenge-response authentication:
+
    ```bash
    ChallengeResponseAuthentication yes
    ```
 
-3. **Save and Exit**.
+3. Save the file and exit.
 
-4. **Restart SSH**:
+4. Restart the SSH service:
+
    ```bash
-   sudo systemctl restart ssh
+   sudo systemctl restart sshd
    ```
 
-### Step 5: Configure PAM
+### Step 5: Set Up PAM to Use OTP
+1. Open the PAM SSH configuration file:
 
-1. **Edit the PAM Configuration for SSH**:
    ```bash
    sudo nano /etc/pam.d/sshd
    ```
 
-2. **Add the Following Line at the Top**:
+2. Add the following line at the end:
+
    ```bash
-   auth required pam_exec.so /usr/bin/python3 /home/your-username/otp_auth/send_otp.py %u
+   auth required pam_exec.so /path/to/otp_script.sh
    ```
 
-   Replace `/home/your-username/` with the actual path to the script.
+### Step 6: Create OTP Script
+Create the script that will handle the OTP generation and verification.
 
-3. **Save and Exit**.
+1. Create the OTP script:
 
-### Step 6: Test the Configuration
+   ```bash
+   sudo nano /usr/local/bin/otp_script.sh
+   ```
 
-1. **Log in via SSH** from a different terminal or machine.
-2. After entering your username and password, the OTP should be sent to the configured email.
-3. Check your email for the OTP and enter it in the SSH prompt to gain access.
+   Paste the following code into the file:
 
-### Notes
+   ```bash
+   #!/bin/bash
 
-- Ensure that your firewall allows outbound SMTP traffic if you're using a cloud provider.
-- You may want to handle rate limiting and more advanced security measures to protect against brute force attacks.
-- Make sure that the email address configured in the script can be sent emails from the server.
-- For production environments, consider using a more robust solution like 2FA libraries or dedicated authentication services. 
+   EMAIL="$PAM_USER@example.com"  # Replace with a method to fetch user email
 
-### Troubleshooting
+   # Generate OTP and send email
+   OTP=$(python3 /path/to/send_otp.py "$EMAIL")
 
-- If you encounter issues with email delivery, check your mail logs (usually in `/var/log/mail.log`) for errors.
-- Verify that your email settings are correct, especially SMTP server, port, and authentication details.
+   echo "Please check your email for the OTP."
+   read -p "Enter the OTP: " input_otp
+
+   if [ "$input_otp" == "$OTP" ]; then
+       exit 0  # Successful authentication
+   else
+       exit 1  # Failed authentication
+   fi
+   ```
+
+2. Make the script executable:
+
+   ```bash
+   sudo chmod +x /usr/local/bin/otp_script.sh
+   ```
+
+### Step 7: Test the Configuration
+- Try logging in via SSH. You should receive an OTP via email and be prompted to enter it.
+- If the OTP is correct, you should gain access. If not, the login will be denied.
+
+### Important Notes
+- Ensure that your email server settings allow sending emails from the script.
+- For production environments, consider using a more secure and robust solution for OTP, like Google Authenticator.
+- Always test configurations in a safe environment before deploying them to production.
+
+This setup should provide a basic email-based OTP authentication mechanism for SSH access on your Ubuntu server. Adjust the scripts and configurations as necessary for your specific requirements.
