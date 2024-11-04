@@ -269,3 +269,147 @@ To configure SSH login on an Ubuntu server using email-based OTP (One-Time Passw
 - For production, consider using established libraries or services for OTP generation and management. 
 
 This solution provides a basic framework for email OTP without PAM or `.bashrc` modifications. Adjust it according to your specific requirements and security practices.
+
+🤭😦🤭🥲😦🤭🙂🙂😦🤭🙂😦😙🤭😥🤭🙂🤭🙂😦🤭🙂😦🙂🤭😦🤭🙂🥲😦🤭🙂😦🤭🥲😦🤭🥲😦🤭🥲😦🤭🙂😦🤭🥲😥🤭😦😮😚🥱😦😦🥱😚😦😦🤭🥲😦🥱😦🥱😙😦😚😦😙🤭😦😦🤭😙😦🤭🙂😦🤭😙😦🥱😙😦🥱😚😦😚😙😮🥱😙😮😮🥱😙😮😚😮🥱😙😮😮😙🥱😙😮😮😙😮🥱😮😘🤗😮🥱😚😮😮🤗😚😘😮😚😮🤗😘😮
+
+To set up SSH login on an Ubuntu server using SMS-based authentication without using PAM or modifying `.bashrc`, you'll need to implement a custom solution. Here’s a simplified guide to achieve this using an SMS API service.
+
+### Prerequisites
+
+1. **SMS API**: Sign up for an SMS service provider (like Twilio, Nexmo, etc.) and get your API credentials.
+2. **Python**: Ensure Python is installed on your server.
+
+### Steps to Configure SSH with SMS Authentication
+
+1. **Install Required Packages**:
+   Install `requests` for handling HTTP requests to your SMS service.
+
+   ```bash
+   sudo apt update
+   sudo apt install python3 python3-pip
+   pip3 install requests
+   ```
+
+2. **Create SMS Sending Script**:
+   Create a Python script to send the SMS.
+
+   ```bash
+   sudo nano /usr/local/bin/send_sms.py
+   ```
+
+   Insert the following code (customize with your SMS provider's API):
+
+   ```python
+   import requests
+   import random
+   import sys
+
+   def send_sms(phone_number, otp):
+       api_key = 'YOUR_API_KEY'
+       api_url = 'https://api.your-sms-provider.com/send'
+
+       payload = {
+           'to': phone_number,
+           'message': f'Your OTP code is: {otp}',
+           'api_key': api_key,
+       }
+
+       response = requests.post(api_url, data=payload)
+       return response.status_code == 200
+
+   if __name__ == "__main__":
+       user_phone = sys.argv[1]
+       otp = str(random.randint(100000, 999999))
+       if send_sms(user_phone, otp):
+           print(otp)  # Print OTP for later verification
+       else:
+           print("Failed to send SMS.")
+   ```
+
+   Make it executable:
+
+   ```bash
+   sudo chmod +x /usr/local/bin/send_sms.py
+   ```
+
+3. **Create the OTP Verification Script**:
+   Create a shell script to handle OTP verification.
+
+   ```bash
+   sudo nano /usr/local/bin/otp_verification.sh
+   ```
+
+   Add the following content:
+
+   ```bash
+   #!/bin/bash
+
+   read -p "Enter your phone number: " user_phone
+   otp_generated=$(python3 /usr/local/bin/send_sms.py "$user_phone")
+
+   read -p "Enter the OTP sent to your phone: " user_otp
+
+   if [ "$user_otp" == "$otp_generated" ]; then
+       echo "Authentication successful."
+       exit 0
+   else
+       echo "Invalid OTP."
+       exit 1
+   fi
+   ```
+
+   Make it executable:
+
+   ```bash
+   sudo chmod +x /usr/local/bin/otp_verification.sh
+   ```
+
+4. **Modify SSH Configuration**:
+   Edit your SSH configuration to allow command execution after login attempts.
+
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Ensure you have the following setting:
+
+   ```
+   ChallengeResponseAuthentication yes
+   ```
+
+5. **Set Up SSH Command**:
+   For each user, you can set up the forced command in the `~/.ssh/authorized_keys` file.
+
+   Edit the `authorized_keys` file for the user:
+
+   ```bash
+   nano /home/username/.ssh/authorized_keys
+   ```
+
+   Add the following line before the public key:
+
+   ```
+   command="/usr/local/bin/otp_verification.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-rsa AAAAB3Nza...
+   ```
+
+6. **Restart SSH Service**:
+   After making changes, restart the SSH service:
+
+   ```bash
+   sudo systemctl restart ssh
+   ```
+
+### Testing
+
+1. Try to SSH into the server.
+2. The OTP script will prompt for the phone number and send an OTP via SMS.
+3. You will need to enter the OTP to complete the login process.
+
+### Notes
+
+- Ensure that your SMS API key and endpoint are configured correctly.
+- This solution is basic and lacks advanced security measures. Consider enhancing it for production use.
+- Remember to handle sensitive data securely and validate user inputs to avoid potential security vulnerabilities.
+
+This setup provides a straightforward way to implement SMS-based OTP authentication for SSH without using PAM or `.bashrc` modifications. Adjust as needed based on your specific requirements and security practices.
+
