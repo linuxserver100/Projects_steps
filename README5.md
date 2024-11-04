@@ -1,124 +1,131 @@
-Setting up SSH login on an Ubuntu server using email-based OTP (One-Time Password) authentication involves several steps. You'll need to configure an email service to send OTPs, install the required packages, and set up the SSH configuration to enforce this method. Below is a step-by-step guide to achieve this, including the use of `ForceCommand` in the SSH config file.
+
+Setting up SSH login on an Ubuntu server using email OTP (One-Time Password) authentication involves several steps. Below, I'll guide you through the process of setting up email OTP authentication without using Python, along with configuring `ForceCommand` in the SSH configuration file.
 
 ### Prerequisites
-
-1. **Ubuntu Server**: Ensure you have an Ubuntu server set up with SSH access.
-2. **Email Service**: You'll need access to an SMTP server or a service that can send emails.
+1. **Ubuntu Server**: Ensure you have a working Ubuntu server.
+2. **Mail Server**: You should have access to an SMTP server for sending emails (e.g., Postfix, Sendmail, or an external SMTP service).
 
 ### Step 1: Install Required Packages
 
-1. **Install `ssmtp` or `msmtp`**: These packages allow your server to send emails. For this guide, we'll use `ssmtp`.
+You'll need to install a few utilities to send emails. For instance, you can use `mailutils` or `ssmtp`.
 
+```bash
+sudo apt update
+sudo apt install mailutils
+```
+
+### Step 2: Configure SMTP
+
+If you're using a local SMTP server like Postfix, ensure it is correctly configured. For an external SMTP server, you might want to use `ssmtp` or `msmtp`. Below is an example configuration for `ssmtp`.
+
+1. Install `ssmtp`:
    ```bash
-   sudo apt update
-   sudo apt install ssmtp mailutils
+   sudo apt install ssmtp
    ```
 
-2. **Configure SSMTP**: Edit the configuration file `/etc/ssmtp/ssmtp.conf` to set up your email credentials:
-
+2. Edit the configuration file `/etc/ssmtp/ssmtp.conf`:
    ```bash
    sudo nano /etc/ssmtp/ssmtp.conf
    ```
 
    Example configuration:
-
-   ```plaintext
-   Root=your-email@example.com
-   Mailhub=smtp.example.com:587
+   ```
+   root=your-email@example.com
+   mailhub=smtp.example.com:587
    AuthUser=your-email@example.com
    AuthPass=your-email-password
    UseSTARTTLS=YES
+   FromLineOverride=YES
    ```
 
-   Make sure to replace the placeholders with your actual email service details.
+### Step 3: Create OTP Script
 
-### Step 2: Install `oathtool`
+Create a script that generates an OTP, sends it to the user’s email, and verifies the input.
 
-Install `oathtool`, which can generate OTPs.
-
-```bash
-sudo apt install oathtool
-```
-
-### Step 3: Create the OTP Script
-
-Create a script that will handle OTP generation and email sending.
-
-1. **Create a new script**:
-
+1. Create a new script:
    ```bash
-   sudo nano /usr/local/bin/send_otp.sh
+   sudo nano /usr/local/bin/otp_auth.sh
    ```
 
-2. **Add the following content**:
+2. Add the following script content:
 
    ```bash
    #!/bin/bash
 
    EMAIL="your-email@example.com"
-   OTP=$(oathtool --totp -b "your-secret-key")
+   OTP=$(shuf -i 100000-999999 -n 1) # Generate a random 6-digit OTP
 
-   # Send OTP via email
-   echo "Your OTP is: $OTP" | mail -s "Your OTP Code" $EMAIL
+   echo "Your OTP is: $OTP" | mail -s "Your OTP Code" "$EMAIL"
 
-   # Print OTP for SSH session
-   echo "Please check your email for the OTP."
+   echo "Enter the OTP sent to your email:"
+   read INPUT_OTP
+
+   if [ "$INPUT_OTP" -eq "$OTP" ]; then
+       exit 0 # Success
+   else
+       echo "Invalid OTP."
+       exit 1 # Failure
+   fi
    ```
 
-   Make sure to replace `"your-secret-key"` with your own secret key. You can generate a base32-encoded secret key using tools like `openssl` or online generators.
-
-3. **Make the script executable**:
-
+3. Make the script executable:
    ```bash
-   sudo chmod +x /usr/local/bin/send_otp.sh
+   sudo chmod +x /usr/local/bin/otp_auth.sh
    ```
 
-### Step 4: Configure SSH to Use ForceCommand
+### Step 4: Configure SSH to Use the OTP Script
 
-You will need to edit the SSH configuration to enforce the OTP login process.
+You need to edit the SSH configuration to use the `ForceCommand` option.
 
-1. **Edit the SSH configuration file**:
-
+1. Open the SSH configuration file:
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-2. **Add or modify the following lines**:
-
-   ```plaintext
-   Match User your-username
-       ForceCommand /usr/local/bin/send_otp.sh
-       PermitTTY yes
-       ForceCommand /bin/bash -i
+2. Add the following line at the end of the file:
+   ```bash
+   ForceCommand /usr/local/bin/otp_auth.sh
    ```
 
-   Replace `your-username` with the actual username that should use OTP for SSH.
+3. Ensure you set `PermitTunnel` and `PermitTTY` to `no` if you want to restrict other SSH functionalities:
+   ```bash
+   PermitTunnel no
+   PermitTTY no
+   ```
+
+4. Save the file and exit.
 
 ### Step 5: Restart SSH Service
 
-After making changes to the configuration, restart the SSH service:
+After making the changes, restart the SSH service to apply them:
 
 ```bash
-sudo systemctl restart ssh
+sudo systemctl restart sshd
 ```
 
-### Step 6: Test the Configuration
+### Step 6: Testing the Setup
 
-1. **Log in to the server using SSH**:
-
+1. Attempt to SSH into your server:
    ```bash
    ssh your-username@your-server-ip
    ```
 
-2. When prompted, the OTP script should execute, sending an OTP to your email. Check your email for the OTP and enter it.
+2. The script should generate an OTP, send it to your email, and prompt you for it. If you enter the correct OTP, you will be granted access; otherwise, access will be denied.
 
-### Additional Notes
+### Security Considerations
 
-- **Security**: Make sure your script does not expose any sensitive information and that your email credentials are secured.
-- **Timeouts**: Configure your OTP timeouts appropriately, as the OTP will expire after a short period (usually 30 seconds).
-- **Backup Access**: Always have a backup access method (like a secondary user or direct console access) in case of misconfiguration.
+- Make sure the email containing the OTP is sent over a secure connection (use TLS/STARTTLS).
+- Consider using a more robust OTP generation and validation method, such as integrating with Google Authenticator or similar services if security is critical.
+- Test the setup thoroughly to ensure that unauthorized access is not possible.
 
-This setup requires careful handling of emails and keys, so test it in a secure environment before deploying it in a production setting.
+### Troubleshooting
+
+- Check `/var/log/auth.log` for any authentication errors.
+- Ensure your email settings are correct by testing email sending independently.
+- Confirm that the SSH service is running correctly.
+
+This setup allows you to use email OTP for SSH logins on your Ubuntu server, adding an extra layer of security.
+
 😯🥲🥱🤭🙂😢🙂😢🤭😢😐🙃😢😐🙃😢😐🙂😢🤭🙂😢🤭🙂😢🤭🙃😢🙃🤭😮🤭😥🤭🙃😦🙃😦🤭🙃🙃🤭😦🙃🤭🤭🙂😮🤭🙃🤭😮🤭🙂😮🤭🙃😮😮🤭🙂😢😢🤭🙂😥🤭🙂😥🙂😐😢🙂😐😢😙😐😮🤭🙂😮🤭🙂😮🤭🙂😮😮🤭🙂😮😮🤭🙂😮🤭😮🤭🙂😦😮🤭🙂😮🤭🙂😮🙂😮🤭🙂
 Setting up SSH login on an Ubuntu server using email link click authentication involves several steps. This approach typically requires some additional software, as native SSH does not support email link click authentication by default. One popular method is to use a combination of SSH with a web server to handle the email link, and `ForceCommand` in the SSH config to enforce the authentication method.
 
