@@ -1,132 +1,121 @@
+To set up SSH login on an Ubuntu server with email-based OTP (One-Time Password) authentication, you can use the following guide. This involves configuring `PAM` (Pluggable Authentication Modules) and integrating an email-based OTP system.
 
-To configure SSH login on your Ubuntu server with email-based OTP (One-Time Password) authentication, you’ll need to follow a few steps. We’ll use `pam_exec` and a simple script to send an OTP to an email. Then, we’ll configure your SSH to require this OTP on login. Finally, I’ll guide you on adding a file to `.bashrc`.
+## Prerequisites
 
-Here’s the step-by-step guide:
+1. **SMTP setup** on your server to send emails.
+2. SSH access to the server with `sudo` privileges.
+3. **Python** and **ssmtp** (or another email client) to send the OTP email.
 
 ### Step 1: Install Required Packages
-First, ensure you have `ssmtp` or `mail` for sending emails. You can install `ssmtp` for this:
+
+Install the `pam-python` package to use Python-based PAM scripts:
 
 ```bash
 sudo apt update
-sudo apt install ssmtp mailutils
+sudo apt install libpam-python
 ```
 
-Then, configure `ssmtp` to be able to send emails by editing its configuration file:
+### Step 2: Create the PAM Python Script
+
+Create a Python script to handle OTP generation and email delivery. You can save it as `/etc/security/pam_email_otp.py`.
 
 ```bash
-sudo nano /etc/ssmtp/ssmtp.conf
+sudo nano /etc/security/pam_email_otp.py
 ```
 
-Add the following configuration (replace with your SMTP details):
+Add the following code:
+
+```python
+import pam
+import random
+import smtplib
+import os
+
+def send_email(to_email, otp_code):
+    from_email = "your_email@example.com"
+    smtp_server = "smtp.example.com"
+    smtp_port = 587
+    smtp_user = "your_email@example.com"
+    smtp_pass = "your_email_password"
+
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        message = f"Subject: SSH OTP\n\nYour OTP is: {otp_code}"
+        server.sendmail(from_email, to_email, message)
+
+def pam_sm_authenticate(pamh, flags, argv):
+    try:
+        user_email = "user@example.com"  # replace with your email
+        otp_code = str(random.randint(100000, 999999))
+        
+        send_email(user_email, otp_code)
+        response = pamh.conversation(pamh.Message(pamh.PAM_PROMPT_ECHO_OFF, "Enter OTP: "))
+
+        if response.resp == otp_code:
+            return pamh.PAM_SUCCESS
+        else:
+            return pamh.PAM_AUTH_ERR
+    except Exception as e:
+        print(f"Error: {e}")
+        return pamh.PAM_AUTH_ERR
+```
+
+Replace `your_email@example.com`, `smtp.example.com`, and other email credentials with your actual SMTP settings.
+
+### Step 3: Set Permissions
+
+Ensure the script has the correct permissions:
 
 ```bash
-mailhub=smtp.gmail.com:587
-AuthUser=your-email@gmail.com
-AuthPass=your-email-password
-UseSTARTTLS=YES
-FromLineOverride=YES
+sudo chmod 700 /etc/security/pam_email_otp.py
+sudo chown root:root /etc/security/pam_email_otp.py
 ```
 
-### Step 2: Create the OTP Script
-Create a script that generates an OTP, emails it to the user, and verifies it on login.
+### Step 4: Configure PAM for SSH Authentication
 
-1. **Create the script:**
+Edit the PAM configuration file for SSH at `/etc/pam.d/sshd` to include your custom OTP module.
 
-   ```bash
-   sudo nano /usr/local/bin/email_otp.sh
-   ```
+```bash
+sudo nano /etc/pam.d/sshd
+```
 
-2. **Paste the following code:**
+Add this line at the top of the file:
 
-   ```bash
-   #!/bin/bash
+```bash
+auth required pam_python.so /etc/security/pam_email_otp.py
+```
 
-   # Generate a random OTP
-   OTP=$(shuf -i 100000-999999 -n 1)
+### Step 5: Configure SSH to Use PAM
 
-   # Email the OTP
-   echo "Your OTP is: $OTP" | mail -s "SSH Login OTP" your-email@gmail.com
+Ensure that PAM is enabled for SSH in the SSH configuration file:
 
-   # Prompt the user for the OTP
-   read -p "Enter OTP sent to your email: " input_otp
+```bash
+sudo nano /etc/ssh/sshd_config
+```
 
-   # Check if the OTP matches
-   if [[ "$input_otp" == "$OTP" ]]; then
-       exit 0  # Success
-   else
-       echo "Invalid OTP"
-       exit 1  # Failure
-   fi
-   ```
+Make sure the following line is set:
 
-   Replace `your-email@gmail.com` with the actual email where you want to receive the OTP.
+```bash
+UsePAM yes
+```
 
-3. **Make the script executable:**
+### Step 6: Restart SSH Service
 
-   ```bash
-   sudo chmod +x /usr/local/bin/email_otp.sh
-   ```
+After making changes, restart the SSH service:
 
-### Step 3: Configure PAM for SSH with OTP
-Edit the SSH PAM configuration to include the OTP script as a required step.
+```bash
+sudo systemctl restart ssh
+```
 
-1. Open the PAM SSH configuration:
+### Step 7: Test SSH Login with OTP
 
-   ```bash
-   sudo nano /etc/pam.d/sshd
-   ```
+Now, when you try to SSH into the server, it should prompt you for the OTP after sending it via email. The SSH login flow should be:
 
-2. Add this line at the beginning of the file:
+1. User enters their SSH password.
+2. User is prompted for an OTP, which is sent to the configured email.
+3. User enters the OTP to gain access.
 
-   ```bash
-   auth required pam_exec.so /usr/local/bin/email_otp.sh
-   ```
+---
 
-### Step 4: Update SSHD Configuration
-Now, make sure SSH is set to use password authentication (so PAM can handle OTP checks).
-
-1. Edit the SSH daemon configuration file:
-
-   ```bash
-   sudo nano /etc/ssh/sshd_config
-   ```
-
-2. Ensure the following options are set:
-
-   ```bash
-   UsePAM yes
-   ChallengeResponseAuthentication yes
-   PasswordAuthentication yes
-   ```
-
-3. Save and close the file, then restart SSH:
-
-   ```bash
-   sudo systemctl restart sshd
-   ```
-
-### Step 5: Test the Setup
-Try logging in via SSH. You should now be prompted for both your password and an OTP sent to your email.
-
-### Step 6: Add File to `.bashrc`
-If you want to source a file every time you open a terminal, you can add it to `.bashrc`.
-
-1. Edit the `.bashrc` file:
-
-   ```bash
-   nano ~/.bashrc
-   ```
-
-2. At the end, add:
-
-   ```bash
-   source /path/to/your/file.sh
-   ```
-
-3. Save and close the file, and apply changes with:
-
-   ```bash
-   source ~/.bashrc
-   ```
-
-Replace `/path/to/your/file.sh` with the actual path of the file you want to add. This will run the file’s content every time you open a terminal session.
+This configuration sets up a basic OTP over email for SSH logins using PAM on Ubuntu. Adjust the email settings and Python script as needed to fit your environment and security requirements.
