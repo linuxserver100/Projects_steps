@@ -100,153 +100,158 @@ Now, configure SSH to use this script as a `ForceCommand` to enforce OTP verific
 This configuration should provide you with a basic OTP-enforced SSH login setup.
 
 😯🥲🥱🤭🙂😢🙂😢🤭😢😐🙃😢😐🙃😢😐🙂😢🤭🙂😢🤭🙂😢🤭🙃😢🙃🤭😮🤭😥🤭🙃😦🙃😦🤭🙃🙃🤭😦🙃🤭🤭🙂😮🤭🙃🤭😮🤭🙂😮🤭🙃😮😮🤭🙂😢😢🤭🙂😥🤭🙂😥🙂😐😢🙂😐😢😙😐😮🤭🙂😮🤭🙂😮🤭🙂😮😮🤭🙂😮😮🤭🙂😮🤭😮🤭🙂😦😮🤭🙂😮🤭🙂😮🙂😮🤭🙂
-Setting up SSH login on an Ubuntu server using email link click authentication involves several steps. This approach typically requires some additional software, as native SSH does not support email link click authentication by default. One popular method is to use a combination of SSH with a web server to handle the email link, and `ForceCommand` in the SSH config to enforce the authentication method.
-
-Here's a step-by-step guide:
+Enforcing email link click authentication using SSH with `ForceCommand` and sending an email link for authentication involves several steps. Here’s a guide on how to set this up, including the necessary scripts and configurations.
 
 ### Prerequisites
-1. **Ubuntu Server**: Ensure you have an Ubuntu server running.
-2. **Domain Name**: You should have a domain name pointing to your server's IP address.
-3. **Email Setup**: You need a working email server or a third-party service to send emails.
 
-### Step 1: Install Necessary Software
-You need a web server and a scripting language. You can use Apache or Nginx and PHP, or you could use Python or Node.js.
+1. **SSH Server**: Ensure you have an SSH server running (e.g., OpenSSH).
+2. **Email Sending Utility**: You’ll need a utility like `ssmtp` or `msmtp` to send emails from the server.
+3. **Web Server**: A web server to handle the link click (could be Nginx, Apache, etc.).
+4. **Database or File Storage**: To store authentication tokens (optional).
 
-For this example, let’s assume you're using Apache and PHP:
+### Steps to Implement Email Link Click Authentication
 
+#### Step 1: Install `ssmtp`
+
+If `ssmtp` is not installed, you can install it using the following commands:
+
+For Debian/Ubuntu:
 ```bash
-sudo apt update
-sudo apt install apache2 php libapache2-mod-php
+sudo apt-get update
+sudo apt-get install ssmtp
 ```
 
-### Step 2: Create a Simple PHP Script for Authentication
-
-1. Navigate to the web directory:
-
-   ```bash
-   cd /var/www/html
-   ```
-
-2. Create a file called `auth.php`:
-
-   ```bash
-   sudo nano auth.php
-   ```
-
-3. Add the following code to handle authentication:
-
-   ```php
-   <?php
-   session_start();
-   
-   if (isset($_GET['token'])) {
-       $token = $_GET['token'];
-
-       // Validate the token (you need to implement token generation and storage logic)
-       // If valid, allow SSH access
-       if (validate_token($token)) {
-           $_SESSION['authenticated'] = true;
-           // Redirect to SSH
-           header('Location: ssh://your_username@your_server_ip');
-           exit();
-       } else {
-           echo "Invalid token.";
-       }
-   }
-
-   function validate_token($token) {
-       // Implement your token validation logic here
-       // Check against a database or a predefined list
-       return true; // Placeholder, replace with actual validation
-   }
-   ?>
-   ```
-
-4. Save and exit the file.
-
-### Step 3: Generate and Send the Authentication Link
-
-1. You need a script to generate the email with a unique link:
-
-   ```php
-   // Send email function (simplified, use PHPMailer for production)
-   function send_email($email, $token) {
-       $subject = "Your SSH Login Link";
-       $link = "http://your_domain/auth.php?token=" . $token;
-       $message = "Click this link to authenticate: " . $link;
-
-       mail($email, $subject, $message);
-   }
-   ```
-
-2. Implement a way to generate a unique token, store it securely, and call the `send_email` function with the user’s email.
-
-### Step 4: Configure SSH to Use `ForceCommand`
-
-1. Open the SSH configuration file:
-
-   ```bash
-   sudo nano /etc/ssh/sshd_config
-   ```
-
-2. Add the following line at the end:
-
-   ```plaintext
-   Match User your_username
-       ForceCommand /path/to/your/script.sh
-   ```
-
-   Replace `/path/to/your/script.sh` with the path to your script that handles the logic for checking if the user is authenticated. This could be a script that checks if the session variable is set.
-
-3. Create the script `script.sh`:
-
-   ```bash
-   sudo nano /path/to/your/script.sh
-   ```
-
-   ```bash
-   #!/bin/bash
-   if [ ! -z "$SSH_CONNECTION" ]; then
-       # Check if the user is authenticated via a mechanism you implemented
-       if [ "$(curl -s http://your_domain/check_auth.php)" != "authenticated" ]; then
-           echo "Authentication required."
-           exit 1
-       fi
-   fi
-   ```
-
-4. Make the script executable:
-
-   ```bash
-   sudo chmod +x /path/to/your/script.sh
-   ```
-
-### Step 5: Restart SSH Service
-
-After making changes to the SSH configuration, restart the SSH service:
-
+For CentOS/RHEL:
 ```bash
-sudo systemctl restart ssh
+sudo yum install ssmtp
 ```
 
-### Step 6: Testing
+#### Step 2: Configure `ssmtp`
 
-1. To test, try SSH into your server:
+Edit the configuration file `/etc/ssmtp/ssmtp.conf`:
 
-   ```bash
-   ssh your_username@your_server_ip
-   ```
+```conf
+root=your_email@example.com
+mailhub=smtp.example.com:587
+AuthUser=your_email@example.com
+AuthPass=your_email_password
+UseSTARTTLS=YES
+UseTLS=YES
+```
 
-2. If the ForceCommand checks fail (i.e., the session variable is not set), it should prompt for authentication via the email link.
+Make sure to replace the placeholder values with your actual email settings.
 
-### Important Security Considerations
+#### Step 3: Create the Email Link Script
 
-- **Token Security**: Ensure that the token generation and validation logic is secure to prevent unauthorized access.
-- **HTTPS**: Use HTTPS for your web server to secure the token transmission.
-- **Session Management**: Implement session management properly to prevent session hijacking.
-- **Firewall**: Ensure your server is secured with proper firewall rules.
+Create a script named `send_auth_email.sh` that sends an authentication email with a unique link.
 
-This method requires thorough testing and security hardening before using in a production environment. Consider alternatives like MFA (Multi-Factor Authentication) if security is a primary concern.
+```bash
+#!/bin/bash
+
+# Variables
+recipient=$1
+token=$(openssl rand -hex 16)  # Generate a random token
+link="http://yourdomain.com/verify.php?token=$token"
+
+# Store the token (for example, in a file or database)
+echo "$recipient:$token" >> /tmp/auth_tokens.txt  # Change to a secure method for production
+
+# Send the email
+subject="SSH Authentication Link"
+body="Click the link to authenticate your SSH session: $link"
+
+echo -e "Subject:$subject\n\n$body" | ssmtp $recipient
+```
+
+Make the script executable:
+
+```bash
+chmod +x send_auth_email.sh
+```
+
+#### Step 4: Create the Verification Script
+
+Create a verification script named `verify.php` to handle link clicks. This script should check the token and allow SSH access if valid.
+
+```php
+<?php
+$token = $_GET['token'];
+
+// Read the stored tokens (make this secure in production)
+$lines = file('/tmp/auth_tokens.txt');
+foreach ($lines as $line) {
+    list($email, $stored_token) = explode(':', trim($line));
+    if ($stored_token === $token) {
+        // Allow access, e.g., create a session or write to a file
+        file_put_contents('/tmp/auth_success.txt', "$email\n", FILE_APPEND);
+        echo "Authentication successful. You may now use SSH.";
+        exit;
+    }
+}
+echo "Invalid token.";
+?>
+```
+
+#### Step 5: Configure SSH with `ForceCommand`
+
+Edit your SSH server configuration file (usually `/etc/ssh/sshd_config`) and add a `ForceCommand` for the users you want to restrict.
+
+```conf
+Match User your_ssh_user
+    ForceCommand /path/to/send_auth_email.sh %u@example.com
+```
+
+This will trigger the email script upon an SSH login attempt.
+
+#### Step 6: Restart SSH Service
+
+After editing the SSH configuration, restart the SSH service to apply the changes:
+
+```bash
+sudo systemctl restart sshd
+```
+
+#### Step 7: Implementing Authentication Check in SSH
+
+You’ll need to modify the `ForceCommand` to check for the successful link click before allowing SSH access. This can be achieved through a simple script that checks for the success file.
+
+Create a script named `check_auth.sh`:
+
+```bash
+#!/bin/bash
+
+if [ -f /tmp/auth_success.txt ]; then
+    echo "Access granted."
+    exit 0  # Allow access
+else
+    echo "Access denied. Please check your email for the authentication link."
+    exit 1  # Deny access
+fi
+```
+
+Make this script executable:
+
+```bash
+chmod +x check_auth.sh
+```
+
+Then, update your `sshd_config`:
+
+```conf
+Match User your_ssh_user
+    ForceCommand /path/to/check_auth.sh
+```
+
+#### Step 8: Final Steps
+
+1. **Security Considerations**: Make sure to secure the token storage and web script properly to prevent unauthorized access.
+2. **Testing**: Test the entire flow, from attempting an SSH login to clicking the email link.
+
+### Summary
+
+You have now set up an email link click authentication mechanism for SSH logins using `ForceCommand` and `ssmtp`. Users will receive an email with a unique link, and their SSH access will be validated upon clicking that link.
+
+
 😢😙😢😙😐😙😛😮‍💨😗😛😢😛😮‍💨😛😗😢😐😗😢😐😗😢😐😮‍💨😐😗😢😗😢😐😗😢😐😗😢😐😗😢😐😗😢😐😗😢😶🙃☹️😶☹️☹️😶😗☹️😶🙃☹️😶😗☹️😶😗☹️😶🙃☹️😶😗☹️😗🫠☹️😝😗☹️😶😗☹️😶😗😯🙃☹️😶😗😢😐😗☹️🙃🫠☹️😝😗😮‍💨😮‍💨😛😗😮‍💨😝😗😤😛😃😮‍💨😃😤😝😃😮‍💨
 
 
