@@ -1,98 +1,112 @@
-
- To implement an OTP (One-Time Password) authentication method for SSH logins using the `ForceCommand` directive, you'll need to set up a few components:
-
-1. **SMTP Configuration**: Set up a mail server to send OTPs.
-2. **OTP Generation**: Use a script or a tool to generate OTPs.
-3. **SSH Configuration**: Use the `ForceCommand` directive in SSH to run a script that handles OTP verification before allowing shell access.
-
-Here's a step-by-step guide to achieve this setup:
+To enforce an OTP check using SSH with `ForceCommand` and send the OTP via email, follow these steps. This configuration uses a simple OTP script triggered by SSH `ForceCommand` and `ssmtp` to send emails. Here’s how to set it up:
 
 ### Step 1: Install Necessary Packages
 
-You need to install a few packages if you haven't done so yet. On a Debian/Ubuntu system, you can run:
+You need `ssmtp` or an equivalent SMTP client to send emails. Install it with:
 
 ```bash
-sudo apt-get update
-sudo apt-get install mailutils otp-generator
+sudo apt update
+sudo apt install ssmtp
 ```
 
-### Step 2: Set Up SMTP Configuration
+### Step 2: Configure ssmtp
 
-Make sure you have a working SMTP server. For simplicity, you can use a service like Gmail or set up a local mail server.
-
-If you're using Gmail, you may need to enable "Allow less secure apps" in your Google account settings. Also, make sure you configure the `/etc/mail.rc` file or equivalent to set the SMTP server details:
+Edit `/etc/ssmtp/ssmtp.conf` to set up SMTP for your email account:
 
 ```bash
-set smtp=smtp://smtp.gmail.com:587
-set from="your_email@gmail.com"
-set smtp-auth=login
-set smtp-auth-user="your_email@gmail.com"
-set smtp-auth-password="your_password"
-set ssl-verify=ignore
-set ssl-starttls
+sudo nano /etc/ssmtp/ssmtp.conf
 ```
+
+Add your SMTP server’s settings, like below:
+
+```plaintext
+root=your-email@example.com
+mailhub=smtp.example.com:587
+AuthUser=your-email@example.com
+AuthPass=your-email-password
+UseSTARTTLS=YES
+```
+
+Make sure to replace these values with your actual email provider's SMTP details.
 
 ### Step 3: Create the OTP Script
 
-Create a script that generates an OTP, sends it via email, and verifies it. For example, create a script called `/usr/local/bin/ssh-otp.sh`:
+Create a script that generates a random OTP, emails it, and checks if the user enters the correct OTP. 
+
+```bash
+sudo nano /usr/local/bin/otp_check.sh
+```
+
+Add the following code to the file:
 
 ```bash
 #!/bin/bash
 
-# Configuration
-EMAIL="user@example.com"  # Change to the user's email
-OTP=$(od -An -N2 -i /dev/urandom | awk '{print $1 % 1000000}')  # Generate a 6-digit OTP
-echo "Your OTP is: $OTP" | mail -s "Your SSH OTP" "$EMAIL"
+# User email address (this should be set per user or use a lookup)
+USER_EMAIL="user-email@example.com"
 
-# Prompt for OTP
-read -p "Enter the OTP sent to your email: " USER_OTP
+# Generate a random 6-digit OTP
+OTP=$(shuf -i 100000-999999 -n 1)
 
-# Check if the entered OTP is correct
-if [ "$USER_OTP" -ne "$OTP" ]; then
-  echo "Invalid OTP. Access denied."
-  exit 1
+# Send OTP to user's email
+echo "Your OTP for SSH login is: $OTP" | ssmtp "$USER_EMAIL"
+
+# Prompt the user to enter the OTP
+echo "Enter OTP sent to your email:"
+read -s USER_OTP
+
+# Check if the entered OTP matches the generated OTP
+if [[ "$USER_OTP" == "$OTP" ]]; then
+    # If OTP matches, start the user’s default shell
+    exec $SHELL
+else
+    # If OTP does not match, deny access
+    echo "Invalid OTP. Access denied."
+    exit 1
 fi
-
-# If OTP is valid, allow the user to proceed
-exec /bin/bash  # Or whatever shell you want to start
 ```
 
-Make sure to give the script execute permissions:
+Save and close the file. Make the script executable:
 
 ```bash
-sudo chmod +x /usr/local/bin/ssh-otp.sh
+sudo chmod +x /usr/local/bin/otp_check.sh
 ```
 
-### Step 4: Modify the SSH Configuration
+### Step 4: Configure SSH to Use the OTP Script with ForceCommand
 
-Edit your SSH configuration file, typically located at `/etc/ssh/sshd_config`. Add the following line at the end of the file:
+Edit your SSH daemon configuration file:
 
 ```bash
-Match User your_username  # Specify the user or remove this line for all users
-    ForceCommand /usr/local/bin/ssh-otp.sh
+sudo nano /etc/ssh/sshd_config
 ```
 
-### Step 5: Restart SSH Service
+Add or modify the `ForceCommand` directive to point to the OTP script:
 
-After making changes to the SSH configuration, restart the SSH service to apply them:
+```plaintext
+ForceCommand /usr/local/bin/otp_check.sh
+```
+
+Make sure to include conditions so it doesn’t affect `scp` or `sftp` sessions if needed, by adding this above `ForceCommand`:
+
+```plaintext
+Match User *,!scp,!sftp
+    ForceCommand /usr/local/bin/otp_check.sh
+```
+
+### Step 5: Restart SSHD
+
+Restart the SSH service to apply the changes:
 
 ```bash
 sudo systemctl restart sshd
 ```
 
-### Step 6: Testing
+### Notes:
+- This setup assumes that `ssmtp` is configured to work with your SMTP provider. 
+- Ensure permissions on sensitive files like `otp_check.sh` and `ssmtp.conf` are secure.
+- Optionally, you could store user emails and settings in a centralized file or database to support multiple users. 
 
-1. Attempt to SSH into your server as the specified user.
-2. The script will send an OTP to the configured email address.
-3. Enter the OTP to gain shell access.
-
-### Important Considerations
-
-- **Security**: Ensure that the email account used for sending OTPs is secured, as it can be a target for attackers.
-- **Rate Limiting**: Consider adding rate limiting to the OTP generation to prevent abuse.
-- **Alternative OTP Methods**: For production systems, consider using dedicated OTP libraries or services (like Google Authenticator or Authy) for more robust solutions.
-
-This setup provides an additional layer of security by requiring an OTP for SSH access. Adjust the script and configurations according to your specific needs and security policies.
+This configuration enforces an OTP check before granting SSH access by emailing a unique code to the user and verifying it upon login.
 
 
 😯🥲🥱🤭🙂😢🙂😢🤭😢😐🙃😢😐🙃😢😐🙂😢🤭🙂😢🤭🙂😢🤭🙃😢🙃🤭😮🤭😥🤭🙃😦🙃😦🤭🙃🙃🤭😦🙃🤭🤭🙂😮🤭🙃🤭😮🤭🙂😮🤭🙃😮😮🤭🙂😢😢🤭🙂😥🤭🙂😥🙂😐😢🙂😐😢😙😐😮🤭🙂😮🤭🙂😮🤭🙂😮😮🤭🙂😮😮🤭🙂😮🤭😮🤭🙂😦😮🤭🙂😮🤭🙂😮🙂😮🤭🙂
