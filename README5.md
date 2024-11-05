@@ -136,20 +136,18 @@ Write a script that generates a random token and sends an email with a validatio
 ```bash
 #!/bin/bash
 
-# User email
-USER_EMAIL=$1
+# Generate a unique token (could be a hash or UUID)
+TOKEN=$(uuidgen)
 
-# Generate a random token (e.g., 32 characters)
-TOKEN=$(openssl rand -base64 32)
+# Store the token temporarily (could also use a database)
+echo "Token: $TOKEN" > /tmp/token_${TOKEN}.txt
 
-# Store the token for later verification (you can use a database or flat file)
-echo "$USER_EMAIL:$TOKEN" > /tmp/valid_tokens.txt
+# Prepare the authentication link (replace with your server's address)
+LINK="http://yourserver.com/verify_login?token=$TOKEN"
 
-# Define the validation link
-VALIDATION_URL="https://yourserver.com/validate?token=$TOKEN"
+# Send the email using msmtp (or any mail tool you prefer)
+echo -e "Subject: SSH Authentication\n\nClick the following link to authenticate your SSH login:\n\n$LINK" | msmtp recipient@example.com
 
-# Send email with the validation link
-echo -e "Subject: SSH Login Verification\n\nClick the link to authenticate your login: $VALIDATION_URL" | ssmtp $USER_EMAIL
 ```
 
 Make sure this script is executable:
