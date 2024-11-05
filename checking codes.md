@@ -1,109 +1,100 @@
-Enforcing email link click authentication during SSH access can enhance security by requiring users to verify their identity through an email link before establishing an SSH session. Below is a general approach to implement this, using a combination of a custom script, email generation, and SSH's `ForceCommand` option.
+Implementing an email link click authentication mechanism for SSH using `ForceCommand` involves several steps, including creating a custom script for generating the email, handling the SSH login, and using `ForceCommand` to enforce the authentication process. Here's a high-level overview and sample implementation of how you might set this up:
 
-### Overview
+### Prerequisites
+- A working mail server or SMTP service to send emails.
+- Access to the SSH server where you want to enforce this authentication method.
+- Basic knowledge of shell scripting and SSH configuration.
 
-1. **Custom Script**: This script will handle generating a unique authentication link, sending it via email, and verifying the link upon user click.
-2. **Email Generation**: Use a tool like `sendmail` or an email library in Python to send the email.
-3. **SSH Configuration**: Use the `ForceCommand` option to invoke the custom script before allowing a session.
+### Overview of Steps
+1. **Create a Custom Authentication Script**: This script will generate a unique authentication link and send it via email to the user.
+2. **Configure SSH Server**: Modify the SSH server configuration to use the `ForceCommand` option to enforce the custom script.
+3. **Set Up the Link Handling**: Create a mechanism to handle the link clicks, verifying the user’s access and allowing them to proceed.
 
-### Implementation Steps
+### Step-by-Step Implementation
 
-#### Step 1: Create the Custom Authentication Script
-
-Here's a basic example of a custom script that generates a unique link, sends it via email, and waits for user verification.
+#### 1. Create a Custom Script
+You can create a script called `auth_script.sh` that will generate a unique token, send an email, and wait for the user to click the link.
 
 ```bash
 #!/bin/bash
 
-# Custom script for email authentication via SSH
-USER=$(whoami)
-EMAIL="user@example.com" # Replace with the user's email or fetch dynamically
-TOKEN=$(openssl rand -hex 16) # Generate a unique token
-EXPIRY=$(date -d "+5 minutes" +%s) # Set expiry time (e.g., 5 minutes from now)
+# Configuration
+EMAIL="$1"
+TOKEN=$(openssl rand -hex 16) # Generate a random token
+EXPIRY_TIME=$(date -d '+10 minutes' +%s) # Set expiry time for the token
 
-# Store the token and expiry time in a temporary file
-echo "$TOKEN $EXPIRY" > /tmp/ssh_auth_token_$USER.txt
+# Store token and expiry time in a temporary file
+echo "$TOKEN,$EXPIRY_TIME" > "/tmp/auth_token_$TOKEN"
 
 # Create the authentication link
-LINK="http://yourdomain.com/authenticate.php?token=$TOKEN"
+LINK="http://yourdomain.com/auth?token=$TOKEN"
 
 # Send the email
-echo "Click the link to authenticate your SSH session: $LINK" | sendmail $EMAIL
+echo "Click this link to authenticate your SSH session: $LINK" | mail -s "SSH Authentication" "$EMAIL"
 
-# Wait for user confirmation
+# Wait for user to click the link (you can customize the waiting mechanism)
+echo "Waiting for authentication link to be clicked..."
 while true; do
-    read -p "Enter the token you received in your email: " INPUT_TOKEN
-    CURRENT_TIME=$(date +%s)
-    
-    # Check if the token matches and is not expired
-    if [[ "$INPUT_TOKEN" == "$TOKEN" && "$CURRENT_TIME" -le "$EXPIRY" ]]; then
-        echo "Authentication successful!"
-        exit 0
-    else
-        echo "Invalid token or expired. Please try again."
+    read -r -t 60 response # Wait for a minute for response
+    if [ $? -eq 0 ]; then
+        # Check if the token is valid and not expired
+        if grep -q "$response" "/tmp/auth_token_$response"; then
+            echo "Authentication successful!"
+            # Cleanup the token file
+            rm "/tmp/auth_token_$response"
+            exit 0
+        else
+            echo "Invalid or expired token."
+            exit 1
+        fi
     fi
 done
 ```
 
-### Step 2: Create the Web Endpoint for Token Verification
+Make the script executable:
 
-You'll need a web server that can handle the verification of the token. Below is a simple PHP example (`authenticate.php`):
+```bash
+chmod +x /path/to/auth_script.sh
+```
+
+#### 2. Configure SSH Server
+
+Edit the SSH configuration file, typically located at `/etc/ssh/sshd_config`, and add the following line:
+
+```bash
+Match User your_username
+    ForceCommand /path/to/auth_script.sh $SSH_CLIENT
+```
+
+This forces the `auth_script.sh` to run whenever the user connects via SSH.
+
+#### 3. Handle the Link Click
+
+You need to set up a web server that can handle the HTTP request when the user clicks the authentication link. Create a script (e.g., `auth.php`) to process the token.
 
 ```php
 <?php
-session_start();
-if (isset($_GET['token'])) {
-    $token = $_GET['token'];
-    // Check the token in the temporary file
-    $file = "/tmp/ssh_auth_token_" . $_SESSION['USER'] . ".txt"; // Ensure to secure user identity
+// Get the token from the URL
+$token = $_GET['token'];
 
-    if (file_exists($file)) {
-        list($stored_token, $expiry) = explode(' ', file_get_contents($file));
-        
-        // Verify token and expiry
-        if ($token == $stored_token && time() <= $expiry) {
-            echo "Authentication successful! You can now close this window.";
-            // Optionally, remove the token file here
-            unlink($file);
-            exit;
-        }
-    }
+// Validate the token and expiry
+list($stored_token, $expiry_time) = explode(',', file_get_contents("/tmp/auth_token_$token"));
+
+if ($stored_token === $token && time() < $expiry_time) {
+    // Authentication successful
+    echo "Authentication successful. You may now access the server.";
+    // Here, you might want to implement a more secure method to notify the SSH server.
+} else {
+    echo "Invalid or expired token.";
 }
-echo "Invalid token or session expired.";
 ?>
 ```
 
-### Step 3: Configure SSH Server
-
-Edit your SSH server configuration file (typically located at `/etc/ssh/sshd_config`) to enforce the custom script using `ForceCommand`.
-
-```plaintext
-Match User your_username
-    ForceCommand /path/to/your/authentication_script.sh
-```
-
-Replace `your_username` with the actual username or use `Match Address` to restrict based on IPs.
-
-### Step 4: Set Shell Directive
-
-To maintain a functional shell after successful authentication, you can append `exec $SHELL` to the end of your script after successful authentication:
-
-```bash
-if [[ "$INPUT_TOKEN" == "$TOKEN" && "$CURRENT_TIME" -le "$EXPIRY" ]]; then
-    echo "Authentication successful!"
-    exec $SHELL # Start a new shell session
-else
-    echo "Invalid token or expired. Please try again."
-fi
-```
-
-### Security Considerations
-
-- **Token Security**: Ensure that the token is adequately secured and cleaned up after use.
-- **HTTPS**: Ensure that the link sent in the email uses HTTPS to prevent man-in-the-middle attacks.
-- **Temporary Files**: Secure the temporary files with appropriate permissions.
-- **Rate Limiting**: Implement rate limiting for token requests to mitigate brute force attacks.
+### Important Security Considerations
+1. **HTTPS**: Always use HTTPS for your authentication links to prevent token interception.
+2. **Token Expiry**: Ensure that tokens expire after a short period.
+3. **Cleanup**: Regularly clean up old tokens from your system to avoid clutter.
+4. **Email Security**: Ensure that the email service you use is secure and can handle the sending of sensitive information.
 
 ### Conclusion
-
-This setup ensures that users must verify their identity via email before being allowed SSH access. Make sure to test the script thoroughly and adapt it to your environment as needed.
+This implementation provides a basic framework for email link click authentication using SSH and `ForceCommand`. Adjust the scripts and configurations according to your specific environment and security requirements.
