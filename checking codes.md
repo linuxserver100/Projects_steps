@@ -253,3 +253,155 @@ sudo systemctl reload sshd
 
 With this setup, users must verify each SSH session via email link click, adding an extra layer of security.
 
+
+🥺🥺😠🤤😠🙂😤🥲🥲🥲😮‍💨🥹😮‍💨😙😮‍💨😗😮‍💨😗🙂😤🙃😤🤤😤🤫😤🫢😤😬😤🤤😤🙃😤😗😤😗😤🙃🙂😤🙂🙂😤🤤😤🤤😤🤤😤🤤😤🤤😤🤤🤤😤😤😋😋😤😋😤😤🤤😗😋🙄😋😗🙄😗😋🙄🙄😉😗😮‍💨😮‍💨😛😮‍💨😮‍💨😄😗😄😮‍💨😁😁😛😗😮‍💨😁😮‍💨😮‍💨😮‍💨😙😝😤😤😤😝😙😤😘😤😚😁😝😤😙😜😁😤😜😤😁😜😤😁😝😤😝😤😝😤😝😙😁😤😤😁😤😁😤😝😁😤😤😤😤😤😜😚😙😤😤😚😤😤😤😤😜😁😤😁
+
+Implementing email-based link-click authentication for SSH access using `ForceCommand` involves several steps. Below is a guide on how to set up this system, including generating an authentication email, creating a custom script to verify the authentication link, and utilizing `ForceCommand` to control the SSH session.
+
+### Prerequisites
+
+1. **SSMTP or equivalent**: Ensure that you have a mail transfer agent (like `ssmtp`, `msmtp`, or `sendmail`) configured to send emails from your server.
+2. **SSH Server**: Have an SSH server (like OpenSSH) installed and configured on your system.
+
+### Steps to Implement Email-Based Link-Click Authentication
+
+#### 1. Set Up SSMTP
+
+First, configure `ssmtp` to send emails. Edit the configuration file, typically found at `/etc/ssmtp/ssmtp.conf`, with the necessary SMTP server details.
+
+```bash
+# /etc/ssmtp/ssmtp.conf
+root=postmaster
+mailhub=smtp.your-email-provider.com:587
+AuthUser=your-email@example.com
+AuthPass=your-email-password
+UseSTARTTLS=YES
+UseTLS=YES
+```
+
+#### 2. Generate Authentication Email
+
+Create a script that generates a unique authentication token, saves it, and sends an email with a link to that token.
+
+```bash
+#!/bin/bash
+
+# auth_email.sh
+TOKEN=$(openssl rand -hex 16)
+USER=$(echo $1)  # Get the username
+
+# Save the token and username to a file or database
+echo "$USER:$TOKEN" >> /tmp/auth_tokens.txt
+
+# Create the authentication link
+LINK="http://yourserver.com/authenticate.php?token=$TOKEN&user=$USER"
+
+# Send the email
+echo "Subject: SSH Authentication Link" | cat - <(echo "Click the link to authenticate: $LINK") | ssmtp $1
+```
+
+Make sure this script is executable:
+
+```bash
+chmod +x auth_email.sh
+```
+
+#### 3. Create the Verification Script
+
+Create a script that verifies the token when clicked.
+
+```php
+<?php
+// authenticate.php
+session_start();
+$user = $_GET['user'];
+$token = $_GET['token'];
+
+// Read the tokens file
+$tokens = file('/tmp/auth_tokens.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+foreach ($tokens as $line) {
+    list($lineUser, $lineToken) = explode(':', $line);
+    if ($lineUser === $user && $lineToken === $token) {
+        // Token is valid, log the user in
+        $_SESSION['authenticated_user'] = $user;
+        // Remove the token from the file
+        unset($tokens[array_search($line, $tokens)]);
+        file_put_contents('/tmp/auth_tokens.txt', implode("\n", $tokens));
+        echo "Authenticated. You can now access the SSH.";
+        exit;
+    }
+}
+echo "Invalid token.";
+?>
+```
+
+#### 4. Use `ForceCommand` in SSH Configuration
+
+Modify your `sshd_config` file (usually located at `/etc/ssh/sshd_config`) to set up `ForceCommand` to use your verification script.
+
+```bash
+Match User your_username
+    ForceCommand /path/to/verify_auth.sh
+```
+
+#### 5. Create the Verification Script for SSH
+
+Create a script that will check if the user is authenticated.
+
+```bash
+#!/bin/bash
+
+# verify_auth.sh
+if [[ -z "$SSH_CONNECTION" ]]; then
+    echo "SSH connection not established."
+    exit 1
+fi
+
+# Check if the user is authenticated
+if [[ -z "$USER" || ! -f /tmp/auth_tokens.txt ]]; then
+    echo "Not authenticated. Please check your email for the authentication link."
+    exit 1
+fi
+
+# Check if the session is authenticated
+if grep -q "$USER" /tmp/auth_tokens.txt; then
+    echo "Authenticated. You can now access the shell."
+    exec $SHELL  # Replace with the user's shell
+else
+    echo "Authentication failed."
+    exit 1
+fi
+```
+
+Make this script executable:
+
+```bash
+chmod +x verify_auth.sh
+```
+
+#### 6. Restart SSH Service
+
+After making changes to the SSH configuration, restart the SSH service to apply the changes:
+
+```bash
+sudo systemctl restart sshd
+```
+
+### Conclusion
+
+With this setup:
+
+1. When a user tries to SSH, they will be prompted to check their email for an authentication link.
+2. Clicking the link will authenticate the user, removing the token from the file to prevent reuse.
+3. If authenticated, the user gains access to their shell.
+
+### Important Security Considerations
+
+- Ensure secure handling of tokens and user data.
+- Regularly clean the `/tmp/auth_tokens.txt` file to remove expired tokens.
+- Consider using HTTPS for your web server to secure the authentication link.
+
+This is a basic implementation; you may want to extend it with additional security measures, such as logging, token expiration, and more robust session management.
+
+
+
