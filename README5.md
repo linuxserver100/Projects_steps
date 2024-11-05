@@ -46,7 +46,7 @@ Add the following code to the file:
 USER_EMAIL="user-email@example.com"
 
 # Generate a random 6-digit OTP
-OTP=$(openssl rand -base64 3 | tr -dc '0-9' | head -c 6)
+OTP=$(printf "%06d" $((RANDOM % 1000000)))
 
 # Send OTP to user's email
 echo "Your OTP for SSH login is: $OTP" | ssmtp "$USER_EMAIL"
