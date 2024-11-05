@@ -12,6 +12,17 @@ Here's how to set it up:
    ```
    Configure `/etc/ssmtp/ssmtp.conf` with your SMTP settings (e.g., Gmail or your mail server).
 
+```bash
+   root=your_email@example.com
+   mailhub=smtp.example.com:587
+   AuthUser=your_email@example.com
+   AuthPass=your_email_password
+   UseSTARTTLS=YES
+   FromLineOverride=YES
+
+   ```
+
+
 ### Steps to Implement SSH OTP Check
 
 #### Step 1: Set Up an OTP Generation Script
