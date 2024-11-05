@@ -240,6 +240,146 @@ sudo systemctl restart ssh
 
 This is a basic implementation and can be expanded or improved based on specific needs and security requirements.
 
+🤧😬🤧😬😢🤧😢🤫🤧😮🤫😢🤫🤧🤫😮🤧😯🤫🤧☹️🤫🤧☹️🤫🤒🤫☹️🤒☹️🫢☹️🤒☹️🤫🤒🙁🫢🤒🤒☹️😑🤒☹️😑🤒😑☹️🤒☹️😑🤒😑🤒☹️😑🤒☹️🫢🤒🫢☹️🤒🫢☹️🤒☹️🤫🤒🙁😑🤒☹️😑🤒☹️🫢🤒☹️😑🤒🙁🤒🙁😑🤒🙁😑🙁🤒😑🤒☹️😑🤒☹️🫢🤒☹️🫢☹️🤒☹️🤫🥸☹️🫢🤒☹️🫢
+To enforce an email link click authentication using SSH and `ForceCommand`, you can use a combination of a custom script, email generation, and an SSH `ForceCommand` directive. Here's a step-by-step outline on how you could implement this:
+
+### 1. **Prerequisites**
+Ensure that the following tools and configurations are available on your system:
+- **ssmtp or msmtp**: For sending emails via SMTP from your server.
+- **SSH server**: Running and configured properly.
+- **Web server**: A simple HTTP server to handle the link validation (you can use something lightweight like `nginx` or `apache2`).
+- **SSH client with `ForceCommand`**: This allows you to specify a specific command to run when a user logs in via SSH.
+
+### 2. **Setup Email Script**
+The main idea is to send a unique authentication link to the user’s email address when they try to authenticate. This link should contain a token that is only valid for a limited time.
+
+#### 2.1 **Install Required Tools**
+First, make sure you have `ssmtp` or `msmtp` configured to send emails.
+
+```bash
+sudo apt-get install ssmtp
+```
+
+Make sure to configure `ssmtp` or `msmtp` with your SMTP credentials. For example, edit `/etc/ssmtp/ssmtp.conf` to include your SMTP server settings:
+
+```bash
+root=postmaster@example.com
+mailhub=smtp.example.com:587
+AuthUser=username@example.com
+AuthPass=yourpassword
+FromLineOverride=YES
+UseSTARTTLS=YES
+```
+
+#### 2.2 **Script for Sending Email**
+Write a script that generates a random token and sends an email with a validation link.
+
+```bash
+#!/bin/bash
+
+# User email
+USER_EMAIL=$1
+
+# Generate a random token (e.g., 32 characters)
+TOKEN=$(openssl rand -base64 32)
+
+# Store the token for later verification (you can use a database or flat file)
+echo "$USER_EMAIL:$TOKEN" > /tmp/valid_tokens.txt
+
+# Define the validation link
+VALIDATION_URL="https://yourserver.com/validate?token=$TOKEN"
+
+# Send email with the validation link
+echo -e "Subject: SSH Login Verification\n\nClick the link to authenticate your login: $VALIDATION_URL" | ssmtp $USER_EMAIL
+```
+
+Make sure this script is executable:
+
+```bash
+chmod +x /path/to/send_auth_email.sh
+```
+
+### 3. **Create a Validation Endpoint**
+You need to create an HTTP endpoint on your server that will handle the token validation. This can be a simple web application.
+
+#### Example using a simple PHP script:
+
+```php
+<?php
+$valid_tokens = file_get_contents('/tmp/valid_tokens.txt');
+$valid_tokens = explode("\n", $valid_tokens);
+
+$token = $_GET['token'];
+
+foreach ($valid_tokens as $line) {
+    list($email, $valid_token) = explode(":", $line);
+    if ($token === $valid_token) {
+        // Token is valid, allow SSH login
+        echo "Token valid. You may now log in.";
+        exit(0);
+    }
+}
+
+echo "Invalid or expired token.";
+exit(1);
+?>
+```
+
+Place this script on your web server, e.g., `/var/www/html/validate.php`.
+
+### 4. **ForceCommand Setup in SSH Configuration**
+Now, modify the SSH server configuration (`/etc/ssh/sshd_config`) to enforce the use of a custom script via `ForceCommand`.
+
+#### 4.1 **Configure `ForceCommand`**
+Modify `/etc/ssh/sshd_config` to force the execution of a script that will handle the token check:
+
+```bash
+ForceCommand /path/to/authentication_check.sh
+```
+
+This script will be executed whenever a user logs in via SSH. 
+
+#### 4.2 **Script for Authentication Check**
+Write a script (`/path/to/authentication_check.sh`) that will verify whether the user clicked the link before allowing SSH access.
+
+```bash
+#!/bin/bash
+
+USER_EMAIL=$(whoami)  # or use a method to get the user email
+VALIDATION_URL="https://yourserver.com/validate?token=$TOKEN"
+
+# Check if the user clicked the link and if the token is valid
+if curl --silent --fail $VALIDATION_URL | grep -q "Token valid"; then
+    # Token is valid, proceed with SSH login
+    exec $SHELL
+else
+    echo "Invalid or expired token. Please check your email and click the link to authenticate."
+    exit 1
+fi
+```
+
+This script checks if the user clicked the link and whether the token is valid. If valid, it allows the user to proceed with the SSH session (`exec $SHELL`). If invalid, it denies access.
+
+### 5. **Restart SSH Service**
+Finally, restart the SSH service to apply the changes:
+
+```bash
+sudo systemctl restart sshd
+```
+
+### 6. **Testing**
+- When a user tries to log in via SSH, the `ForceCommand` will trigger the `authentication_check.sh` script.
+- The script will send an email with the unique authentication link.
+- The user will need to click the link, which will verify their identity before allowing the SSH session.
+
+### Caveats and Considerations
+- **Security**: Tokens should be time-limited, and you should ensure that they are only valid for a short period of time (e.g., 10-15 minutes).
+- **Scalability**: For a larger setup, using a database to store tokens and manage sessions might be more appropriate than using a flat file.
+- **Error Handling**: Ensure proper error handling and logging in your scripts for better debugging and auditing.
+
+This approach can be a good way to add an additional layer of authentication, but keep in mind that it introduces potential delays and complexity to the login process.
+
+
 
 😢😙😢😙😐😙😛😮‍💨😗😛😢😛😮‍💨😛😗😢😐😗😢😐😗😢😐😮‍💨😐😗😢😗😢😐😗😢😐😗😢😐😗😢😐😗😢😐😗😢😶🙃☹️😶☹️☹️😶😗☹️😶🙃☹️😶😗☹️😶😗☹️😶🙃☹️😶😗☹️😗🫠☹️😝😗☹️😶😗☹️😶😗😯🙃☹️😶😗😢😐😗☹️🙃🫠☹️😝😗😮‍💨😮‍💨😛😗😮‍💨😝😗😤😛😃😮‍💨😃😤😝😃😮‍💨
 
