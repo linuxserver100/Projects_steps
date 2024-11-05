@@ -297,7 +297,7 @@ echo "$USER:$TOKEN" >> /tmp/auth_tokens.txt
 LINK="http://yourserver.com/authenticate.php?token=$TOKEN&user=$USER"
 
 # Send the email
-echo "Subject: SSH Authentication Link" | cat - <(echo "Click the link to authenticate: $LINK") | ssmtp $1
+echo -e "Subject: SSH Authentication\n\nClick the link to authenticate your SSH session:" $LINK | ssmtp $USER
 ```
 
 Make sure this script is executable:
