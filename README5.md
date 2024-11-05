@@ -1,84 +1,104 @@
+To implement an OTP check on SSH login using `ForceCommand`, you’ll need to configure the SSH server to enforce the OTP verification before allowing the user access to a shell session. Here’s a guide on how to set this up:
 
-To enforce an OTP check by sending a code to the user’s email when they try to log in via SSH, you can use the `ForceCommand` directive in the SSH configuration file (`sshd_config`). This setup requires scripting to send the OTP email and check it before granting access.
+### 1. Install Necessary Packages
+First, ensure you have Python installed (or another way to script the OTP sending), along with any necessary email-sending libraries (e.g., `smtplib` for Python).
 
-Here's a step-by-step guide:
+### 2. Create the OTP Script
+Create a Python script (or a shell script with another tool) that will:
+   - Generate a random OTP
+   - Email this OTP to the user's registered email
+   - Prompt the user to enter the OTP for verification
 
-### 1. Create a Script for OTP Check
+Here’s an example Python script (`/usr/local/bin/otp_verification.py`):
 
-1. **Create the OTP script**:
-   This script generates a one-time passcode, emails it to the user, and then prompts the user to enter it. If the user enters the correct OTP, the script grants access to the shell.
+```python
+#!/usr/bin/env python3
 
-   ```bash
-   #!/bin/bash
+import smtplib
+import random
+import getpass
 
-   # Configuration for sending email
-   SMTP_SERVER="smtp.example.com"
-   SMTP_PORT="587"
-   EMAIL_FROM="no-reply@example.com"
-   EMAIL_SUBJECT="Your SSH Login OTP"
-   EMAIL_BODY="Your OTP code is:"
+# Function to generate a random OTP
+def generate_otp():
+    return random.randint(100000, 999999)
 
-   # Generate a 6-digit OTP
-   OTP=$(shuf -i 100000-999999 -n 1)
-   
-   # Send OTP to the user's email
-   USER_EMAIL="<user's email>"
-   echo "$EMAIL_BODY $OTP" | mail -s "$EMAIL_SUBJECT" "$USER_EMAIL"
+# Function to send OTP to email
+def send_otp_via_email(otp, user_email):
+    sender_email = "youremail@example.com"   # Change to your sender email
+    sender_password = "yourpassword"         # Change to your sender email password
+    smtp_server = "smtp.example.com"         # Change to your SMTP server
 
-   # Prompt user for OTP
-   echo "An OTP has been sent to your email. Please enter it to proceed:"
-   read -s USER_INPUT_OTP
+    with smtplib.SMTP(smtp_server, 587) as server:
+        server.starttls()
+        server.login(sender_email, sender_password)
+        message = f"Subject: Your SSH OTP\n\nYour OTP is: {otp}"
+        server.sendmail(sender_email, user_email, message)
 
-   # Check if entered OTP is correct
-   if [[ "$USER_INPUT_OTP" == "$OTP" ]]; then
-       echo "Access granted"
-       exec "$SHELL"  # Start the shell session if OTP is correct
-   else
-       echo "Invalid OTP. Access denied."
-       exit 1
-   fi
-   ```
+# Main OTP process
+def otp_verification():
+    user_email = f"{getpass.getuser()}@example.com"  # Map username to email address
+    otp = generate_otp()
+    send_otp_via_email(otp, user_email)
 
-2. **Adjust the email configuration**:
-   - Replace `<user's email>` with the actual user's email address (or add logic to determine the email based on the SSH user).
-   - Configure the `mail` command (or replace it with a different email-sending method) to ensure email delivery.
+    # Ask user for OTP input
+    user_input = input("Enter the OTP sent to your email: ")
+    if user_input == str(otp):
+        print("OTP verified. Access granted.")
+        return True
+    else:
+        print("Invalid OTP. Access denied.")
+        return False
 
-3. **Set the script permissions**:
-   Make the script executable:
-   ```bash
-   sudo chmod +x /path/to/otp_script.sh
-   ```
+if __name__ == "__main__":
+    if otp_verification():
+        # Run the user’s shell if OTP is correct
+        import os
+        os.execv("/bin/bash", ["bash"])
+    else:
+        exit(1)
+```
 
-### 2. Configure SSH to Use the OTP Script with `ForceCommand`
+> **Note:** Replace `youremail@example.com`, `yourpassword`, and `smtp.example.com` with valid email credentials and SMTP server details. Ensure to secure your email password or, ideally, use an environment variable for sensitive data.
 
-Edit the SSH daemon configuration file, typically found at `/etc/ssh/sshd_config`:
+### 3. Make the Script Executable
+Run the following command to make the script executable:
 
-1. **Add `ForceCommand`**:
-   Specify the path to your OTP script in the `ForceCommand` directive. For example:
+```bash
+sudo chmod +x /usr/local/bin/otp_verification.py
+```
 
-   ```bash
-   Match User your_ssh_user  # Apply to a specific user
-       ForceCommand /path/to/otp_script.sh
-   ```
+### 4. Configure SSH with `ForceCommand`
+Now, configure the SSH server to run this script upon login by using `ForceCommand`. Open the SSH configuration file:
 
-2. **Restart SSH service**:
-   After editing the `sshd_config` file, restart the SSH service to apply changes:
+```bash
+sudo nano /etc/ssh/sshd_config
+```
 
-   ```bash
-   sudo systemctl restart sshd
-   ```
+Add the following lines to enforce `ForceCommand`:
 
-### 3. Test the Setup
+```bash
+Match User username   # Or use 'Match Group groupname' for a group of users
+    ForceCommand /usr/local/bin/otp_verification.py
+```
 
-- Try logging in as the specified user.
-- The `otp_script.sh` script should run and prompt the user to enter the OTP.
-- If the OTP matches, the user will gain access to the shell.
+> **Note:** Replace `username` with the actual username you want this OTP check applied to, or configure for a group if necessary.
 
-### Important Notes
+### 5. Restart SSH
+After making these changes, restart the SSH service:
 
-- **Security**: Ensure email delivery is secured, as it transmits sensitive OTP data.
-- **Dependency**: Install `mail` or a similar package on the server for email sending.
-- **Email Delivery**: Set up an SMTP relay or use a reliable SMTP server for consistent email delivery.
+```bash
+sudo systemctl restart ssh
+```
+
+### 6. Test the Configuration
+Now, when the user tries to SSH into the server, they should be prompted to enter an OTP, which will be sent to their email. If they enter the correct OTP, they’ll gain access to their shell; otherwise, the session will terminate.
+
+### Important Considerations
+- **Security of Credentials**: Ensure email credentials in your script are secured, potentially using environment variables instead of hardcoding.
+- **Rate Limiting**: For production, consider adding a rate limit or a delay to prevent spamming the OTP endpoint.
+- **Logging**: Logging invalid OTP attempts might be useful for auditing or security monitoring.
+
+
 
 😯🥲🥱🤭🙂😢🙂😢🤭😢😐🙃😢😐🙃😢😐🙂😢🤭🙂😢🤭🙂😢🤭🙃😢🙃🤭😮🤭😥🤭🙃😦🙃😦🤭🙃🙃🤭😦🙃🤭🤭🙂😮🤭🙃🤭😮🤭🙂😮🤭🙃😮😮🤭🙂😢😢🤭🙂😥🤭🙂😥🙂😐😢🙂😐😢😙😐😮🤭🙂😮🤭🙂😮🤭🙂😮😮🤭🙂😮😮🤭🙂😮🤭😮🤭🙂😦😮🤭🙂😮🤭🙂😮🙂😮🤭🙂
 Setting up SSH login on an Ubuntu server using email link click authentication involves several steps. This approach typically requires some additional software, as native SSH does not support email link click authentication by default. One popular method is to use a combination of SSH with a web server to handle the email link, and `ForceCommand` in the SSH config to enforce the authentication method.
