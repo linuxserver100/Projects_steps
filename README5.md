@@ -1,113 +1,92 @@
-To enforce an OTP check using SSH with `ForceCommand` and send the OTP via email, follow these steps. This configuration uses a simple OTP script triggered by SSH `ForceCommand` and `ssmtp` to send emails. Here’s how to set it up:
 
-### Step 1: Install Necessary Packages
+To enforce an OTP check using SSH with `ForceCommand`, you can set up a script that generates a one-time password (OTP) and sends it via email using `ssmtp`. This guide assumes you have some familiarity with SSH, shell scripting, and basic server configuration. 
 
-You need `ssmtp` or an equivalent SMTP client to send emails. Install it with:
+Here's how to set it up:
 
-```bash
-sudo apt update
-sudo apt install ssmtp
-```
+### Prerequisites
+1. **Ensure that you have root access** to configure SSH and install necessary packages.
+2. **Install `ssmtp`** to send emails. On Debian/Ubuntu, use:
+   ```bash
+   sudo apt update
+   sudo apt install ssmtp
+   ```
+   Configure `/etc/ssmtp/ssmtp.conf` with your SMTP settings (e.g., Gmail or your mail server).
 
-### Step 2: Configure ssmtp
+### Steps to Implement SSH OTP Check
 
-Edit `/etc/ssmtp/ssmtp.conf` to set up SMTP for your email account:
+#### Step 1: Set Up an OTP Generation Script
+Create a script that will generate an OTP, email it to the user, and check for user input.
 
-```bash
-sudo nano /etc/ssmtp/ssmtp.conf
-```
+1. **Create the OTP Script**:
+   ```bash
+   sudo nano /usr/local/bin/ssh-otp-check.sh
+   ```
 
-Add your SMTP server’s settings, like below:
+2. **Add the Following Script Content**:
+   ```bash
+   #!/bin/bash
 
-```plaintext
-root=your-email@example.com
-mailhub=smtp.example.com:587
-AuthUser=your-email@example.com
-AuthPass=your-email-password
-UseSTARTTLS=YES
-```
+   # Configuration: Set the user's email and OTP validity period in seconds
+   EMAIL="user@example.com"
+   OTP_VALIDITY=300  # OTP is valid for 5 minutes
 
-Make sure to replace these values with your actual email provider's SMTP details.
+   # Generate a random 6-digit OTP
+   OTP=$(shuf -i 100000-999999 -n 1)
 
-### Step 3: Create the OTP Script
+   # Send the OTP to the user's email using ssmtp
+   echo -e "Subject: SSH OTP Authentication\n\nYour OTP is: $OTP" | ssmtp $EMAIL
 
-Create a script that generates a random OTP, emails it, and checks if the user enters the correct OTP. 
+   # Request OTP input from the user
+   echo "Enter the OTP sent to your email:"
+   read -t $OTP_VALIDITY -p "OTP: " USER_INPUT
 
-```bash
-sudo nano /usr/local/bin/otp_check.sh
-```
+   # Verify if the input matches the generated OTP
+   if [[ "$USER_INPUT" == "$OTP" ]]; then
+       echo "OTP verified successfully."
+       exec $SHELL
+   else
+       echo "Invalid OTP or OTP expired."
+       exit 1
+   fi
+   ```
 
-Add the following code to the file:
+3. **Make the Script Executable**:
+   ```bash
+   sudo chmod +x /usr/local/bin/ssh-otp-check.sh
+   ```
 
-```bash
-#!/bin/bash
+#### Step 2: Configure SSH to Use `ForceCommand`
+Now, configure SSH to use this script as a `ForceCommand` to enforce OTP verification on login.
 
-# User email address (this should be set per user or use a lookup)
-USER_EMAIL="user-email@example.com"
+1. **Edit the SSH Configuration File**:
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
 
-# Generate a random 6-digit OTP
-OTP=$(printf "%06d" $((RANDOM % 1000000)))
+2. **Add/Modify the Following Lines**:
+   ```bash
+   Match User your_ssh_user  # Replace with the specific user or set conditions for OTP enforcement
+       ForceCommand /usr/local/bin/ssh-otp-check.sh
+   ```
 
-# Send OTP to user's email
-echo "Your OTP for SSH login is: $OTP" | ssmtp "$USER_EMAIL"
+   *Note*: This `Match User` section will enforce the OTP script only for the specified user(s). Adjust as needed.
 
-# Prompt the user to enter the OTP
-echo "Enter OTP sent to your email:"
-read -s USER_OTP
+3. **Restart the SSH Service**:
+   ```bash
+   sudo systemctl restart ssh
+   ```
 
-# Check if the entered OTP matches the generated OTP
-if [[ "$USER_OTP" == "$OTP" ]]; then
-    # If OTP matches, start the user’s default shell
-    exec $SHELL
-else
-    # If OTP does not match, deny access
-    echo "Invalid OTP. Access denied."
-    exit 1
-fi
-```
+#### Step 3: Test the Configuration
+1. Attempt an SSH connection as the specified user.
+2. You should receive an OTP via email.
+3. Enter the OTP when prompted in the SSH session.
+4. If correct, you’ll be granted access. Otherwise, the session will terminate.
 
-Save and close the file. Make the script executable:
+### Notes
+- **Security Considerations**: This is a basic OTP implementation and is suitable for testing and internal use but may not be as secure as established OTP solutions (like Google Authenticator).
+- **ssmtp Alternatives**: `ssmtp` is deprecated in some distributions, so you may consider `msmtp` or configuring `mailx` as an alternative for production environments.
 
-```bash
-sudo chmod +x /usr/local/bin/otp_check.sh
-```
-
-### Step 4: Configure SSH to Use the OTP Script with ForceCommand
-
-Edit your SSH daemon configuration file:
-
-```bash
-sudo nano /etc/ssh/sshd_config
-```
-
-Add or modify the `ForceCommand` directive to point to the OTP script:
-
-```plaintext
-ForceCommand /usr/local/bin/otp_check.sh
-```
-
-Make sure to include conditions so it doesn’t affect `scp` or `sftp` sessions if needed, by adding this above `ForceCommand`:
-
-```plaintext
-Match User *,!scp,!sftp
-    ForceCommand /usr/local/bin/otp_check.sh
-```
-
-### Step 5: Restart SSHD
-
-Restart the SSH service to apply the changes:
-
-```bash
-sudo systemctl restart sshd
-```
-
-### Notes:
-- This setup assumes that `ssmtp` is configured to work with your SMTP provider. 
-- Ensure permissions on sensitive files like `otp_check.sh` and `ssmtp.conf` are secure.
-- Optionally, you could store user emails and settings in a centralized file or database to support multiple users. 
-
-This configuration enforces an OTP check before granting SSH access by emailing a unique code to the user and verifying it upon login.
-
+This configuration should provide you with a basic OTP-enforced SSH login setup.
 
 😯🥲🥱🤭🙂😢🙂😢🤭😢😐🙃😢😐🙃😢😐🙂😢🤭🙂😢🤭🙂😢🤭🙃😢🙃🤭😮🤭😥🤭🙃😦🙃😦🤭🙃🙃🤭😦🙃🤭🤭🙂😮🤭🙃🤭😮🤭🙂😮🤭🙃😮😮🤭🙂😢😢🤭🙂😥🤭🙂😥🙂😐😢🙂😐😢😙😐😮🤭🙂😮🤭🙂😮🤭🙂😮😮🤭🙂😮😮🤭🙂😮🤭😮🤭🙂😦😮🤭🙂😮🤭🙂😮🙂😮🤭🙂
 Setting up SSH login on an Ubuntu server using email link click authentication involves several steps. This approach typically requires some additional software, as native SSH does not support email link click authentication by default. One popular method is to use a combination of SSH with a web server to handle the email link, and `ForceCommand` in the SSH config to enforce the authentication method.
