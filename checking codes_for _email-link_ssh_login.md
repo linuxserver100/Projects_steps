@@ -1202,7 +1202,7 @@ This will force the execution of the `verify_and_login.sh` script every time thi
 ### `verify_and_login.sh` Script
 The script will check if the user has verified their email and grant or deny access based on that:
 ```bash
-#!/bin/bash
+   #!/bin/bash
 
 # The user's email (you can also pass this as an argument)
 USER_EMAIL=$(whoami)@example.com
@@ -1212,19 +1212,24 @@ VERIFICATION_FILE="/tmp/verification_token_${USER_EMAIL}"
 
 # Check if the user has a valid token for verification
 if [ -f "$VERIFICATION_FILE" ]; then
-  # Verification passed, allow access to the shell
-  exec $SHELL
+    # Verification passed, allow access to the shell
+    exec $SHELL
 else
-  # Send email with verification link using `ssmtp`
-  TOKEN=$(openssl rand -base64 32)
-  echo "Verification link: http://yourserver.com/verify?token=$TOKEN" | ssmtp $USER_EMAIL
+    # Send email with verification link using `ssmtp`
+    TOKEN=$(openssl rand -base64 32)
+    SUBJECT="Verification Link"
+    BODY="Please click the following link to verify your identity: http://yourserver.com/verify?token=$TOKEN"
+    
+    # The email content with a subject
+    echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp $USER_EMAIL
 
-  # Store token temporarily to check the validity
-  echo "$TOKEN" > /tmp/token_$USER_EMAIL
+    # Store token temporarily to check the validity
+    echo "$TOKEN" > /tmp/token_$USER_EMAIL
 
-  echo "Please check your email for the verification link."
-  exit 1
+    echo "Please check your email for the verification link."
+    exit 1
 fi
+
 ```
 
 ### Email Verification (via `ssmtp`):
