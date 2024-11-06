@@ -1072,23 +1072,32 @@ To set up SSH login via an email link verification system and use `ForcedCommand
    
    **`/usr/local/bin/ssh-email-verification.sh`**:
    ```bash
-   #!/bin/bash
+
+      #!/bin/bash
+
+    # Check if a username is provided
+    if [ -z "$1" ]; then
+   echo "Usage: $0 <username>"
+   exit 1
+   fi
 
    # User-specific session details
    USERNAME=$1
    TOKEN=$(openssl rand -base64 12)  # Generate a unique token
 
-   # Save token to a file (can be in a DB for scalability)
-   echo "$USERNAME $TOKEN" > /tmp/ssh_tokens.txt
+   # Save token to a file (append to keep history)
+   echo "$USERNAME $TOKEN" >> /tmp/ssh_tokens.txt
 
-   # Send verification email with link
+   # Email details
+   EMAIL="$USERNAME@example.com"
    EMAIL_SUBJECT="SSH Login Verification"
    EMAIL_BODY="To verify your login, click on the link below:
    http://your-server.com/verify?user=$USERNAME&token=$TOKEN"
 
-   echo -e "Subject:$EMAIL_SUBJECT\n$EMAIL_BODY" | ssmtp $USERNAME@example.com
+   # Send email using mail command
+   echo -e "$EMAIL_BODY" | mail -s "$EMAIL_SUBJECT" "$EMAIL"
 
-   echo "Verification email sent to $USERNAME@example.com"
+   echo "Verification email sent to $EMAIL"  
    ```
 
 4. **Force Command Execution via SSH:**
