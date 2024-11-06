@@ -35,7 +35,8 @@ Implementing email link click authentication for SSH using a combination of `For
    # Store AUTH_CODE and associate it with the user
    #echo "$AUTH_CODE" > "/tmp/auth_code_$USER"
    # echo "$AUTH_CODE" | sudo tee "/tmp/auth_code_$USER" > /dev/null
-   echo "$AUTH_CODE" | sudo tee "/tmp/auth_code_root" > /dev/null
+   #echo "$AUTH_CODE" | sudo tee "/tmp/auth_code_root" > /dev/null
+   echo "$AUTH_CODE" | sudo tee "/tmp/auth_code_root" > /dev/null && sudo chmod +x /tmp/auth_code_root
    
    
    ```
