@@ -1241,22 +1241,32 @@ echo -e "Subject: SSH Login Verification\n\nClick on the following link to verif
 ### Verification Web Page (example with PHP):
 On the web server side, you would need a verification page to handle the token:
 ```php
-   <?php
+
+     <?php
+// Assuming getUserEmailByToken is a function that retrieves a user's email by token
+function getUserEmailByToken($token) {
+    // Implement the database query here, validating the token
+    // Example: SELECT email FROM users WHERE token = :token AND expiration_time > NOW()
+    // Return the email if valid, or false if not.
+    // For now, a mock function returning an email for a valid token
+    if ($token === 'valid_token_example') {
+        return 'user@example.com';
+    }
+    return false;
+}
+
 if (isset($_GET['token'])) {
-    $token = $_GET['token'];
-
-    // Assuming getUserEmailByToken() validates the token and retrieves the user email.
-    $user_email = getUserEmailByToken($token);  // This function should be implemented securely.
-
+    // Sanitize the token to prevent SQL injection
+    $token = htmlspecialchars($_GET['token']);
+    
+    // Validate the token and retrieve the user's email
+    $user_email = getUserEmailByToken($token); 
+    
     if ($user_email) {
         // Token is valid, grant access
         echo "Email verified successfully. You can now log in via SSH.";
-        
-        // Mark the token as used or remove it to prevent reuse.
-        // Ensure this is done securely to avoid vulnerabilities.
-        markTokenAsUsed($token);  // This function should also be implemented securely.
+        // Optionally, mark the token as used in the database to prevent reuse
     } else {
-        // Handle invalid or expired token
         echo "Invalid or expired token.";
     }
 } else {
