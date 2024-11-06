@@ -433,5 +433,62 @@ With this setup:
 
 This is a basic implementation; you may want to extend it with additional security measures, such as logging, token expiration, and more robust session management.
 
+😀😃😄🥰😄☺️😄😄☺️😃☺️☺️😃
+
+
+<?php
+// authenticate.php
+session_start();
+
+// Sanitize user inputs to prevent potential issues
+$user = filter_input(INPUT_GET, 'user', FILTER_SANITIZE_STRING);
+$token = filter_input(INPUT_GET, 'token', FILTER_SANITIZE_STRING);
+
+// Check if user or token are empty
+if (empty($user) || empty($token)) {
+    echo "User or token is missing.";
+    exit;
+}
+
+// Read the tokens file, handle the case where the file might not exist
+$tokensFile = '/tmp/auth_tokens.txt';
+if (!file_exists($tokensFile) || !is_readable($tokensFile)) {
+    echo "Error: Token file is missing or unreadable.";
+    exit;
+}
+
+$tokens = file($tokensFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+if ($tokens === false) {
+    echo "Error reading the token file.";
+    exit;
+}
+
+// Check for valid token
+foreach ($tokens as $line) {
+    list($lineUser, $lineToken) = explode(':', $line);
+    if ($lineUser === $user && $lineToken === $token) {
+        // Token is valid, log the user in
+        $_SESSION['authenticated_user'] = $user;
+
+        // Regenerate session ID to prevent session fixation
+        session_regenerate_id(true);
+
+        // Remove the token from the file
+        unset($tokens[array_search($line, $tokens)]);
+        
+        // Write the updated token list back to the file
+        if (file_put_contents($tokensFile, implode("\n", $tokens) . "\n") === false) {
+            echo "Error updating token file.";
+            exit;
+        }
+
+        echo "Authenticated. You can now access the SSH.";
+        exit;
+    }
+}
+
+echo "Invalid token.";
+?>
+
 
 
