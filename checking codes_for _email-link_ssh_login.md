@@ -1176,6 +1176,542 @@ This method integrates email verification into the SSH login process with the `F
 
 😙😙☺️😙☺️😄☺️😙😚☺️😁😌😄😌😄😌😚😌😚😌😌😁😁☺️😄😍😍😄😍😚😚😍😍😊😬😬🥲😬🥲😬😗🥲😬🥲😬🥲😬🥲😤🥲😤🥲😤🥲😤🥲😤🥲🥲😤🥲😤🥲😤🥲😤🥲😤🥲😤🥲😤😶😤😶😤😶😌😤🥲😤🥲😤🥲😬😢😏😢😏😢😏😊😏😗😢🤗🤗😢🤗🤭🤗😢😢🤗😢🤗😢😢🤗😢🤗😢🤗😢🤗
 
-.
+Setting up SSH login with email link-click authentication on an Ubuntu server using `ssmtp`, PHP, and `ForceCommand` is a complex setup. Below are simplified instructions on how you could implement such a solution, focusing on the necessary steps and configurations. However, please note that email link-click authentication for SSH access is unconventional and may require custom development for secure implementation.
 
+### Steps to Achieve SSH Login with Email Link Click Authentication
+
+#### 1. Install Required Software
+
+Make sure you have the following installed:
+
+- **OpenSSH server** for SSH access
+- **ssmtp** for sending emails
+- **PHP** for handling server-side logic
+
+```bash
+sudo apt update
+sudo apt install openssh-server ssmtp php
+```
+
+#### 2. Configure ssmtp
+
+Edit the `ssmtp` configuration to set up your email server.
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+Here's a sample configuration for Gmail. Replace with your email provider's SMTP settings:
+
+```bash
+root=postmaster@example.com
+mailhub=smtp.gmail.com:587
+AuthUser=your-email@gmail.com
+AuthPass=your-email-password
+UseTLS=YES
+UseSTARTTLS=YES
+FromLineOverride=YES
+```
+
+**Note**: For Gmail, you may need to enable less secure apps or set up App Passwords for enhanced security.
+
+#### 3. Configure PHP for Sending Email
+
+Create a PHP script to handle the email link generation and verification. Here is an example of how you can send an email with a verification link.
+
+```php
+<?php
+$to = "user@example.com";
+$subject = "SSH Login Link";
+$token = bin2hex(random_bytes(16)); // Generate a random token for authentication
+$verification_link = "http://your-server-ip/verify.php?token=$token";
+
+// Store the token temporarily in a database or file for validation later
+file_put_contents("tokens/$token.txt", "user@example.com");
+
+$message = "Click the link below to authenticate your SSH login:\n$verification_link";
+
+$headers = 'From: no-reply@your-server.com' . "\r\n" .
+           'Reply-To: no-reply@your-server.com' . "\r\n" .
+           'X-Mailer: PHP/' . phpversion();
+
+mail($to, $subject, $message, $headers);
+echo "Verification link sent to $to!";
+?>
+```
+
+#### 4. Create Verification Script (`verify.php`)
+
+This script verifies the token and allows the user to initiate the SSH login.
+
+```php
+<?php
+if(isset($_GET['token'])) {
+    $token = $_GET['token'];
+
+    if(file_exists("tokens/$token.txt")) {
+        $email = file_get_contents("tokens/$token.txt");
+        // Start a session and store the email in it for future use
+        session_start();
+        $_SESSION['user_email'] = $email;
+
+        // Redirect to a page indicating successful login or directly handle SSH session
+        echo "You have been authenticated! Please proceed to SSH.";
+    } else {
+        echo "Invalid or expired token!";
+    }
+} else {
+    echo "No token provided!";
+}
+?>
+```
+
+#### 5. Modify `sshd_config` to Use ForceCommand
+
+You need to set up `ForceCommand` in `sshd_config` to run a custom script once the user logs in through SSH. This can ensure the user is only allowed to log in if they are authenticated via the email link.
+
+Edit the SSH configuration file:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add the following line to the `sshd_config`:
+
+```bash
+ForceCommand /usr/local/bin/ssh-login-script.sh
+```
+
+This ensures that once the SSH session is initiated, the custom script `ssh-login-script.sh` will be executed. 
+
+#### 6. Create the SSH Login Script (`ssh-login-script.sh`)
+
+Now, create a simple script that will check if the user has been authenticated through the email link:
+
+```bash
+sudo nano /usr/local/bin/ssh-login-script.sh
+```
+
+```bash
+#!/bin/bash
+
+# Check if the user has been authenticated via email
+if [ -f "/tmp/authorized_user" ]; then
+    # If authenticated, allow them to access the shell
+    $SHELL
+else
+    # If not authenticated, close the connection
+    echo "You need to authenticate via email to log in."
+    exit 1
+fi
+```
+
+#### 7. Implement the Email Login Validation
+
+When the user clicks on the link in the email, you should save a session or token indicating that they are authenticated. You can create a file in `/tmp/authorized_user` to signify that the user is authorized to log in.
+
+Modify `verify.php` to create this file:
+
+```php
+<?php
+if(isset($_GET['token'])) {
+    $token = $_GET['token'];
+
+    if(file_exists("tokens/$token.txt")) {
+        $email = file_get_contents("tokens/$token.txt");
+
+        // Store the authentication status in a temporary file
+        file_put_contents("/tmp/authorized_user", $email);
+
+        session_start();
+        $_SESSION['user_email'] = $email;
+        echo "You have been authenticated! Please proceed to SSH.";
+    } else {
+        echo "Invalid or expired token!";
+    }
+} else {
+    echo "No token provided!";
+}
+?>
+```
+
+#### 8. Secure the Setup
+
+Ensure that the authentication file (`/tmp/authorized_user`) is deleted after the session ends or after a timeout.
+
+You might want to implement additional security features, such as limiting the validity of the token, logging out after a certain period, and securing access to the `/tmp/authorized_user` file.
+
+---
+
+### Final Thoughts
+
+This is a basic guide for setting up SSH login via email verification on Ubuntu using PHP and `ssmtp`. However, implementing email-based authentication for SSH is non-standard, and you should consider using proven alternatives like multi-factor authentication (MFA) or SSH keys for better security.
+
+🙄😛😙🙄🙄😋😗🙄🙄🥹😃🙄🥹😃🫢😮‍💨🥹😃😮‍💨😄🥹🤭🥹😄😮‍💨😛🤭🥹😄🙄😮‍💨🥹😃🙄😄😛🙄😛😄😮‍💨😛😄😮‍💨😛😙😮‍💨😙😛😮‍💨😛😃😮‍💨😮‍💨😛😄😮‍💨😛😃🙄😄😛😮‍💨😛😄😮‍💨🙄😛😄🙄😄😛🙄🙄😄😛😮‍💨😛😄😮‍💨😄😛😮‍💨😛😄😮‍💨😛😄🙄😄😛🥹😄😛😃😢🙂😐😢😙😐😙😛😢😛😙😢😢😛😙😛😙😮‍💨😮‍💨😛😗😮‍💨😙😛😢😙😛😛😢😗😮‍💨😛😗😢😛😗😢😮‍💨😛😢😛😢😙😝😢😙😢😝😙😙😮‍💨😛😙😮‍💨😙😝😢😝😙
+
+To set up SSH login using email link click authentication in an Ubuntu server with shell access, you need to achieve two things:
+
+1. **Configure SSMTP for sending emails**: SSMTP allows you to send emails without needing a full mail server, which is perfect for this setup.
+2. **Use SSH's `ForceCommand` to restrict access to a shell script that can verify the email link click**.
+
+This example will guide you through the steps using simple `.sh` scripts and `ssmtp` for email configuration. The idea is to generate a unique token for the user, send it via email, and have the user click on a link to authenticate, which triggers the shell script to authenticate their session.
+
+### 1. **Install and Configure `ssmtp`**
+
+Install `ssmtp` on your Ubuntu server to send emails from the server to the user's email.
+
+```bash
+sudo apt update
+sudo apt install ssmtp
+```
+
+Configure `ssmtp` by editing its configuration file:
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+Here's a basic configuration for using Gmail (you can modify this for other email services):
+
+```
+root=postmaster
+mailhub=smtp.gmail.com:587
+hostname=yourdomain.com
+AuthUser=your-email@gmail.com
+AuthPass=your-email-password
+FromLineOverride=YES
+UseSTARTTLS=YES
+```
+
+You will need to replace the `AuthUser` and `AuthPass` with your Gmail account and password. For added security, consider using an App Password if you're using Gmail.
+
+### 2. **Create the Shell Script to Send the Authentication Link**
+
+Create a script (`send_email.sh`) that generates a unique token and sends it via email.
+
+```bash
+#!/bin/bash
+
+# Create a unique token (for simplicity, using the current timestamp)
+token=$(date +%s | sha256sum | base64 | head -c 32)
+
+# Store the token in a file
+echo $token > /tmp/token.txt
+
+# Prepare the authentication link
+auth_link="http://your-server.com/verify_token?token=$token"
+
+# Send the email with the link using ssmtp
+echo -e "Subject: SSH Login Authentication\n\nClick the link to authenticate your SSH session:\n$auth_link" | ssmtp user@example.com
+
+# Output the token (optional, for debugging purposes)
+echo "Token sent: $auth_link"
+```
+
+### 3. **Set Up SSH Configuration with `ForceCommand`**
+
+You can configure `ForceCommand` to restrict SSH login to a specific shell script that verifies the token when the user logs in.
+
+Edit the SSH configuration file `/etc/ssh/sshd_config`:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add or modify these lines:
+
+```
+ForceCommand /path/to/your/verify_token.sh
+AllowUsers yourusername
+```
+
+This configuration ensures that any login attempt will force the user to run the `verify_token.sh` script, instead of providing normal shell access.
+
+### 4. **Create the Token Verification Script**
+
+Create a script `verify_token.sh` that checks the token and allows the user to proceed if the token matches.
+
+```bash
+#!/bin/bash
+
+# Get the token from the SSH command line arguments
+provided_token=$1
+
+# Check if the token matches the one stored
+stored_token=$(cat /tmp/token.txt)
+
+if [[ "$provided_token" == "$stored_token" ]]; then
+    echo "Token validated. Access granted!"
+    # Grant access to the shell (optional, you can customize further)
+    /bin/bash
+else
+    echo "Invalid token. Access denied."
+    exit 1
+fi
+```
+
+### 5. **Triggering Token Verification from the Email Link**
+
+When the user clicks the authentication link in their email, the server should verify the token. You can configure this to work with a web server (like Apache or Nginx) or even a local script that responds to HTTP requests.
+
+Since you mentioned not using web access directly, a simple way to test is to store the tokens in a file and compare them in your shell script.
+
+### Final Notes:
+
+- **Security**: This method is for demonstration purposes. In a real production environment, you should implement secure methods to manage tokens (e.g., via HTTPS and cryptographic tokens).
+- **Email Delivery**: Ensure that the email server can reliably deliver messages, especially when using a service like Gmail, which may flag your server as a spammer if it's sending too many emails.
+
+Once everything is set up, you should be able to initiate the process by running the `send_email.sh` script. The user will receive an email with a link, and upon clicking, their SSH session will be validated via the `verify_token.sh` script.
+
+
+🥲😍🥲😊😤☺️🙄☺️🙄☺️🙄☺️🥹😌🙄😌🙄😌🙄☺️🙄☺️🙄🙄☺️🤭😌😌☺️😌😌🙄😌🙄😌🙄😌😌😌😌😌😌😌😌😌😌😌🙄😌🙄😌😝😌😝☺️🤭☺️😋☺️🫢☺️🤭☺️🥹☺️🙄😌😶☺️😍😌🫢😌😮‍💨😌🤭😌🤩🫢😍🫢😍🤭😍🤭😍😍😍😍😝😝😍🤭😍🤭😍🫢😍😮‍💨😍😢😍😝😍🙄😍🤭🤭😍🤭😍🙄🤩
+To set up SSH login on an Ubuntu server via email link click authentication with `$SHELL` access using only `ssmtp`, `.sh` scripts, and `ForceCommand` in the `sshd_config` without web access, you can follow these steps.
+
+### Requirements:
+- Ubuntu server with `ssmtp` installed.
+- SSH configured to allow specific commands via the `ForceCommand` option.
+
+### Steps:
+
+#### 1. Install `ssmtp` on the Ubuntu server
+
+First, install `ssmtp` (a simple mail relay system):
+
+```bash
+sudo apt update
+sudo apt install ssmtp
+```
+
+#### 2. Configure `ssmtp`
+
+Configure `ssmtp` for sending emails. The configuration file is `/etc/ssmtp/ssmtp.conf`.
+
+Edit the configuration file:
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+Here’s an example configuration for Gmail (replace with your email provider’s details):
+
+```bash
+root=postmaster@example.com
+mailhub=smtp.gmail.com:587
+AuthUser=your-email@example.com
+AuthPass=your-email-password
+FromLineOverride=YES
+UseSTARTTLS=YES
+```
+
+Ensure that the email credentials and SMTP server details are correct. **Note:** It's highly recommended to use App Passwords instead of your regular email password for security reasons if you're using Gmail.
+
+#### 3. Create a script to send a login link
+
+Create a shell script that sends an email with a login link. You can generate a token or use a simple authentication method, for instance, with a random string:
+
+```bash
+#!/bin/bash
+
+# Generate a random authentication token (or use a simpler method)
+AUTH_TOKEN=$(openssl rand -hex 12)
+
+# Send an email to the user with the authentication token
+echo "Click the link below to authenticate your SSH session: \
+https://yourserver.com/ssh-login/$AUTH_TOKEN" | ssmtp user@example.com
+
+# Print token for reference (in production, you may store it securely)
+echo "Generated authentication token: $AUTH_TOKEN"
+```
+
+Save this script as `send_login_link.sh` and make it executable:
+
+```bash
+chmod +x send_login_link.sh
+```
+
+#### 4. Create a `ForceCommand` script
+
+In `sshd_config`, set up the `ForceCommand` option to execute a script upon SSH login. Create a shell script (e.g., `verify_login.sh`) to verify the link or token.
+
+```bash
+#!/bin/bash
+
+# Example: Check if the login token matches one sent in the email
+if [[ "$SSH_AUTH_TOKEN" == "$EXPECTED_TOKEN" ]]; then
+    # If it matches, allow the user to proceed to their shell
+    exec $SHELL
+else
+    # If not, deny access
+    echo "Invalid authentication token."
+    exit 1
+fi
+```
+
+Save this script as `verify_login.sh` and make it executable:
+
+```bash
+chmod +x verify_login.sh
+```
+
+#### 5. Configure SSH to use the script
+
+In the SSH configuration file `/etc/ssh/sshd_config`, set the `ForceCommand` option to execute the `verify_login.sh` script.
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add the following line:
+
+```bash
+ForceCommand /path/to/verify_login.sh
+```
+
+#### 6. Restart the SSH service
+
+After making changes to the SSH configuration, restart the SSH service:
+
+```bash
+sudo systemctl restart sshd
+```
+
+#### 7. Authentication process overview:
+
+1. The user runs `send_login_link.sh` to send an email with the authentication token.
+2. The user receives the email, clicks the link (which would be a token-based authentication URL).
+3. Upon SSH login, the server checks the token against a stored or generated token (from email).
+4. If the token is correct, the user is granted access to `$SHELL`.
+
+### Security Considerations:
+- This approach doesn't include web-based token validation, so it relies on a pre-shared method for token verification.
+- You can extend the script to store the token securely in a file or database for better validation.
+- Avoid hardcoding passwords or sensitive information in scripts, especially in a production environment.
+
+This is a simple implementation, and in a real-world environment, you should consider additional security mechanisms, like 2FA or more robust token management.
+🥰😗☺️😙☺️😙😁😍😁😍😍😍😋🤤🙃🥹😊🙃🥹😊🤤🥹😊😊🤤🥹😊😊🤤🥹🥰☺️🤤🤭☺️😍🙂‍↔️😋😍🤭☺️🙂‍↔️🤭😍😋🙂‍↔️😂😃😶😂🥱😜😶‍🌫️😂😂😃😶‍🌫️🥱😂😶‍🌫️🥱😂😶‍🌫️😂😶‍🌫️😃😂😃😶‍🌫️😍😂😂🙃😶‍🌫️😍🙃🙃😶‍🌫️😍🙃😶‍🌫️😶‍🌫️🙃😍😍🙃😶‍🌫️😍🙃🙃😶‍🌫️😍🥱😶‍🌫️😍😍🙃😶‍🌫️🙃😍😶‍🌫️😍🙃😶‍🌫️😍🙃😶‍🌫️🙃😶‍🌫️😍🙃😶‍🌫️🤩🙃😶‍🌫️🙃🤩😶‍🌫️😍😶‍🌫️🙃🤩😶‍🌫️😍🥱😶‍🌫️🙃😶‍🌫️😍🙃😶‍🌫️😍🥱😶‍🌫️😶‍🌫️🥱😍😶‍🌫️😍🥱😶‍🌫️😶‍🌫️😍🥱😶‍🌫️😶‍🌫️😍🥱😶‍🌫️😍🥱😶
+To achieve SSH login authentication via email link click with `$SHELL` access using `ssmtp` and simple shell scripts on Ubuntu, you would need to implement a custom solution. Here's how you can approach this:
+
+### 1. Prerequisites
+- Ubuntu server running SSH.
+- `ssmtp` installed for sending email notifications.
+- Email service to send the link for SSH login.
+- A basic shell script for generating a login link.
+- Use of `ForceCommand` in the `sshd_config` for security.
+
+### Step-by-Step Solution:
+
+#### Step 1: Install `ssmtp` and Configure it
+Install `ssmtp` for email sending.
+
+```bash
+sudo apt update
+sudo apt install ssmtp
+```
+
+#### Step 2: Configure `ssmtp` (`/etc/ssmtp/ssmtp.conf`)
+Edit `ssmtp.conf` to configure your mail settings. You need to use a working SMTP server (e.g., Gmail, SendGrid, etc.).
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+Here’s an example for Gmail:
+
+```bash
+root=postmaster
+mailhub=smtp.gmail.com:587
+AuthUser=your_email@gmail.com
+AuthPass=your_email_password
+UseTLS=YES
+UseSTARTTLS=YES
+FromLineOverride=YES
+```
+
+#### Step 3: Create a Script to Send Email with a Login Link (`/usr/local/bin/send_login_link.sh`)
+You need a script that generates a unique login link, sends it via email, and sets up the temporary SSH access.
+
+```bash
+#!/bin/bash
+
+# Generate a unique link/token (could use UUID or any other method)
+TOKEN=$(uuidgen)
+
+# Set your email and recipient
+FROM_EMAIL="your_email@gmail.com"
+TO_EMAIL="recipient_email@example.com"
+
+# Prepare the login link (this could point to a script or page that validates the token)
+LOGIN_LINK="ssh://$USER@$HOSTNAME?token=$TOKEN"
+
+# Send the email with the login link
+echo -e "Subject: SSH Login Link\n\nClick on the link to login to your server:\n$LOGIN_LINK" | ssmtp $TO_EMAIL
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/send_login_link.sh
+```
+
+#### Step 4: SSH Configuration (`/etc/ssh/sshd_config`)
+Modify SSH settings to force the login to run a specific command for validation when the user clicks the link.
+
+Edit `sshd_config`:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Ensure you have these settings:
+
+```bash
+ForceCommand /usr/local/bin/validate_login.sh
+AllowUsers your_username
+PasswordAuthentication no
+```
+
+The `ForceCommand` ensures that every SSH login will run the script `/usr/local/bin/validate_login.sh`, which will verify the login link.
+
+#### Step 5: Create the Validation Script (`/usr/local/bin/validate_login.sh`)
+This script will be responsible for validating the token received from the link.
+
+```bash
+#!/bin/bash
+
+# Extract the token passed via SSH
+TOKEN=$1
+
+# Validate the token (you could store tokens in a file or database)
+VALID_TOKEN="your_valid_token_here"
+
+if [[ "$TOKEN" == "$VALID_TOKEN" ]]; then
+  # Allow the user to continue with the shell
+  exec $SHELL
+else
+  echo "Invalid token!"
+  exit 1
+fi
+```
+
+Make it executable:
+
+```bash
+sudo chmod +x /usr/local/bin/validate_login.sh
+```
+
+#### Step 6: Send the Login Link
+Finally, you can run the `send_login_link.sh` script to send the login link to the recipient:
+
+```bash
+/usr/local/bin/send_login_link.sh
+```
+
+The recipient will get an email with the SSH login link. When they click the link, it will pass the token to the SSH login process, where the token will be validated. If valid, the user will be granted access to the shell.
+
+### Additional Considerations:
+- **Security**: This approach is highly simplified. In a production environment, you would need a more robust method for validating tokens (e.g., with an expiry time, or by storing tokens securely).
+- **Error Handling**: Add proper error handling and logging in the scripts to ensure smooth operations.
+- **Link Validation**: This example uses a static token. You may want to implement a more secure, time-sensitive token system (e.g., using time-based one-time passwords or a hashed method).
+
+This solution provides basic functionality to authenticate SSH via email link and `$SHELL` access with `ssmtp`.
 
