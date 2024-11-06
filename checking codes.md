@@ -51,13 +51,23 @@ This script will handle the authentication when the user clicks the link.
 
 # auth_link.sh
 AUTH_CODE="$1"
+USER_AUTH_CODE_FILE="/tmp/auth_code_$USER"
+
+# Debugging: Check if file exists
+echo "Looking for auth code file: $USER_AUTH_CODE_FILE"
+
+# Create a test auth code if the file doesn't exist
+if [ ! -f "$USER_AUTH_CODE_FILE" ]; then
+    echo "Creating auth code file with a test code."
+    echo "12345" > "$USER_AUTH_CODE_FILE"
+fi
 
 # Check if the code matches the stored one
-if [ -f "/tmp/auth_code_$USER" ]; then
-    STORED_CODE="$(cat /tmp/auth_code_$USER)"
+if [ -f "$USER_AUTH_CODE_FILE" ]; then
+    STORED_CODE="$(cat $USER_AUTH_CODE_FILE)"
     if [ "$AUTH_CODE" == "$STORED_CODE" ]; then
         echo "Authentication successful."
-        rm "/tmp/auth_code_$USER"  # Cleanup
+        rm "$USER_AUTH_CODE_FILE"  # Cleanup
         exec $SHELL  # Open a shell session
     else
         echo "Authentication failed."
@@ -67,6 +77,8 @@ else
     echo "No authentication code found."
     exit 1
 fi
+
+   
 ```
 
 Make this script executable:
