@@ -33,7 +33,9 @@ Implementing email link click authentication for SSH using a combination of `For
    echo -e "Subject: SSH Authentication\n\nClick the link to authenticate your SSH session: $LINK" | ssmtp "$EMAIL"
 
    # Store AUTH_CODE and associate it with the user
-   echo "$AUTH_CODE" > "/tmp/auth_code_$USER"
+   #echo "$AUTH_CODE" > "/tmp/auth_code_$USER"
+   sudo sh -c 'echo "$AUTH_CODE" > "/tmp/auth_code_$USER"'
+   
    ```
 
    Make the script executable:
