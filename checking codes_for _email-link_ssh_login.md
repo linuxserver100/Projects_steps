@@ -885,4 +885,155 @@ Ensure the PHP `mail()` function is working by configuring the system's SMTP set
 ### Conclusion:
 By combining PHP, SSH forced commands, and a token-based verification process, you can effectively implement an email link for SSH login verification.
 
+😗😊😙😙😊😙😊😊😄😄☺️😙☺️😙☺️😚☺️😚☺️😚☺️😚😚☺️😚☺️😚☺️😚☺️😚☺️😚☺️😚😚☺️😚☺️😚☺️😚☺️😚☺️😚☺️😚😚☺️😚☺️😚😌😚😌😚😌😚😚☺️😚☺️😚☺️😚☺️😚☺️😚☺️😚😚☺️😚☺️😚☺️😚☺️😚☺️😚😌😚😌😘☺️😘☺️😆☺️😁☺️😚☺️😚☺️😚☺️😚😚😌😚☺️😚😌
+Setting up SSH login via an email link verification system and using ForcedCommand with `$SHELL` access involves several steps, integrating various components such as SSH, email verification, and `ForcedCommand`. Here's a guide on how to achieve this:
+
+### Components Involved:
+1. **SSMTP**: To send email verification links.
+2. **SSH**: For securing remote access to the server.
+3. **ForcedCommand**: To restrict users to a specific shell or action.
+4. **Email Link Verification**: A mechanism for sending a verification link to the user for authentication.
+
+### Steps to Implement SSH Login with Email Verification and ForcedCommand
+
+#### 1. **Install SSMTP**
+First, install `ssmtp` on the server to send email via a third-party SMTP server (e.g., Gmail).
+
+```bash
+sudo apt-get update
+sudo apt-get install ssmtp
+```
+
+#### 2. **Configure SSMTP**
+Set up your SMTP configuration for sending emails. The configuration file is usually located at `/etc/ssmtp/ssmtp.conf`.
+
+Edit the `ssmtp.conf` file with your email service details:
+
+```bash
+root=postmaster
+mailhub=smtp.gmail.com:587
+UseSTARTTLS=YES
+AuthUser=your-email@gmail.com
+AuthPass=your-email-password
+FromLineOverride=YES
+```
+
+Ensure that "Less secure apps" access is enabled in your email provider (if using Gmail, for example).
+
+#### 3. **Create a Simple Script for Email Verification**
+You can use a custom script to generate a verification link and send it via email. The script will be responsible for generating a unique token, sending the email, and then verifying it when the user tries to authenticate via SSH.
+
+For example:
+
+```bash
+#!/bin/bash
+# verify-email.sh
+
+# Generate a unique token (you can use any method you prefer for this)
+TOKEN=$(openssl rand -base64 32)
+
+# Send the email with the verification link
+echo "Subject: SSH Login Verification" | cat - email_body.txt | ssmtp $USER_EMAIL
+
+# Email Body
+echo "Click the link below to verify your SSH login:
+https://yourserver.com/verify-token?token=$TOKEN" > email_body.txt
+```
+
+Ensure that the user will have to click the link (which sends the token to the server) to complete verification.
+
+#### 4. **Verify the Token**
+On your server, you'll need a web service or script that listens for incoming verification requests. When a user clicks the link, the server should compare the token in the URL with the one stored in a file or database.
+
+Here’s a simple example using `nginx` and PHP:
+
+1. Install Nginx and PHP:
+   ```bash
+   sudo apt-get install nginx php-fpm
+   ```
+
+2. Configure `nginx` to handle the verification request.
+
+   Edit `/etc/nginx/sites-available/default` to include a location for the token verification endpoint.
+
+   ```nginx
+   server {
+       listen 80;
+
+       location /verify-token {
+           fastcgi_pass 127.0.0.1:9000;
+           fastcgi_param SCRIPT_FILENAME /var/www/html/verify-token.php;
+           include fastcgi_params;
+       }
+   }
+   ```
+
+3. Create the `verify-token.php` script:
+
+   ```php
+   <?php
+   if (isset($_GET['token'])) {
+       $token = $_GET['token'];
+
+       // Compare the token with the one stored (in a database or file)
+       if (tokenIsValid($token)) {
+           echo "Token verified!";
+           // Proceed with SSH login process, allow access, or set a flag
+       } else {
+           echo "Invalid token.";
+       }
+   }
+
+   function tokenIsValid($token) {
+       // Implement your token validation logic here
+       return file_get_contents('/path/to/token_file') === $token;
+   }
+   ?>
+   ```
+
+#### 5. **Configure SSH for ForcedCommand**
+Now, you'll set up SSH to use ForcedCommand and provide access to `$SHELL`.
+
+Edit `/etc/ssh/sshd_config` to include the following configuration:
+
+```bash
+Match User your_username
+    ForceCommand /path/to/your/custom-shell-script.sh
+    PasswordAuthentication no
+```
+
+In your `custom-shell-script.sh`, you can include logic to check if the user has verified their email. If not, deny the login.
+
+```bash
+#!/bin/bash
+# custom-shell-script.sh
+
+# Check if the user has verified their email (e.g., by checking a file or database)
+if [ ! -f /path/to/user_verified ]; then
+    echo "Email verification required."
+    exit 1
+fi
+
+# Proceed with the default shell if verified
+exec $SHELL
+```
+
+#### 6. **Finalize and Test**
+1. **Restart the SSH service** to apply the configuration changes:
+   ```bash
+   sudo systemctl restart ssh
+   ```
+
+2. **Test the entire process**:
+   - The user attempts to log in via SSH.
+   - The server sends a verification email with a link.
+   - The user clicks the link to verify their identity.
+   - After verification, the user gains access to the shell.
+
+### Notes:
+- You can modify the script to store the token in a database or file for checking.
+- The `ForceCommand` option ensures that users are always executed through the shell script.
+- Email services like Gmail may require additional configuration (such as app-specific passwords) for sending emails securely.
+
+This setup should provide a basic structure for an SSH login system with email verification and ForcedCommand enforcement.
 
