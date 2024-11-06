@@ -37,7 +37,7 @@ Implementing email link click authentication for SSH using a combination of `For
    # echo "$AUTH_CODE" | sudo tee "/tmp/auth_code_$USER" > /dev/null
    #echo "$AUTH_CODE" | sudo tee "/tmp/auth_code_root" > /dev/null
    #echo "$AUTH_CODE" | sudo tee "/tmp/auth_code_root" > /dev/null && sudo chmod +x /tmp/auth_code_root
-    echo "$AUTH_CODE" | sudo -u <username> tee "/tmp/auth_code_root" > /dev/null && sudo chmod +x /tmp/auth_code_root
+    echo "$AUTH_CODE" | sudo -u <username> tee "/tmp/auth_code_root" > /dev/null && sudo chmod +x /tmp/auth_code_root && chmod 644 /tmp/auth_code_root
    
    
    ```
