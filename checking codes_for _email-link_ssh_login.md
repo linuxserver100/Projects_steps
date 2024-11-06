@@ -571,22 +571,43 @@ To set up SSH login via an email link verification system and use `ForcedCommand
    **Example PHP verification page (verification.php):**
    ```php
    <?php
-   if (isset($_GET['token'])) {
-       $token = $_GET['token'];
-       $file = '/tmp/ssh_login_tokens.txt';
-       $tokens = file($file, FILE_IGNORE_NEW_LINES);
-       
-       foreach ($tokens as $line) {
-           list($stored_token, $user_email) = explode(' ', $line);
-           if ($stored_token == $token) {
-               // Token is valid, proceed with the process (e.g., mark as verified)
-               file_put_contents($file, implode("\n", array_filter($tokens, fn($line) => !str_contains($line, $token))));
-               echo "Verification successful. You may now return to your SSH session.";
-               break;
-           }
-       }
-   }
-   ?>
+if (isset($_GET['token'])) {
+    $token = $_GET['token'];
+    $file = '/tmp/ssh_login_tokens.txt';
+
+    // Check if file exists
+    if (file_exists($file)) {
+        $tokens = file($file, FILE_IGNORE_NEW_LINES);
+        $isVerified = false;
+
+        foreach ($tokens as $index => $line) {
+            list($stored_token, $user_email) = explode(' ', $line);
+
+            // Compare the token
+            if ($stored_token == $token) {
+                // Token is valid, proceed with the process (e.g., mark as verified)
+                unset($tokens[$index]); // Remove the verified token
+
+                // Update the file
+                file_put_contents($file, implode("\n", $tokens));
+
+                echo "Verification successful. You may now return to your SSH session.";
+                $isVerified = true;
+                break;
+            }
+        }
+
+        if (!$isVerified) {
+            echo "Invalid token.";
+        }
+    } else {
+        echo "Token file not found.";
+    }
+} else {
+    echo "No token provided.";
+}
+?>
+
    ```
 
 ### 4. **Finalizing SSH Login Process**
