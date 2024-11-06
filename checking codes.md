@@ -224,17 +224,28 @@ if (isset($_GET['token'])) {
     $token = $_GET['token'];
     $user_token_file = "/tmp/auth_tokens/{$_SERVER['REMOTE_USER']}.token";
 
-    if (file_exists($user_token_file) && file_get_contents($user_token_file) === $token) {
-        // Token matches, delete the file
-        unlink($user_token_file);
-        echo "Authentication successful!";
+    // Debug: Output token and file path
+    echo "Token from URL: " . htmlspecialchars($token) . "<br>";
+    echo "File path: " . htmlspecialchars($user_token_file) . "<br>";
+    
+    if (file_exists($user_token_file)) {
+        $file_token = trim(file_get_contents($user_token_file));
+        echo "Token from file: " . htmlspecialchars($file_token) . "<br>";
+        
+        if ($file_token === $token) {
+            unlink($user_token_file);
+            echo "Authentication successful!";
+        } else {
+            echo "Invalid or expired token.";
+        }
     } else {
-        echo "Invalid or expired token.";
+        echo "Token file does not exist.";
     }
 } else {
     echo "No token provided.";
 }
 ?>
+
 ```
 
 Place `verify.php` on your web server and ensure it’s accessible at the URL defined in `auth_check.sh`.
