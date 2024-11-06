@@ -1241,22 +1241,29 @@ echo -e "Subject: SSH Login Verification\n\nClick on the following link to verif
 ### Verification Web Page (example with PHP):
 On the web server side, you would need a verification page to handle the token:
 ```php
-<?php
+   <?php
 if (isset($_GET['token'])) {
     $token = $_GET['token'];
-    
-    // Validate the token and user email
-    $user_email = getUserEmailByToken($token);  // This function needs to be implemented
-    
+
+    // Assuming getUserEmailByToken() validates the token and retrieves the user email.
+    $user_email = getUserEmailByToken($token);  // This function should be implemented securely.
+
     if ($user_email) {
         // Token is valid, grant access
         echo "Email verified successfully. You can now log in via SSH.";
-        // Remove or mark the token as used to prevent reuse
+        
+        // Mark the token as used or remove it to prevent reuse.
+        // Ensure this is done securely to avoid vulnerabilities.
+        markTokenAsUsed($token);  // This function should also be implemented securely.
     } else {
+        // Handle invalid or expired token
         echo "Invalid or expired token.";
     }
+} else {
+    echo "No token provided.";
 }
 ?>
+
 ```
 
 ### `ssmtp` Configuration:
