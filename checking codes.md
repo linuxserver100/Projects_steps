@@ -434,7 +434,7 @@ With this setup:
 This is a basic implementation; you may want to extend it with additional security measures, such as logging, token expiration, and more robust session management.
 
 😀😃😄🥰😄☺️😄😄☺️😃☺️☺️😃
-
+```bash
 
 <?php
 // authenticate.php
@@ -490,5 +490,5 @@ foreach ($tokens as $line) {
 echo "Invalid token.";
 ?>
 
-
+```
 
