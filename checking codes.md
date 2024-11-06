@@ -194,8 +194,8 @@ TOKEN=$(uuidgen)  # Generate a unique token
 URL="http://yourserver.com/verify?token=$TOKEN"  # Verification URL
 
 # Store the token in a file with the user's name
-#echo "$TOKEN" > "$TOKEN_FILE/${USER}.token"
- mkdir -p tmp/auth_tokens && echo "$TOKEN" > "tmp/auth_tokens/${USER}.token"
+echo "$TOKEN" > "$TOKEN_FILE/${USER}.token"
+ 
 
 # Send an email with the token link using ssmtp
 echo -e "Subject: SSH Authentication\n\nClick the link to authenticate:\n$URL" | ssmtp "$EMAIL"
