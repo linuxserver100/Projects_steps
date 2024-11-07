@@ -2468,11 +2468,15 @@ This script will handle the email verification part. It will send an email with 
 #### `verify_email.sh`:
 
 ```bash
-  #!/bin/bash
+    #!/bin/bash
 
 # Define a unique token for verification
 TOKEN=$(openssl rand -hex 16)
 USER_EMAIL="$1"  # Assumes email is passed to the script via SSH command line
+
+# Set token expiration time (in seconds, e.g., 10 minutes = 600 seconds)
+EXPIRATION_TIME=600
+START_TIME=$(date +%s)
 
 # Create a temporary file to track the token
 TEMP_DIR="/tmp/verification"
@@ -2486,15 +2490,26 @@ echo -e "Subject: SSH Login Verification\n\nClick the link to verify your SSH lo
 # Wait for user to verify (by clicking the link, ideally with a server-side handler)
 echo "Waiting for verification..."
 while true; do
+    # Check if token has expired
+    CURRENT_TIME=$(date +%s)
+    ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+    
     if [ -f "$TEMP_DIR/$USER_EMAIL.verified" ]; then
         echo "Email verified, continuing SSH session."
         break
+    elif [ $ELAPSED_TIME -gt $EXPIRATION_TIME ]; then
+        echo "Token expired. Verification failed."
+        rm "$TEMP_DIR/$USER_EMAIL.token"  # Clean up token
+        exit 1
     fi
+
+    # Sleep for a short time before checking again
     sleep 5
 done
 
 # Provide the user with shell access
 exec $SHELL
+
 
 ```
 
