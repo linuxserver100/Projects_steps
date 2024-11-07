@@ -2455,11 +2455,44 @@ Next, you need a PHP script that handles the verification process when the user 
    ?>
    ```
 
+   or if you want to delete token after successful verification then  use below command
+
+   ```php
+
+      <?php
+     // This should be stored securely, using sessions or a database
+     $verification_code = $_GET['code'];
+
+    if (!empty($verification_code)) {
+    // Here we simulate the verification process by creating a file to signal success
+    $verification_file = "/tmp/verified_$verification_code";
+
+    // You could add additional logic to check the code against a database or a file-based store
+    file_put_contents($verification_file, "verified");
+
+    // Verification successful message
+    echo "Verification successful! You can now return to your SSH session.";
+
+    // Automatically delete the verification file after a short delay
+    // Optionally you can adjust the delay time, for instance sleep(10) will wait for 10 seconds
+    sleep(5); // Wait for 5 seconds before deleting the file
+    unlink($verification_file); // Delete the file
+
+   } else {
+    echo "Invalid verification code.";
+   }
+   ?>
+
+    
+   
+   ```
+   
+
    Explanation:
    - This script checks for a `code` parameter in the URL.
    - If the code is present and valid, it creates a temporary file (`/tmp/verified_<code>`) that the SSH login script (`verification.sh`) will check to proceed with shell access.
 
-3. **Configure Web Server**:
+4. **Configure Web Server**:
    Make sure the `Apache` web server is running and accessible via `https://yourdomain.com/verify.php`.
 
 ---
