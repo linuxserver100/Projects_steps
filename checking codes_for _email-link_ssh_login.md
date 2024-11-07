@@ -2397,7 +2397,7 @@ This script will handle the email verification part. It will send an email with 
 #### `verify_email.sh`:
 
 ```bash
-#!/bin/bash
+  #!/bin/bash
 
 # Define a unique token for verification
 TOKEN=$(openssl rand -hex 16)
@@ -2410,7 +2410,7 @@ echo $TOKEN > "$TEMP_DIR/$USER_EMAIL.token"
 
 # Send email with the verification link
 VERIFICATION_URL="https://yourserver.com/verify?token=$TOKEN"
-echo "Click the link to verify your SSH login: $VERIFICATION_URL" | ssmtp $USER_EMAIL
+echo -e "Subject: SSH Login Verification\n\nClick the link to verify your SSH login: $VERIFICATION_URL" | ssmtp $USER_EMAIL
 
 # Wait for user to verify (by clicking the link, ideally with a server-side handler)
 echo "Waiting for verification..."
@@ -2424,6 +2424,7 @@ done
 
 # Provide the user with shell access
 exec $SHELL
+
 ```
 
 This script generates a verification token and sends it via email using `ssmtp`. The user will have to click the verification link. The script checks if a file named `.verified` exists to confirm the user has verified via the link.
