@@ -3623,6 +3623,182 @@ By following these steps, you will have a working SSH login system with email ve
 
 
 
+☺️😗😙☺️😙😊😚😊😄😊😃😊😚😊😚😊😄😊😄😊😄😊😙😊😚😊😁😜😄😜😃😜😃😜😙☺️😙😙☺️😙☺️😙😜😙😜😙☺️😙☺️😚☺️😄☺️😄☺️😄☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😆😆☺️😆☺️😁☺️😁☺️😁☺️😁☺️😚😜😚😜😚☺️😘☺️😘😜😚😜🥲😜🥲😜🥲😜😚😜😚😜😚😜😚😜😚😜😚😜😚😚😜😁☺️😁☺️😁☺️😄☺️😄☺️😄☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😄☺️😁☺️😚☺️😚☺️😚☺️😚☺️😚☺️😚☺️😚☺️😚☺️😁☺️😚☺️😚☺️😁☺️😁☺️😁😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️😁☺️🤪😁
+
+Configuring SSH login via an email link with `ssmtp` and `$SHELL` access, while using `ForceCommand` without the traditional token or key-based authentication, is a non-standard approach that requires several creative workarounds. This setup will likely require combining multiple methods, including email-based verification, server-side scripting, and SSH configuration adjustments. Here's an outline of the steps to configure this:
+
+### **Overview:**
+1. **Email Link Authentication:** Create a system that sends an email with a unique verification link.
+2. **Scripting and `$SHELL` Access:** Use the link to trigger a server-side script that generates a temporary session and allows SSH access.
+3. **ForceCommand:** Use `ForceCommand` to enforce a specific script on login that verifies the link/token.
+
+### **Prerequisites:**
+1. **ssmtp** installed and configured to send emails.
+2. An SMTP server (e.g., Gmail, SendGrid, etc.) to send emails.
+3. The server must have a web server (e.g., Apache or Nginx) to handle the link-click verification.
+
+### **Step-by-Step Configuration**
+
+#### 1. **Install and Configure ssmtp**
+First, set up `ssmtp` to send emails. You can use a service like Gmail or any other SMTP server.
+
+```bash
+sudo apt-get update
+sudo apt-get install ssmtp
+```
+
+Configure `ssmtp` by editing `/etc/ssmtp/ssmtp.conf`:
+
+```ini
+root=postmaster
+mailhub=smtp.gmail.com:587
+AuthUser=your-email@gmail.com
+AuthPass=your-email-password
+UseTLS=YES
+UseSTARTTLS=YES
+FromLineOverride=YES
+```
+
+Replace `your-email@gmail.com` and `your-email-password` with your actual credentials.
+
+#### 2. **Create the Email Verification System**
+You'll need a web server to handle the unique link. Let’s create a simple PHP script to handle the link-click verification.
+
+- Install Apache and PHP:
+
+```bash
+sudo apt-get install apache2 php libapache2-mod-php
+```
+
+- Create a simple script to generate and verify tokens.
+
+**Step 1:** Create a `tokens.txt` file to store the tokens:
+
+```bash
+touch /var/www/html/tokens.txt
+chmod 600 /var/www/html/tokens.txt
+```
+
+**Step 2:** Create a PHP script to handle the link click and token validation. Create a file `/var/www/html/verify.php`:
+
+```php
+<?php
+// Get the token from the URL
+$token = $_GET['token'];
+$tokensFile = '/var/www/html/tokens.txt';
+
+if(file_exists($tokensFile)) {
+    $tokens = file($tokensFile, FILE_IGNORE_NEW_LINES);
+
+    if(in_array($token, $tokens)) {
+        echo "Token verified! You can now login to the server via SSH.";
+        
+        // Remove the token after successful use
+        $tokens = array_diff($tokens, array($token));
+        file_put_contents($tokensFile, implode(PHP_EOL, $tokens));
+
+        // Send SSH access email notification
+        mail("your-email@gmail.com", "SSH Access Granted", "The token $token was successfully verified.");
+    } else {
+        echo "Invalid token.";
+    }
+} else {
+    echo "No tokens available.";
+}
+?>
+```
+
+**Step 3:** Create a script to generate tokens and send emails.
+
+Create a script `/usr/local/bin/send_verification_email.sh`:
+
+```bash
+#!/bin/bash
+
+# Generate a unique token
+TOKEN=$(openssl rand -hex 16)
+TOKEN_URL="http://your-server-ip/verify.php?token=$TOKEN"
+
+# Store the token in a file for later verification
+echo "$TOKEN" >> /var/www/html/tokens.txt
+
+# Send the email with the token link
+echo "Click the following link to verify your SSH login: $TOKEN_URL" | ssmtp recipient-email@example.com
+
+echo "Verification email sent with token: $TOKEN"
+```
+
+Make sure the script is executable:
+
+```bash
+chmod +x /usr/local/bin/send_verification_email.sh
+```
+
+#### 3. **Modify SSH Configuration:**
+To ensure that a user cannot log in without a valid token, you can set `ForceCommand` in the SSH configuration file. The `ForceCommand` directive can run a custom script instead of allowing the usual shell or login process.
+
+Edit `/etc/ssh/sshd_config` and add the following:
+
+```bash
+ForceCommand /usr/local/bin/verify_login.sh
+```
+
+This will ensure that when a user connects via SSH, they will be forced to run `/usr/local/bin/verify_login.sh` instead of getting a regular shell.
+
+#### 4. **Create the SSH Verification Script:**
+
+Now, create the script `/usr/local/bin/verify_login.sh`, which will check whether a user has a valid token before allowing them to use the shell.
+
+```bash
+#!/bin/bash
+
+# Prompt user for token input
+echo "Please enter the token you received via email:"
+read USER_TOKEN
+
+# Check if the token is valid
+TOKEN_FILE="/var/www/html/tokens.txt"
+
+if grep -q "$USER_TOKEN" "$TOKEN_FILE"; then
+    # Valid token, proceed with shell access
+    echo "Token verified! Access granted."
+    # Set the user's shell to bash
+    exec /bin/bash
+else
+    # Invalid token
+    echo "Invalid token. Access denied."
+    exit 1
+fi
+```
+
+Make the script executable:
+
+```bash
+chmod +x /usr/local/bin/verify_login.sh
+```
+
+#### 5. **Restart SSH and Apache Services:**
+
+After configuring everything, restart the SSH and Apache services:
+
+```bash
+sudo systemctl restart sshd
+sudo systemctl restart apache2
+```
+
+#### 6. **Using the System:**
+- When a user wants to log in via SSH, they will run `ssh user@your-server-ip`.
+- The server will then ask them for the verification token.
+- The user will need to click the email verification link sent to their email, which will provide them with a token.
+- Once the token is entered, the SSH access will be granted if it matches a valid token.
+
+### **Security Considerations:**
+1. **Token Expiry:** Tokens should have an expiration time. You can implement this in your PHP verification script.
+2. **Token Storage:** Tokens are stored in plain text (`tokens.txt`). Consider using encryption for higher security.
+3. **Email Access:** Email accounts should be secured with two-factor authentication to prevent unauthorized access.
+
+### Conclusion:
+This method is highly customized and involves combining several components, including PHP for token management, `ssmtp` for email, and SSH configurations. However, keep in mind that this isn't the most secure or efficient way to handle SSH access compared to traditional key-based or password authentication.
 
 
 
