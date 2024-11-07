@@ -2108,3 +2108,141 @@ exec /bin/bash  # Or any shell you want to use
 ### Conclusion
 This setup allows SSH access via email-based verification by sending a link with a unique token. Upon clicking the link, the user is verified, and access to the shell is granted. The `ForceCommand` ensures that no user can bypass the verification step. The use of `ssmtp` helps send the verification email securely.
 
+😗😗😊😙😊😙😊😚😊😙😍😙😙🥰😙🥰😙🥹😙🥹😃😙😘😄🥰😃🥰😃🥰😙🥰😚😍😍😃😍😃😍😄😍😄😍😄😍😚😍😚😍😄😍😄😍😄😍😁😁😍😁😍😚😍😁🥰😁🥰😁🥰😄😍😚😍😚😍😙😍😄😍😄😍😄😍😁😍😄😍😄😄😍😄😍😚😍😄😍😄😍😁😍😄😍😚😍😚😚😍😚😍😁😍😁😍😆😍😅🤩😅🤩😄🤩😄😍😄😍😚😍😚😍😁😍😁☺️🥲☺️😙☺️😄😍😁😍😁😄😍😁😍😁😍😄😍😄😍😄😍
+To configure SSH login via an email link click verification with access to `$SHELL`, along with configuring `ssmtp` and `.sh` files, including a `ForceCommand` directive in the `sshd_config` file, follow the steps below.
+
+We'll break it down into:
+
+1. **Configure `ssmtp` for sending the email verification link.**
+2. **Set up the `sshd_config` for SSH login with `ForceCommand`.**
+3. **Create a script for handling the SSH login verification via a link.**
+4. **Ensure proper setup of `.sh` files to handle the full flow.**
+
+### Step 1: Configure `ssmtp` for Sending the Email Verification Link
+
+First, we’ll configure `ssmtp` to send email notifications with a login verification link.
+
+1. **Install `ssmtp`**:
+   ```bash
+   sudo apt-get install ssmtp
+   ```
+
+2. **Configure `ssmtp` in `/etc/ssmtp/ssmtp.conf`**:
+   Here’s an example configuration for Gmail:
+
+   ```bash
+   root=postmaster
+   mailhub=smtp.gmail.com:587
+   AuthUser=your-email@gmail.com
+   AuthPass=your-email-password
+   UseTLS=YES
+   UseSTARTTLS=YES
+   FromLineOverride=YES
+   ```
+
+   Replace `your-email@gmail.com` and `your-email-password` with your actual credentials. **Warning:** Avoid plain-text passwords; use app passwords if possible, especially for services like Gmail.
+
+### Step 2: Configure `sshd_config` for SSH with `ForceCommand`
+
+To enforce a verification process during SSH login, we need to modify the `sshd_config` file to run a custom script.
+
+1. **Edit `/etc/ssh/sshd_config`**:
+   
+   Add these lines at the end:
+
+   ```bash
+   ForceCommand /path/to/verification.sh
+   AllowUsers your-username
+   PermitEmptyPasswords no
+   ```
+
+   Here, `/path/to/verification.sh` will be the script to handle the verification. Replace `your-username` with the username you intend to use.
+
+2. **Restart SSH service**:
+   
+   After modifying the config, restart the SSH service:
+
+   ```bash
+   sudo systemctl restart sshd
+   ```
+
+### Step 3: Create the Verification Script (`verification.sh`)
+
+The idea is that when a user logs in via SSH, a verification script runs. This script will:
+
+1. Send an email with a link for the user to click.
+2. Wait for the click (this will simulate a process).
+3. Once clicked, allow the user to access the shell.
+
+Here is a sample script:
+
+#### `/path/to/verification.sh`
+
+```bash
+#!/bin/bash
+
+# Define a random verification code
+verification_code=$(openssl rand -base64 12)
+
+# Send the email with the verification code and link
+email_subject="SSH Login Verification"
+email_body="Click the link to verify your login: https://example.com/verify?code=$verification_code"
+echo -e "Subject:$email_subject\n\n$email_body" | ssmtp recipient-email@example.com
+
+# Output the message to the user about the verification email
+echo "A verification email has been sent. Please check your inbox and click the verification link to continue."
+
+# Wait for the user to verify
+while true; do
+    # Here we simulate a process to wait for the user to verify via the link
+    # In a real-world setup, this could involve checking a database or API for the verification status.
+    
+    # Simulate the check by waiting for a process or file change indicating verification
+    sleep 10  # This could be replaced with actual verification logic
+done
+
+# Once verified, proceed to shell access
+exec /bin/bash  # This will give the user access to their shell
+```
+
+In this script:
+
+- The user receives an email with a verification link.
+- The script loops, simulating the waiting process (this could be a real check against a verification endpoint).
+- Once verified (e.g., by clicking the link), the user is given access to the shell.
+
+### Step 4: Handling `.sh` Files for Verification Process
+
+You can store additional logic in `.sh` files for specific tasks or to enhance the verification process.
+
+For example:
+
+#### `/path/to/verify.sh`
+
+```bash
+#!/bin/bash
+
+# Assuming we check the verification status
+# For simplicity, this is a placeholder for a real check
+
+if [ "$1" == "correct_verification_code" ]; then
+    echo "Verification successful."
+    exit 0
+else
+    echo "Invalid code."
+    exit 1
+fi
+```
+
+In this example, the `verify.sh` script simulates the verification process where a correct code is checked. You would call this from the main `verification.sh` script after receiving the user’s verification input.
+
+### Additional Notes:
+
+- **Security Considerations**: Do not store sensitive data like passwords in plain text. Consider using secure authentication methods (e.g., OAuth, JWT) for email or code verification.
+- **Web Server**: If using a web link for the verification (`https://example.com/verify?code=$verification_code`), ensure your server is properly configured to handle these requests and verify the code.
+- **Handling Multiple Users**: If you want to handle multiple users, ensure the verification code is unique per session and stored securely.
+
+This is a basic implementation of SSH login via email verification and ForceCommand in `sshd_config`. Depending on your environment and specific needs, you may want to refine the approach further.
+
+
+
