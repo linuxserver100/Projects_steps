@@ -2486,7 +2486,47 @@ Next, you need a PHP script that handles the verification process when the user 
     
    
    ```
-   
+
+
+   another format almost same
+
+   ```php
+
+       <?php
+        // Check if a code is provided in the URL
+        if (isset($_GET['code']) && !empty($_GET['code'])) {
+        // Sanitize the input to avoid potential security risks (e.g., directory traversal)
+        $verification_code = basename($_GET['code']); // Get the base name to avoid directory traversal attacks
+
+        // Define the path to save the file
+        $destination_path = "/tmp/verified_$verification_code";
+
+        // Simulate the verification process: create the file at the destination
+        if (file_put_contents($destination_path, "verified")) {
+        // Success message
+        echo "Verification successful! The verification file has been created.";
+
+        // Optionally, set a delay before deleting the verification file
+        sleep(5); // Wait for 5 seconds before deleting the file
+        
+        // Delete the verification file after the delay
+        unlink($destination_path); // Remove the file
+
+        // Inform the user that the file has been deleted
+        echo " The verification file has been deleted.";
+        } else {
+        // Failure to create the file
+        echo "Failed to create the verification file. Please try again.";
+        }
+  
+        } else {
+       // Error if no code is provided in the URL
+       echo "Invalid or missing verification code.";
+       }
+       ?>
+
+
+   ```
 
    Explanation:
    - This script checks for a `code` parameter in the URL.
