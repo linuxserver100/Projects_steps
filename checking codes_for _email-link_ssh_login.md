@@ -2315,74 +2315,101 @@ In this example, the `verify.sh` script simulates the verification process where
 
 This is a basic implementation of SSH login via email verification and ForceCommand in `sshd_config`. Depending on your environment and specific needs, you may want to refine the approach further.
 
-😗😊😗😊😙😊😄😊😄😊😃😊😃😊😄😄😊😄😊😁😊😁😊😁😄😊😄😊😄😊😄😊😚😊😚😊😄😊😄😄😊😄😊😚😊😚😊😚☺️😆☺️😆😚☺️😚☺️😙☺️😙😊😙☺️😗☺️😃😊😃😊😄😊😃😃😊😃😊😙😊😙☺️😗☺️😙☺️😗☺️😃😃☺️☺️😄☺️😃☺️😃☺️😄☺️😄☺️😄☺️😙☺️☺️😙😙☺️😙☺️😄☺️😄☺️😄☺️😃☺️😃☺️😗☺️😙☺️😗☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃😃☺️😃☺️😗☺️😗☺️😗☺️😗☺️😗☺️😗☺️😗☺️😗☺️😗☺️😃☺️😃☺️😃😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😗☺️😃☺️😃☺️😃😗To set up SSH login via email link verification, including `$SHELL` access and `ssmtp.conf`, along with `.sh` files to automate the process, you would need to follow several steps. This approach involves utilizing a custom script to generate an email link, which the user clicks to authenticate, and some modifications to the SSH configuration for proper security.
+😗😊😗😊😙😊😄😊😄😊😃😊😃😊😄😄😊😄😊😁😊😁😊😁😄😊😄😊😄😊😄😊😚😊😚😊😄😊😄😄😊😄😊😚😊😚😊😚☺️😆☺️😆😚☺️😚☺️😙☺️😙😊😙☺️😗☺️😃😊😃😊😄😊😃😃😊😃😊😙😊😙☺️😗☺️😙☺️😗☺️😃😃☺️☺️😄☺️😃☺️😃☺️😄☺️😄☺️😄☺️😙☺️☺️😙😙☺️😙☺️😄☺️😄☺️😄☺️😃☺️😃☺️😗☺️😙☺️😗☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃😃☺️😃☺️😗☺️😗☺️😗☺️😗☺️😗☺️😗☺️😗☺️😗☺️😗☺️😃☺️😃☺️😃😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😃☺️😗☺️😃☺️😃☺️😃😗
 
-Below is a step-by-step guide, including all necessary files and configurations:
+To implement a more secure and complete SSH login verification process via email link with token expiration and read/write permissions, you’ll need to enhance the script logic and the system components. Here’s an improved, secure version of the setup.
+
+### Key Features:
+1. **Token Expiration**: The token will expire after a set period (e.g., 15 minutes).
+2. **Token File Read/Write Permissions**: Tokens and other session data will be stored securely with proper file permissions.
+3. **Email with Verification Link**: The user receives a link to verify their login.
+4. **SSH Access Control**: Only after successful email verification will the user be allowed to access the shell.
+
+### Updated Setup Steps
+
+---
 
 ### 1. **Configure SSH Server (`sshd_config`)**
-Modify your `sshd_config` file to enforce the use of a custom `ForceCommand` and disable password authentication.
 
-Edit the `/etc/ssh/sshd_config`:
+First, ensure SSH is set to use the verification script by disabling password authentication and enforcing the use of the custom script.
 
 ```bash
-# Disable password authentication
+# /etc/ssh/sshd_config
+
 PasswordAuthentication no
 ChallengeResponseAuthentication yes
-
-# Force the use of the custom verification script for login
-ForceCommand /path/to/your/verify_login.sh
+ForceCommand /path/to/your/verify_login.sh  # Specify the script to handle verification
 ```
 
-This will ensure that SSH login attempts invoke the `verify_login.sh` script instead of providing shell access directly.
-
-After editing the `sshd_config` file, restart the SSH service:
+Restart the SSH service:
 
 ```bash
 sudo systemctl restart sshd
 ```
 
+---
+
 ### 2. **Create the Verification Script (`verify_login.sh`)**
-This script will handle the login verification process, send an email with a clickable link to the user, and provide `$SHELL` access after the verification is successful.
+
+The updated script will handle the creation of the token, sending the email, and waiting for verification. It also includes logic for token expiration and ensuring proper permissions for the token files.
 
 ```bash
 #!/bin/bash
 
-# Set the user's email address and generate a unique token for verification
-USER_EMAIL="user@example.com"  # Replace with the actual email address
-VERIFICATION_TOKEN=$(openssl rand -base64 32)  # Generates a unique token
-VERIFICATION_URL="https://yourdomain.com/verify?token=$VERIFICATION_TOKEN"  # Replace with your actual verification URL
+# Set the user's email address
+USER_EMAIL="user@example.com"  # Replace with the actual user's email address
+EXPIRATION_TIME=900  # Token expiration time in seconds (15 minutes)
+TOKEN_FILE="/tmp/verification_token.txt"
+VERIFIED_FILE="/tmp/verification_complete.txt"
+CURRENT_TIME=$(date +%s)
 
-# Store the token temporarily (e.g., in a file or database)
-echo $VERIFICATION_TOKEN > /tmp/verification_token.txt
+# Generate a unique token
+VERIFICATION_TOKEN=$(openssl rand -base64 32)
 
-# Send the email with the verification link using ssmtp
+# Generate a verification URL with the token
+VERIFICATION_URL="https://yourdomain.com/verify.php?token=$VERIFICATION_TOKEN"
+
+# Store the token with expiration timestamp
+echo "$VERIFICATION_TOKEN $CURRENT_TIME" > $TOKEN_FILE
+
+# Ensure the token file has proper read/write permissions
+chmod 600 $TOKEN_FILE
+
+# Send the email with the verification link
 echo -e "Subject: SSH Login Verification\n\nClick the following link to complete your SSH login: $VERIFICATION_URL" | ssmtp $USER_EMAIL
 
-# Prompt the user to wait for email verification
+# Notify user to check email
 echo "A verification link has been sent to $USER_EMAIL. Please check your inbox and click the link to complete the login process."
 
-# Wait for the user to click the verification link (you can check for token verification here)
-# This part can be more sophisticated based on your server setup
-while [ ! -f /tmp/verification_complete.txt ]; do
+# Wait for the user to click the link and verify
+while [ ! -f $VERIFIED_FILE ]; do
+    # Check for expiration
+    TOKEN_TIMESTAMP=$(awk '{print $2}' $TOKEN_FILE)
+    if [ $((CURRENT_TIME - TOKEN_TIMESTAMP)) -ge $EXPIRATION_TIME ]; then
+        echo "Verification token expired. Please request a new login link."
+        exit 1
+    fi
     sleep 5
 done
 
-# If verification is successful, grant access
+# If verification is successful, grant shell access
 echo "Verification successful. Granting access to $USER_EMAIL."
-exec /bin/bash  # Allow access to the shell after verification
-
+exec /bin/bash
 ```
 
-Make sure the script is executable:
+Ensure the script is executable:
 
 ```bash
 chmod +x /path/to/your/verify_login.sh
 ```
 
-### 3. **Configure the `ssmtp.conf` for Sending Emails**
-You'll need a working `ssmtp` configuration to send emails from your server. Edit `/etc/ssmtp/ssmtp.conf` to configure your email sending.
+---
 
-Example configuration:
+### 3. **Configure `ssmtp.conf` for Email Sending**
+
+Ensure `ssmtp` is installed and configured to send emails.
+
+Example `/etc/ssmtp/ssmtp.conf`:
 
 ```bash
 # /etc/ssmtp/ssmtp.conf
@@ -2394,48 +2421,109 @@ FromLineOverride=YES
 UseSTARTTLS=YES
 ```
 
-Ensure that the `ssmtp` service is installed:
+Install `ssmtp` if not already installed:
 
 ```bash
 sudo apt-get install ssmtp
 ```
 
-### 4. **Create a Web Verification Endpoint**
-For the clickable link in the email to work, you'll need a web server that can handle the token verification. This could be done with a simple PHP script or a custom web application.
+---
 
-Example PHP script (`verify.php`):
+### 4. **Create the Web Verification Endpoint**
+
+You need a web server to handle the token verification. This can be done with a simple PHP script that verifies the token and marks it as verified.
+
+**PHP Script (`verify.php`)**:
 
 ```php
 <?php
 $token = $_GET['token'];  // Get token from URL
 
-// Validate the token (check if it matches the one sent via email)
-$stored_token = file_get_contents("/tmp/verification_token.txt");  // Read the stored token
+$token_file = '/tmp/verification_token.txt';
+$verified_file = '/tmp/verification_complete.txt';
 
-if ($token == $stored_token) {
-    // Mark the verification as successful
-    file_put_contents("/tmp/verification_complete.txt", "verified");
+// Read the stored token and timestamp
+$stored_token = file_get_contents($token_file);
+list($stored_token_value, $timestamp) = explode(" ", $stored_token);
 
-    // Redirect the user to a success page or return a response
-    echo "Verification successful! You can now return to your SSH session.";
+$current_time = time();
+$token_expiry = 900;  // Token expiry time in seconds (15 minutes)
+
+if ($token == $stored_token_value) {
+    // Check if the token is expired
+    if (($current_time - $timestamp) > $token_expiry) {
+        echo "The verification link has expired. Please request a new link.";
+    } else {
+        // Mark the verification as complete
+        file_put_contents($verified_file, "verified");
+
+        echo "Verification successful! You can now return to your SSH session.";
+    }
 } else {
     echo "Invalid verification link.";
 }
 ?>
 ```
 
-### 5. **Setup Browser Access and Final Flow**
-Ensure the browser server is accessible via `https://yourdomain.com/verify.php`. The user clicks on the email link to complete the verification.
+Ensure that the PHP script is served via HTTPS and that the web server has access to the `/tmp/verification_token.txt` file.
 
-- After verification, the script marks the process as complete by creating the `/tmp/verification_complete.txt` file, which the SSH verification script (`verify_login.sh`) checks to allow the user access to the shell.
-- Upon successful verification, the user is granted access to `$SHELL` through the `exec /bin/bash` command in the `verify_login.sh`.
+---
 
-### 6. **Final Notes**
-- Ensure your server can send and receive email using `ssmtp` properly configured.
-- Set up a secure HTTPS server for handling the verification link.
-- The verification process can be extended with token expiration or more advanced security checks.
+### 5. **Permissions and Expiry Logic**
+
+- **Permissions**: The `/tmp/verification_token.txt` file should have proper read/write permissions for the verification script to write the token and read it during the verification process.
   
-This setup should provide SSH login via email verification, shell access, and a seamless experience for the user, using the provided scripts and configurations.
+- **Expiration Logic**: The script stores both the token and the timestamp when it was generated. If more than 15 minutes pass before the user verifies, the token expires, and they are prompted to request a new one.
+
+- **Token Verification**: Once the user clicks the link, the PHP script checks if the token matches the one stored on the server and whether it’s expired. If the token is valid, it creates a `verification_complete.txt` file that lets the SSH script know the user is authorized.
+
+---
+
+### 6. **Web Server Setup for HTTPS (Optional)**
+
+Ensure your verification endpoint is available over HTTPS. Use Let's Encrypt or another SSL provider to secure your server. Example with `nginx`:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+
+    root /var/www/html;
+    index index.php;
+
+    location /verify.php {
+        fastcgi_pass 127.0.0.1:9000;  # PHP-FPM setup
+        fastcgi_param SCRIPT_FILENAME /var/www/html/verify.php;
+        include fastcgi_params;
+    }
+}
+```
+
+Ensure the `nginx` or Apache web server is properly configured to serve your `verify.php` file securely.
+
+---
+
+### 7. **Testing**
+
+1. After setting up everything, test the flow:
+    - Attempt an SSH login.
+    - Receive the verification email with the link.
+    - Click the link to verify and return to the SSH session.
+    - After successful verification, the user is granted access to the shell.
+
+2. If the verification link expires (after 15 minutes), the user will need to request a new verification link.
+
+---
+
+### 8. **Final Notes**
+- **Security**: Always secure the web server with HTTPS, especially when handling sensitive login tokens.
+- **Session Management**: The verification token expiration should be enforced on both the web server and SSH verification scripts.
+- **Email Provider**: Ensure your email provider allows sending emails via `ssmtp`. You may want to use services like SendGrid, Amazon SES, or Gmail with OAuth for better security.
+
+This setup allows for a secure, token-based SSH login verification process that ensures the user’s identity via an email link with token expiration and proper file permissions.
 
 😃🥲😗😙🥲😙🥹😄🥹😄🥹😁🥹😁😄🥹😄😄🥹😁🥹😁🥹😚🥹😚🥹😄🥹😄🥹😄🥹😄🥹😄🥹😁🥹😁🥹😁🥹😁🥹😄🥹😄🥹😄🥹😁🥹😁🥹😁🥹😁🥹😁🥹🥹😁😁🥹😁🥹😁🥹😁🥹😁🥹😄🥹😄😄🥹😁🥹😁🥹😁🥹😁🥹😁🥹😁🥹😁🥹😁🥹😄🥹😄🥹😄🥹😄🥹😄😄🥹😄🥹😄🥹😄🥹😄🥹😄🥹😄🥹😄🥹😄🥹😄🥹😄🥹😄🥹😄🥹😄🥹🥹😄😄🥹🥹😄🥹😄😄🥹🥹😄😁🥹😁🥹😄🥹😁🥹😁
 To configure SSH login via email link click verification (two-factor authentication via a link sent to an email), incorporating `$SHELL` access, `ssmtp.conf`, and `.sh` files (for scripts), and forcing the command with `ForceCommand` and browser, we need to address multiple aspects.
