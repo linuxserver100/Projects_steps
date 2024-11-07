@@ -3931,5 +3931,165 @@ However, it's important to note that SSH generally doesn't natively support "ema
 By following these steps, you'll implement a form of "email link click" authentication for SSH access on Ubuntu, using token-based authentication and a forced command.
 
 
+😗😊😙😊😚☺️😁☺️😁☺️😘😘😳😂🥹🥱🤩🥹😶😄🥱😃🥱😗🥹😤😊😤🥹😗😤😙😤🥹😗😤😊😙😤😊😙😤😊😙😠😙🙁😊😙😜😚😯😟💩😵‍💫😟😵‍💫😟😵‍💫😧🙂🙁😶🙂🙁😶🙂☹️🙁😶🙃🫨😤🥺🤕🥱😬😷🙁🫢🤡😷😠🫢🤕🤕😠😒🤕🤕😠🤫😷🙁🤫💤💤❣️❣️🙀🌞🙀🌞❣️🙀🌞👣❣️💦🌝👣💦🌝❣️😿🌞❣️🌞💤❣️💤🌞👣
+To implement this setup using `.sh` files, a clickable link for verification, and a post-login token validation, here’s an approach that integrates everything into a streamlined process:
+
+### Step-by-Step Setup
+
+### 1. **Install and Configure `ssmtp`**
+
+Install and configure `ssmtp` to enable email sending on the server, following the steps provided previously. This setup will allow us to send an email with a clickable verification link containing the token.
+
+### 2. **Generate Token and Send Email with Verification Link**
+
+The `send_token.sh` script will generate a token, store it, and send an email with a clickable verification link. Place this file in `/var/www/html/` for easy access.
+
+#### Example Script (`/var/www/html/send_token.sh`):
+
+```bash
+#!/bin/bash
+
+# Generate a unique token and store it in /tmp
+TOKEN=$(uuidgen)
+echo "$TOKEN" > /tmp/token.txt
+
+# Define the verification link
+VERIFICATION_URL="http://your-server-ip/verify_token.sh?token=$TOKEN"
+
+# Email subject and body with the clickable verification link
+SUBJECT="Your Login Token"
+BODY="Click the following link to verify your login: $VERIFICATION_URL"
+
+# Send the email
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
+```
+
+Make the script executable:
+
+```bash
+chmod +x /var/www/html/send_token.sh
+```
+
+This script will generate a token, store it in `/tmp/token.txt`, and send an email with a clickable link to the verification endpoint.
+
+### 3. **SSH Configuration (Allow Login, Require Token Post-Login)**
+
+Modify the SSH configuration to allow login but force users to run a verification script upon login.
+
+#### SSH Configuration (`/etc/ssh/sshd_config`):
+
+Edit the SSH configuration file:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add or modify these lines:
+
+```plaintext
+# ForceCommand to run a token validation script after login
+ForceCommand /usr/local/bin/validate_token.sh
+
+# Allow only specific users to log in
+AllowUsers youruser
+
+# Optionally, restrict SSH access to certain IP addresses
+# ListenAddress 0.0.0.0
+```
+
+This will make SSH run `validate_token.sh` for verification as soon as the user logs in.
+
+### 4. **Create Token Validation Script (`validate_token.sh`)**
+
+Now, create a script that will be triggered upon SSH login to check if the user has verified their token by clicking the link.
+
+#### Example Script (`/usr/local/bin/validate_token.sh`):
+
+```bash
+#!/bin/bash
+
+# Check if the token has been verified
+if [[ -f /tmp/token_verified ]]; then
+    # Token is verified, grant shell access
+    echo "Token verified. Access granted."
+    exec $SHELL
+else
+    # Token is not verified, deny access
+    echo "Token not verified. Please click the verification link sent to your email."
+    exit 1
+fi
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/validate_token.sh
+```
+
+This script checks for the presence of `/tmp/token_verified`, which will only exist if the user has clicked the verification link.
+
+### 5. **Create Verification Script (`verify_token.sh`) for the Link**
+
+To handle the verification link click, create a script accessible via the web server. This script will validate the token passed as a query parameter and create a marker file (`/tmp/token_verified`) upon successful verification.
+
+#### Example Script (`/var/www/html/verify_token.sh`):
+
+```bash
+#!/bin/bash
+
+# Extract the token from the query string
+QUERY_STRING=$(echo "$1" | sed 's/token=//')
+USER_TOKEN=$QUERY_STRING
+
+# Check if the token matches
+if [[ "$USER_TOKEN" == "$(cat /tmp/token.txt)" ]]; then
+    # Create a marker file to indicate successful verification
+    touch /tmp/token_verified
+    echo "Token verified successfully. You can now log in via SSH."
+else
+    echo "Invalid token. Access denied."
+fi
+```
+
+Ensure it’s executable:
+
+```bash
+chmod +x /var/www/html/verify_token.sh
+```
+
+This script checks the token passed in the URL. If it matches the stored token, it creates `/tmp/token_verified`.
+
+### 6. **Testing the Process**
+
+1. **Run `send_token.sh`**:
+   Execute the token generation and email script:
+
+   ```bash
+   /var/www/html/send_token.sh
+   ```
+
+2. **Click the Verification Link**:
+   Open your email and click the link. This should run `verify_token.sh`, setting the marker file if the token matches.
+
+3. **SSH into the Server**:
+   Log in via SSH:
+
+   ```bash
+   ssh youruser@your-server-ip
+   ```
+
+   If the token has been verified, the `validate_token.sh` script will detect `/tmp/token_verified` and grant access.
+
+### 7. **Optional Enhancements**
+
+- **Token Expiry**: You can add a check in `verify_token.sh` or `validate_token.sh` to enforce token expiration by comparing timestamps.
+- **Secure Token Storage**: `/tmp` works for short-term storage, but consider a secure, persistent storage location if higher security is needed.
+- **Remove Marker After Login**: Add logic to delete `/tmp/token_verified` after a successful login to avoid repeated access without re-verification.
+
+### Final Notes
+
+This process allows login without blocking SSH access but requires the user to click an emailed verification link to gain full access. This setup is flexible and integrates clickable link verification into the token-based system. Be sure to test thoroughly before using this in a production environment.
+
+
 
 
