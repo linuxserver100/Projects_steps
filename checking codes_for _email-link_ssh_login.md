@@ -4140,7 +4140,7 @@ This script generates a token, sets the expiry time, and sends an email with the
 #### **Create and edit `send_token.sh`**
 
 ```bash
-sudo nano /var/www/html/send_token.sh
+sudo nano /usr/local/bin/send_token.sh
 ```
 
 Add the following content:
@@ -4172,7 +4172,7 @@ echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
 Make the script executable:
 
 ```bash
-chmod +x /var/www/html/send_token.sh
+chmod +x /usr/local/bin/send_token.sh
 ```
 
 ---
@@ -4294,6 +4294,7 @@ Add the following line:
 
 ```plaintext
 ForceCommand /usr/local/bin/validate_token.sh
+ForceCommand/usr/local/bin/send_token.sh
 ```
 
 This forces SSH to run `validate_token.sh` instead of the normal shell, ensuring the token validation process is followed.
@@ -4306,7 +4307,7 @@ sudo systemctl restart sshd
 
 ---
 
-### 7. Test the Setup
+### 7. Test the Setup (this is to be handeled when the send_token is setup in /var/www/html/file to action via browser)
 
 1. **Generate and Send Token**:
    Run the `send_token.sh` script to generate a token and send the verification email.
