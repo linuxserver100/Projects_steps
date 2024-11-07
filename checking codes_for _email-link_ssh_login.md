@@ -3031,9 +3031,9 @@ You can set up a web server to handle the verification. Here’s an example PHP 
 
 ```php
 
-    <?php
+     <?php
 // Retrieve the verification code from the URL (GET parameter)
-$code = isset($_GET['code']) ? $_GET['code'] : '';
+$code = isset($_GET['code']) ? basename($_GET['code']) : '';  // Ensure the code is a safe filename
 
 // Ensure that the code parameter is provided
 if (empty($code)) {
