@@ -4090,6 +4090,261 @@ This script checks the token passed in the URL. If it matches the stored token, 
 
 This process allows login without blocking SSH access but requires the user to click an emailed verification link to gain full access. This setup is flexible and integrates clickable link verification into the token-based system. Be sure to test thoroughly before using this in a production environment.
 
+😊😗😗☺️😄☺️😚☺️😚☺️☺️😘😘😌🥰😌🥰😌🥰😌🥰😌🥰🥰😌😘😌😁😌😁😌😆😌😆😌😆😌😅🙂‍↕️😆🙂‍↕️🙂‍↕️😁🙂‍↕️😚🙂‍↕️😘🙂‍↕️😘🙂‍↕️😘🙂‍↕️😘🙂‍↕️🥰🙂‍↕️🥰🙂‍↕️🥰🙂‍↕️😊🙂‍↕️😘😅🙂‍↕️😅🙂‍↕️😁🙂‍↕️😁🙂‍↕️😚🙂‍↕️😚😌🥲😌😙😌😃😌😄😌😙😌🙂😙😌😌😙😙😌😄😌😄😌😄😌😄😌😄😌😙😌😙😙😌😙😌😚😌😚😌😚😌😚😌😁😁😌😁😌😚😌😘😌😘😌😘😌😘😌😚😌😚😚😌😚😌😌🙂‍↕️🙂‍↕️🙂‍↕️🙂‍↕️🙂‍↕️😌😌😌To fully implement the solution with `ssmtp.conf` and `.sh` scripts, here's a comprehensive guide with all necessary configurations, including token expiration, validation, and automatic cleanup.
+
+### Step-by-Step Setup with Expiring Tokens and `ssmtp` Configuration
+
+---
+
+### 1. Install and Configure `ssmtp`
+
+`ssmtp` is used to send email from your server. Follow these steps to install and configure it:
+
+#### **Install `ssmtp`**
+On Ubuntu or Debian-based systems, run:
+
+```bash
+sudo apt update
+sudo apt install ssmtp
+```
+
+#### **Configure `ssmtp` in `/etc/ssmtp/ssmtp.conf`**
+
+Open the `ssmtp.conf` file to configure email settings:
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+Add the following configuration:
+
+```plaintext
+root=your-email@example.com
+mailhub=smtp.your-email-provider.com:587
+AuthUser=your-email@example.com
+AuthPass=your-email-password
+FromLineOverride=YES
+UseSTARTTLS=YES
+```
+
+- Replace `your-email@example.com` with your actual email address.
+- Replace `smtp.your-email-provider.com:587` with the SMTP server and port for your email provider (e.g., `smtp.gmail.com:587` for Gmail).
+- Replace `your-email-password` with your email account password or an app-specific password (for Gmail).
+
+---
+
+### 2. Create the `send_token.sh` Script with Expiry Time
+
+This script generates a token, sets the expiry time, and sends an email with the verification link.
+
+#### **Create and edit `send_token.sh`**
+
+```bash
+sudo nano /var/www/html/send_token.sh
+```
+
+Add the following content:
+
+```bash
+#!/bin/bash
+
+# Generate a unique token
+TOKEN=$(uuidgen)
+
+# Set an expiry time of 5 minutes from now
+EXPIRY=$(date -d "+5 minutes" +%s)
+echo "$TOKEN:$EXPIRY" > /tmp/token.txt
+
+# Define the verification link
+VERIFICATION_URL="http://your-server-ip/verify_token.sh?token=$TOKEN"
+
+# Email subject and body with clickable verification link
+SUBJECT="Your Login Token"
+BODY="Click the following link to verify your login (link expires in 5 minutes): $VERIFICATION_URL"
+
+# Send the email
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
+```
+
+- Replace `recipient@example.com` with the recipient's email address.
+- Replace `your-server-ip` with your server's IP address or domain name.
+
+Make the script executable:
+
+```bash
+chmod +x /var/www/html/send_token.sh
+```
+
+---
+
+### 3. Create the `validate_token.sh` Script
+
+This script checks if the token has been verified before granting SSH access.
+
+#### **Create and edit `validate_token.sh`**
+
+```bash
+sudo nano /usr/local/bin/validate_token.sh
+```
+
+Add the following content:
+
+```bash
+#!/bin/bash
+
+# Check if the token has been verified
+if [[ -f /tmp/token_verified ]]; then
+    # Token is verified, grant shell access and remove marker
+    echo "Token verified. Access granted."
+    rm /tmp/token_verified
+    exec $SHELL
+else
+    # Token is not verified, deny access
+    echo "Token not verified. Please click the verification link sent to your email."
+    exit 1
+fi
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/validate_token.sh
+```
+
+---
+
+### 4. Create the `verify_token.sh` Script to Check Expiry
+
+This script checks if the token is valid and has not expired.
+
+#### **Create and edit `verify_token.sh`**
+
+```bash
+sudo nano /var/www/html/verify_token.sh
+```
+
+Add the following content:
+
+```bash
+#!/bin/bash
+
+# Extract token from query string
+QUERY_STRING=$(echo "$1" | sed 's/token=//')
+USER_TOKEN=$QUERY_STRING
+
+# Check if the token exists and has not expired
+TOKEN_FILE="/tmp/token.txt"
+if [[ -f "$TOKEN_FILE" ]]; then
+    # Read token and expiry time from file
+    SAVED_TOKEN=$(cut -d ':' -f1 "$TOKEN_FILE")
+    EXPIRY_TIME=$(cut -d ':' -f2 "$TOKEN_FILE")
+    
+    CURRENT_TIME=$(date +%s)
+    
+    # Validate token and expiry time
+    if [[ "$USER_TOKEN" == "$SAVED_TOKEN" && "$CURRENT_TIME" -lt "$EXPIRY_TIME" ]]; then
+        # Create a marker file to indicate successful verification
+        touch /tmp/token_verified
+        echo "Token verified successfully. You can now log in via SSH."
+    else
+        echo "Invalid or expired token. Access denied."
+    fi
+else
+    echo "Token not found. Access denied."
+fi
+```
+
+Make the script executable:
+
+```bash
+chmod +x /var/www/html/verify_token.sh
+```
+
+---
+
+### 5. Create a Cron Job to Clean Up Expired Tokens
+
+This cron job will check for expired tokens and delete them automatically.
+
+#### **Edit the crontab**
+
+```bash
+sudo crontab -e
+```
+
+Add the following line to delete expired tokens:
+
+```plaintext
+* * * * * /bin/bash -c '[[ $(date +%s) -gt $(cut -d ":" -f2 /tmp/token.txt 2>/dev/null || echo 0) ]] && rm -f /tmp/token.txt'
+```
+
+---
+
+### 6. SSH Configuration to Use Forced Command
+
+To force the execution of `validate_token.sh` upon SSH login, modify the SSH server configuration.
+
+#### **Edit `/etc/ssh/sshd_config`**
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add the following line:
+
+```plaintext
+ForceCommand /usr/local/bin/validate_token.sh
+```
+
+This forces SSH to run `validate_token.sh` instead of the normal shell, ensuring the token validation process is followed.
+
+#### **Restart the SSH service**
+
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
+### 7. Test the Setup
+
+1. **Generate and Send Token**:
+   Run the `send_token.sh` script to generate a token and send the verification email.
+
+   ```bash
+   /var/www/html/send_token.sh
+   ```
+
+2. **Check Email for Token**:
+   The email will contain a verification link. Click the link within 5 minutes.
+
+3. **Token Verification**:
+   The `verify_token.sh` script will check the token and create the `token_verified` file if valid.
+
+4. **SSH Login**:
+   Attempt to log in via SSH:
+
+   ```bash
+   ssh youruser@your-server-ip
+   ```
+
+   - If the token is verified, you’ll see “Token verified. Access granted.”
+   - If the token is expired or not verified, the login will fail with the message: "Token not verified. Please click the verification link sent to your email."
+
+---
+
+### Summary of the Solution
+
+1. **`send_token.sh`**: Generates a token, sets an expiry time, and sends an email with a verification link.
+2. **`validate_token.sh`**: Verifies if the token has been validated before granting SSH access.
+3. **`verify_token.sh`**: Checks if the token is valid and not expired, then creates a marker file.
+4. **Cron Job**: Automatically deletes expired tokens every minute.
+5. **SSH Forced Command**: Ensures SSH access is only granted after token verification.
+
+This solution ensures secure token-based authentication for SSH logins, with tokens that expire automatically after a set time.
+
+
+
 
 
 
