@@ -2528,6 +2528,58 @@ Next, you need a PHP script that handles the verification process when the user 
 
    ```
 
+   use above file with sudo access in php
+
+```php
+
+    <?php
+// Check if a code is provided in the URL
+if (isset($_GET['code']) && !empty($_GET['code'])) {
+    // Sanitize the input to avoid potential security risks (e.g., directory traversal)
+    $verification_code = basename($_GET['code']); // Get the base name to avoid directory traversal attacks
+
+    // Define the path to save the file
+    $destination_path = "/tmp/verified_$verification_code";
+
+    // Command to create the file with sudo
+    $create_command = "echo 'verified' | sudo tee $destination_path > /dev/null";
+
+    // Execute the command with sudo
+    $create_result = shell_exec($create_command);
+
+    // Check if the file was successfully created
+    if ($create_result !== null) {
+        // Success message
+        echo "Verification successful! The verification file has been created.";
+
+        // Optionally, set a delay before deleting the verification file
+        sleep(5); // Wait for 5 seconds before deleting the file
+
+        // Command to delete the file with sudo
+        $delete_command = "sudo rm -f $destination_path";
+
+        // Execute the delete command
+        shell_exec($delete_command);
+
+        // Inform the user that the file has been deleted
+        echo " The verification file has been deleted.";
+    } else {
+        // Failure to create the file
+        echo "Failed to create the verification file. Please try again.";
+    }
+} else {
+    // Error if no code is provided in the URL
+    echo "Invalid or missing verification code.";
+}
+?>
+
+
+
+```
+
+
+sudo permissions: The web server user (e.g., www-data on Apache) must be granted permission to execute the commands with sudo without requiring a password. You can set this up by modifying the sudoers file (via visudo), but this should be done with extreme caution. For example, adding a line like this:
+
    Explanation:
    - This script checks for a `code` parameter in the URL.
    - If the code is present and valid, it creates a temporary file (`/tmp/verified_<code>`) that the SSH login script (`verification.sh`) will check to proceed with shell access.
@@ -2535,6 +2587,9 @@ Next, you need a PHP script that handles the verification process when the user 
 4. **Configure Web Server**:
    Make sure the `Apache` web server is running and accessible via `https://yourdomain.com/verify.php`.
 
+```php
+www-data ALL=(ALL) NOPASSWD: /bin/tee, /bin/rm
+```
 ---
 
 ### Step 5: Ensure the Full Flow Works
