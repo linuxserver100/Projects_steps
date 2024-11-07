@@ -2964,7 +2964,7 @@ sudo nano /path/to/verify-login.sh
 Here’s an example script that will generate a verification link and send it via email:
 
 ```bash
-#!/bin/bash
+   #!/bin/bash
 
 # Get the username of the person attempting to log in
 USERNAME=$(whoami)
@@ -2972,14 +2972,17 @@ USERNAME=$(whoami)
 # Get the user's email address (from the system password entry)
 EMAIL=$(getent passwd $USERNAME | cut -d: -f5)
 
-# Generate a random verification code
+# Generate a random verification code (UUID)
 VERIFICATION_CODE=$(uuidgen)
 
-# Save the verification code in a temporary file (or a more secure location)
-echo $VERIFICATION_CODE > /tmp/verification_code_$USERNAME
+# Define a secure temporary file for the verification code
+VERIFICATION_FILE="/tmp/verification_code_${USERNAME}_$VERIFICATION_CODE"
+
+# Save the verification code in the temporary file
+echo $VERIFICATION_CODE > $VERIFICATION_FILE
 
 # Create a URL that the user will click to verify their login
-VERIFICATION_LINK="http://your-server.com/verify?code=$VERIFICATION_CODE"
+VERIFICATION_LINK="http://your-server.com/verify.php?code=$VERIFICATION_CODE"
 
 # Send the verification email with the link
 echo -e "Subject: SSH Login Verification\n\nHello $USERNAME,\n\nPlease click the following link to verify your SSH login: $VERIFICATION_LINK" | ssmtp $EMAIL
@@ -2989,6 +2992,8 @@ echo "A verification link has been sent to your email address. Please click the 
 
 # End the session until the user clicks the link
 exit 1
+
+
 ```
 
 - Replace `/path/to/verify-login.sh` with the actual path to the script.
@@ -3023,22 +3028,35 @@ You can set up a web server to handle the verification. Here’s an example PHP 
 ##### Example PHP Verification Script (`verify.php`):
 
 ```php
-<?php
-// Retrieve the verification code from the URL
-$code = $_GET['code'];
 
-// Path to the verification code file (you could use a database instead)
+   <?php
+// Retrieve the verification code from the URL (GET parameter)
+$code = isset($_GET['code']) ? $_GET['code'] : '';
+
+// Ensure that the code parameter is provided
+if (empty($code)) {
+    echo "No verification code provided.";
+    exit;
+}
+
+// Path to the verification code file (matching the naming convention used in the Bash script)
 $verification_file = "/tmp/verification_code_" . $code;
 
 // Check if the file exists and validate the code
 if (file_exists($verification_file)) {
+    // Validation success
     echo "SSH login verified successfully.";
-    // Optionally, mark the user as verified (e.g., by deleting the file)
+
+    // Optionally, you could log the user in here or set a session
+    // For now, we simply remove the verification file
     unlink($verification_file);
 } else {
+    // Invalid or expired verification code
     echo "Invalid or expired verification code.";
 }
 ?>
+
+
 ```
 
 #### 4.2 Web Server Configuration
