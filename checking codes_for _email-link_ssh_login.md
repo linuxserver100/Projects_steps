@@ -3801,6 +3801,135 @@ sudo systemctl restart apache2
 This method is highly customized and involves combining several components, including PHP for token management, `ssmtp` for email, and SSH configurations. However, keep in mind that this isn't the most secure or efficient way to handle SSH access compared to traditional key-based or password authentication.
 
 
+😗😊😃😊😄😊😄😄😊😄☺️☺️😙☺️☺️😄☺️😄😄☺️😄☺️😄😍😄😍😁😍😄😍😄😄😂😁😂😚😍😚☺️🥲☺️🥲😌🥹😌😘😘😌🥰😌🥰😌🥰😌😘😌😘😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😘😌😘😌😘😌😘😌😘😌😘😌😘😌🥰😌🥰😌🥰😌🥰😌🥰😌😘😌😘😌😘😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌😘😌🥰😌🥰🙂‍↕️🥰🙂‍↕️🥰🙂‍↕️🥰🙂‍↕️🥰🥰🙂‍↕️🥰🙂‍↕️🥰😌🥰😌🥰😌😘😌😘😌😘😌😘😌😘😘😌😘😌😘
+
+To configure SSH login on an Ubuntu server using an email link click authentication method combined with a fixed token authentication file, and enforce the use of `$SHELL` with `ForceCommand`, you'll need to integrate several components, including email handling, token-based authentication, and SSH server configuration.
+
+However, it's important to note that SSH generally doesn't natively support "email link click" authentication, but we can simulate this flow using a two-step process involving token-based access. Here’s how you can configure it:
+
+### Steps:
+
+#### 1. **Install and Configure `ssmtp` (or `msmtp`) for Email Sending**
+   First, install `ssmtp` or `msmtp` to send an email with a token link.
+
+   ```bash
+   sudo apt update
+   sudo apt install ssmtp
+   ```
+
+   **Configure `ssmtp`:**  
+   Edit `/etc/ssmtp/ssmtp.conf` to set up an SMTP server for sending emails.
+
+   Example `ssmtp.conf` (adjust according to your mail provider):
+
+   ```ini
+   root=postmaster
+   mailhub=smtp.gmail.com:587
+   AuthUser=your-email@gmail.com
+   AuthPass=your-email-password
+   UseTLS=YES
+   UseSTARTTLS=YES
+   FromLineOverride=YES
+   ```
+
+   If using Gmail or a similar service, you might need to allow "less secure apps" or use an App Password for authentication.
+
+#### 2. **Create a Token-based Authentication System**
+   To simulate "email link click" authentication, you’ll need to generate a temporary token and email it to the user. When the user clicks the link, the token should be verified against a server-side file (e.g., `/etc/ssh-token`).
+
+   Example:
+
+   1. **Generate a unique token (e.g., UUID)** for the user.
+
+      ```bash
+      TOKEN=$(uuidgen)
+      echo $TOKEN > /etc/ssh-token
+      ```
+
+   2. **Send the token via email:**
+
+      Create a script to send an email to the user with a link that includes the token.
+
+      Example script (`send-token.sh`):
+
+      ```bash
+      #!/bin/bash
+
+      TO=$1
+      TOKEN=$(cat /etc/ssh-token)
+      URL="https://your-server.com/validate_token?token=$TOKEN"
+
+      SUBJECT="SSH Login Token"
+      BODY="Click the link to authenticate: $URL"
+
+      echo -e "Subject:$SUBJECT\n\n$BODY" | ssmtp $TO
+      ```
+
+   To send the token, run:
+
+   ```bash
+   ./send-token.sh user@example.com
+   ```
+
+#### 3. **Create Token Validation Mechanism**
+   The user clicks the link, which should hit a server-side script that verifies the token and updates an `authorized_tokens` file.
+
+   Example in `validate_token.sh`:
+
+   ```bash
+   #!/bin/bash
+
+   RECEIVED_TOKEN=$1
+   VALID_TOKEN=$(cat /etc/ssh-token)
+
+   if [ "$RECEIVED_TOKEN" == "$VALID_TOKEN" ]; then
+       echo "Token is valid. Access granted."
+       echo "user" >> /etc/ssh-authorized-users
+   else
+       echo "Invalid token!"
+   fi
+   ```
+
+   **Note:** This is a simplified example; in practice, you should implement proper web server logic, SSL encryption, and secure token storage.
+
+#### 4. **Configure SSH Server to Force Command and Token Authentication**
+   Now, configure the SSH server to enforce the token-based authentication and use a forced command for shell access.
+
+   Edit `/etc/ssh/sshd_config`:
+
+   ```bash
+   # Disable normal password authentication
+   PasswordAuthentication no
+
+   # Only allow users who have an "authorized token"
+   Match User *
+       ForceCommand /usr/local/bin/validate-ssh-token.sh
+   ```
+
+   Create a script `/usr/local/bin/validate-ssh-token.sh` that checks if the user is authorized based on the token stored in `/etc/ssh-authorized-users`:
+
+   ```bash
+   #!/bin/bash
+   if grep -q "$USER" /etc/ssh-authorized-users; then
+       exec $SHELL
+   else
+       echo "Access denied"
+       exit 1
+   fi
+   ```
+
+#### 5. **Test the Authentication**
+   1. Generate a token and send the link.
+   2. The user clicks the link, which verifies the token.
+   3. If valid, the user's SSH access is allowed.
+
+#### Additional Considerations:
+- **Security**: Email-based authentication has inherent security risks (e.g., interception of email). Consider using more secure methods like multi-factor authentication (MFA) or hardware keys.
+- **Expiry Time**: Tokens should have an expiration time and be deleted once used, to prevent reuse.
+- **Web Server**: You would need a web server (like Apache or Nginx) to handle the token validation process properly.
+
+By following these steps, you'll implement a form of "email link click" authentication for SSH access on Ubuntu, using token-based authentication and a forced command.
+
 
 
 
