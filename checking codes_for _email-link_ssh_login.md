@@ -4090,261 +4090,216 @@ This script checks the token passed in the URL. If it matches the stored token, 
 
 This process allows login without blocking SSH access but requires the user to click an emailed verification link to gain full access. This setup is flexible and integrates clickable link verification into the token-based system. Be sure to test thoroughly before using this in a production environment.
 
-😊😗😗☺️😄☺️😚☺️😚☺️☺️😘😘😌🥰😌🥰😌🥰😌🥰😌🥰🥰😌😘😌😁😌😁😌😆😌😆😌😆😌😅🙂‍↕️😆🙂‍↕️🙂‍↕️😁🙂‍↕️😚🙂‍↕️😘🙂‍↕️😘🙂‍↕️😘🙂‍↕️😘🙂‍↕️🥰🙂‍↕️🥰🙂‍↕️🥰🙂‍↕️😊🙂‍↕️😘😅🙂‍↕️😅🙂‍↕️😁🙂‍↕️😁🙂‍↕️😚🙂‍↕️😚😌🥲😌😙😌😃😌😄😌😙😌🙂😙😌😌😙😙😌😄😌😄😌😄😌😄😌😄😌😙😌😙😙😌😙😌😚😌😚😌😚😌😚😌😁😁😌😁😌😚😌😘😌😘😌😘😌😘😌😚😌😚😚😌😚😌😌🙂‍↕️🙂‍↕️🙂‍↕️🙂‍↕️🙂‍↕️😌😌😌To fully implement the solution with `ssmtp.conf` and `.sh` scripts, here's a comprehensive guide with all necessary configurations, including token expiration, validation, and automatic cleanup.
+😊😗😗☺️😄☺️😚☺️😚☺️☺️😘😘😌🥰😌🥰😌🥰😌🥰😌🥰🥰😌😘😌😁😌😁😌😆😌😆😌😆😌😅🙂‍↕️😆🙂‍↕️🙂‍↕️😁🙂‍↕️😚🙂‍↕️😘🙂‍↕️😘🙂‍↕️😘🙂‍↕️😘🙂‍↕️🥰🙂‍↕️🥰🙂‍↕️🥰🙂‍↕️😊🙂‍↕️😘😅🙂‍↕️😅🙂‍↕️😁🙂‍↕️😁🙂‍↕️😚🙂‍↕️😚😌🥲😌😙😌😃😌😄😌😙😌🙂😙😌😌😙😙😌😄😌😄😌😄😌😄😌😄😌😙😌😙😙😌😙😌😚😌😚😌😚😌😚😌😁😁😌😁😌😚😌😘😌😘😌😘😌😘😌😚😌😚😚😌😚😌😌🙂‍↕️🙂‍↕️🙂‍↕️🙂‍↕️🙂‍↕️😌😌
 
-### Step-by-Step Setup with Expiring Tokens and `ssmtp` Configuration
+To configure SSH access using a link-based authentication mechanism with forced commands, token access, and integrating browser-based authentication (via an email link), you'll need to go through a few key steps. This process involves multiple configurations to ensure SSH can authenticate via an email token and a web interface. 
 
----
+This guide assumes you're working with a Linux server and using SSH for remote access. Below is a detailed breakdown of each step:
 
-### 1. Install and Configure `ssmtp`
-
-`ssmtp` is used to send email from your server. Follow these steps to install and configure it:
-
-#### **Install `ssmtp`**
-On Ubuntu or Debian-based systems, run:
-
-```bash
-sudo apt update
-sudo apt install ssmtp
-```
-
-#### **Configure `ssmtp` in `/etc/ssmtp/ssmtp.conf`**
-
-Open the `ssmtp.conf` file to configure email settings:
-
-```bash
-sudo nano /etc/ssmtp/ssmtp.conf
-```
-
-Add the following configuration:
-
-```plaintext
-root=your-email@example.com
-mailhub=smtp.your-email-provider.com:587
-AuthUser=your-email@example.com
-AuthPass=your-email-password
-FromLineOverride=YES
-UseSTARTTLS=YES
-```
-
-- Replace `your-email@example.com` with your actual email address.
-- Replace `smtp.your-email-provider.com:587` with the SMTP server and port for your email provider (e.g., `smtp.gmail.com:587` for Gmail).
-- Replace `your-email-password` with your email account password or an app-specific password (for Gmail).
+### Overview
+1. **Generate and send an email with a unique token** (via an email link).
+2. **Force the user to click the link** to authenticate.
+3. **Use `ForcedCommand` in SSH configuration** to restrict actions after login.
+4. **Create a `$SHELL` environment variable for token verification**.
+5. **Configure `ssmtp` to send emails**.
+6. **Integrate OpenSSL for secure token generation**.
+7. **Create a directory accessible to the user for storing tokens**.
 
 ---
 
-### 2. Create the `send_token.sh` Script with Expiry Time
+### 1. Set Up Forced Command for SSH Access
 
-This script generates a token, sets the expiry time, and sends an email with the verification link.
+SSH's `ForcedCommand` directive allows you to restrict the user to execute only a specific command upon login. Here, we use this to restrict SSH access to running a script that validates the email token.
 
-#### **Create and edit `send_token.sh`**
+1. **Edit SSH configuration**:
 
-```bash
-sudo nano /usr/local/bin/send_token.sh
-```
-
-Add the following content:
-
-```bash
-#!/bin/bash
-
-# Generate a unique token
-TOKEN=$(uuidgen)
-
-# Set an expiry time of 5 minutes from now
-EXPIRY=$(date -d "+5 minutes" +%s)
-echo "$TOKEN:$EXPIRY" > /tmp/token.txt
-
-# Define the verification link
-VERIFICATION_URL="http://your-server-ip/verify_token.sh?token=$TOKEN"
-
-# Email subject and body with clickable verification link
-SUBJECT="Your Login Token"
-BODY="Click the following link to verify your login (link expires in 5 minutes): $VERIFICATION_URL"
-
-# Send the email
-echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
-```
-
-- Replace `recipient@example.com` with the recipient's email address.
-- Replace `your-server-ip` with your server's IP address or domain name.
-
-Make the script executable:
-
-```bash
-chmod +x /usr/local/bin/send_token.sh
-```
-
----
-
-### 3. Create the `validate_token.sh` Script
-
-This script checks if the token has been verified before granting SSH access.
-
-#### **Create and edit `validate_token.sh`**
-
-```bash
-sudo nano /usr/local/bin/validate_token.sh
-```
-
-Add the following content:
-
-```bash
-#!/bin/bash
-
-# Check if the token has been verified
-if [[ -f /tmp/token_verified ]]; then
-    # Token is verified, grant shell access and remove marker
-    echo "Token verified. Access granted."
-    rm /tmp/token_verified
-    exec $SHELL
-else
-    # Token is not verified, deny access
-    echo "Token not verified. Please click the verification link sent to your email."
-    exit 1
-fi
-```
-
-Make the script executable:
-
-```bash
-sudo chmod +x /usr/local/bin/validate_token.sh
-```
-
----
-
-### 4. Create the `verify_token.sh` Script to Check Expiry
-
-This script checks if the token is valid and has not expired.
-
-#### **Create and edit `verify_token.sh`**
-
-```bash
-sudo nano /var/www/html/verify_token.sh
-```
-
-Add the following content:
-
-```bash
-#!/bin/bash
-
-# Extract token from query string
-QUERY_STRING=$(echo "$1" | sed 's/token=//')
-USER_TOKEN=$QUERY_STRING
-
-# Check if the token exists and has not expired
-TOKEN_FILE="/tmp/token.txt"
-if [[ -f "$TOKEN_FILE" ]]; then
-    # Read token and expiry time from file
-    SAVED_TOKEN=$(cut -d ':' -f1 "$TOKEN_FILE")
-    EXPIRY_TIME=$(cut -d ':' -f2 "$TOKEN_FILE")
-    
-    CURRENT_TIME=$(date +%s)
-    
-    # Validate token and expiry time
-    if [[ "$USER_TOKEN" == "$SAVED_TOKEN" && "$CURRENT_TIME" -lt "$EXPIRY_TIME" ]]; then
-        # Create a marker file to indicate successful verification
-        touch /tmp/token_verified
-        echo "Token verified successfully. You can now log in via SSH."
-    else
-        echo "Invalid or expired token. Access denied."
-    fi
-else
-    echo "Token not found. Access denied."
-fi
-```
-
-Make the script executable:
-
-```bash
-chmod +x /var/www/html/verify_token.sh
-```
-
----
-
-### 5. Create a Cron Job to Clean Up Expired Tokens
-
-This cron job will check for expired tokens and delete them automatically.
-
-#### **Edit the crontab**
-
-```bash
-sudo crontab -e
-```
-
-Add the following line to delete expired tokens:
-
-```plaintext
-* * * * * /bin/bash -c '[[ $(date +%s) -gt $(cut -d ":" -f2 /tmp/token.txt 2>/dev/null || echo 0) ]] && rm -f /tmp/token.txt'
-```
-
----
-
-### 6. SSH Configuration to Use Forced Command
-
-To force the execution of `validate_token.sh` upon SSH login, modify the SSH server configuration.
-
-#### **Edit `/etc/ssh/sshd_config`**
-
-```bash
-sudo nano /etc/ssh/sshd_config
-```
-
-Add the following line:
-
-```plaintext
-ForceCommand /usr/local/bin/validate_token.sh
-ForceCommand/usr/local/bin/send_token.sh
-```
-
-This forces SSH to run `validate_token.sh` instead of the normal shell, ensuring the token validation process is followed.
-
-#### **Restart the SSH service**
-
-```bash
-sudo systemctl restart sshd
-```
-
----
-
-### 7. Test the Setup (this is to be handeled when the send_token is setup in /var/www/html/file to action via browser)
-
-1. **Generate and Send Token**:
-   Run the `send_token.sh` script to generate a token and send the verification email.
+   Open `/etc/ssh/sshd_config` and add a rule for ForcedCommand:
 
    ```bash
-   /var/www/html/send_token.sh
+   Match User yourusername
+   ForcedCommand /path/to/authentication_script.sh
    ```
 
-2. **Check Email for Token**:
-   The email will contain a verification link. Click the link within 5 minutes.
+2. **Reload SSH**:
 
-3. **Token Verification**:
-   The `verify_token.sh` script will check the token and create the `token_verified` file if valid.
-
-4. **SSH Login**:
-   Attempt to log in via SSH:
+   After updating the configuration, reload the SSH service:
 
    ```bash
-   ssh youruser@your-server-ip
+   sudo systemctl restart sshd
    ```
-
-   - If the token is verified, you’ll see “Token verified. Access granted.”
-   - If the token is expired or not verified, the login will fail with the message: "Token not verified. Please click the verification link sent to your email."
 
 ---
 
-### Summary of the Solution
+### 2. Email Token Generation and Sending
 
-1. **`send_token.sh`**: Generates a token, sets an expiry time, and sends an email with a verification link.
-2. **`validate_token.sh`**: Verifies if the token has been validated before granting SSH access.
-3. **`verify_token.sh`**: Checks if the token is valid and not expired, then creates a marker file.
-4. **Cron Job**: Automatically deletes expired tokens every minute.
-5. **SSH Forced Command**: Ensures SSH access is only granted after token verification.
+You need a script that generates a unique token and sends it to the user's email address. We will use `OpenSSL` for token generation and `ssmtp` for sending the email.
 
-This solution ensures secure token-based authentication for SSH logins, with tokens that expire automatically after a set time.
+1. **Install `ssmtp` (or an alternative like `msmtp`)**:
 
+   ```bash
+   sudo apt-get install ssmtp
+   ```
 
+2. **Configure `ssmtp.conf`**:
+
+   Edit `/etc/ssmtp/ssmtp.conf` to set up the mail server:
+
+   ```ini
+   root=your-email@example.com
+   mailhub=smtp.your-email-provider.com:587
+   AuthUser=your-email@example.com
+   AuthPass=your-email-password
+   FromLineOverride=YES
+   ```
+
+3. **Script to Generate and Send Token**:
+
+   Create a script (`generate_send_token.sh`) to generate a token and email it to the user:
+
+   ```bash
+   #!/bin/bash
+
+   USER_EMAIL="user@example.com"
+   TOKEN=$(openssl rand -hex 32)
+   EXPIRY_TIME=$(date -d "+10 minutes" +%s)  # Token expires after 10 minutes
+   TOKEN_FILE="/tmp/${TOKEN}.txt"
+
+   # Save token and expiry to a file
+   echo "TOKEN=${TOKEN}" > $TOKEN_FILE
+   echo "EXPIRES_AT=${EXPIRY_TIME}" >> $TOKEN_FILE
+
+   # Send email with the token as a link
+   echo -e "Subject: SSH Authentication Token\n\nClick the link to authenticate: http://yourserver.com/verify?token=${TOKEN}" | ssmtp $USER_EMAIL
+   ```
+
+   This script generates a random token using `OpenSSL`, saves it to a file, and sends the email with the link.
+
+---
+
+### 3. Implementing Token Validation
+
+You need a web server to handle the token verification. This can be a simple script running on Apache or Nginx.
+
+1. **Set up a web server** (using Apache, Nginx, or another server of your choice).
+   
+2. **Web script to validate token** (`verify_token.php` or similar):
+
+   ```php
+   <?php
+   if(isset($_GET['token'])) {
+       $token = $_GET['token'];
+       $token_file = "/tmp/${token}.txt";
+
+       if(file_exists($token_file)) {
+           $file_content = file_get_contents($token_file);
+           list($stored_token, $expiry) = explode("\n", $file_content);
+
+           if(time() < trim(explode("=", $expiry)[1])) {
+               // Valid token, allow SSH access
+               echo "Token valid! You can now access the server.";
+               // Save the token to a temporary session or DB to allow SSH login
+           } else {
+               echo "Token expired.";
+           }
+       } else {
+           echo "Invalid token.";
+       }
+   } else {
+       echo "No token provided.";
+   }
+   ?>
+   ```
+
+3. **Link in the email**:
+   
+   When the user clicks the link in the email, the web server validates the token. If valid, the user can be authenticated for SSH.
+
+---
+
+### 4. Restricting Access and Using `$SHELL` for Token Verification
+
+To ensure the user can only proceed once the token is validated, set the `$SHELL` environment variable to point to a validation script after the token verification.
+
+1. **Modify `/etc/passwd` for the user**:
+
+   In `/etc/passwd`, set the user's shell to the token validation script:
+
+   ```bash
+   yourusername:x:1001:1001::/home/yourusername:/path/to/token_validation_script.sh
+   ```
+
+2. **Token Validation Script** (`token_validation_script.sh`):
+
+   This script will verify if the user has clicked the token link and is authorized to continue:
+
+   ```bash
+   #!/bin/bash
+
+   TOKEN=$(cat /tmp/${USER}_token)
+   TOKEN_FILE="/tmp/${TOKEN}.txt"
+
+   if [[ -f $TOKEN_FILE ]]; then
+       VALID=$(cat $TOKEN_FILE | grep -c "TOKEN=${TOKEN}")
+
+       if [[ $VALID -eq 1 ]]; then
+           # Allow the user to proceed
+           exec /bin/bash
+       else
+           echo "Invalid or expired token"
+           exit 1
+       fi
+   else
+       echo "No token found"
+       exit 1
+   fi
+   ```
+
+---
+
+### 5. Token Storage and Access Control
+
+You want the user to have access to a specific folder where tokens are stored, but restrict access to others.
+
+1. **Create a directory**:
+
+   ```bash
+   mkdir /home/yourusername/.tokens
+   chown yourusername:yourusername /home/yourusername/.tokens
+   chmod 700 /home/yourusername/.tokens
+   ```
+
+2. **Store Tokens in the Directory**:
+
+   The script (`generate_send_token.sh`) can be modified to store the generated tokens in the `.tokens` directory:
+
+   ```bash
+   mv $TOKEN_FILE /home/yourusername/.tokens/
+   ```
+
+3. **Configure Permissions**:
+
+   Ensure only the user can access the token files:
+
+   ```bash
+   chmod 600 /home/yourusername/.tokens/*
+   ```
+
+---
+
+### 6. Testing
+
+To test, follow these steps:
+
+1. The user receives an email with a token link.
+2. The user clicks the link, which verifies the token on the server.
+3. If valid, the token is stored, and the user can SSH into the server.
+4. SSH login is restricted to running a script that checks for the token and proceeds with the session.
+
+---
+
+### Conclusion
+
+This approach involves using a combination of forced commands, token-based authentication, email links, web-based token verification, and strict access controls to provide a secure SSH authentication method. Each component, such as `ssmtp`, OpenSSL, and web scripts, plays a key role in this process. Make sure to test thoroughly and adjust configurations based on your specific environment.
 
 
 
