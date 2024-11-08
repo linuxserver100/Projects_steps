@@ -4302,5 +4302,66 @@ To test, follow these steps:
 This approach involves using a combination of forced commands, token-based authentication, email links, web-based token verification, and strict access controls to provide a secure SSH authentication method. Each component, such as `ssmtp`, OpenSSL, and web scripts, plays a key role in this process. Make sure to test thoroughly and adjust configurations based on your specific environment.
 
 
+the above code is converted to html format 
+```bash
 
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Verification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .message {
+            padding: 10px;
+            border: 1px solid #ccc;
+            margin-top: 20px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Token Verification</h1>
+
+    <?php
+    if(isset($_GET['token'])) {
+        $token = $_GET['token'];
+        $token_file = "/tmp/${token}.txt";
+
+        if(file_exists($token_file)) {
+            $file_content = file_get_contents($token_file);
+            list($stored_token, $expiry) = explode("\n", $file_content);
+
+            if(time() < trim(explode("=", $expiry)[1])) {
+                // Valid token, allow SSH access
+                echo '<div class="message success">Token valid! You can now access the server.</div>';
+                // Save the token to a temporary session or DB to allow SSH login
+            } else {
+                echo '<div class="message error">Token expired.</div>';
+            }
+        } else {
+            echo '<div class="message error">Invalid token.</div>';
+        }
+    } else {
+        echo '<div class="message error">No token provided.</div>';
+    }
+    ?>
+
+</body>
+</html>
+
+
+```
