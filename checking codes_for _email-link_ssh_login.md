@@ -4738,4 +4738,216 @@ This setup ensures token-based SSH authentication with these core features:
 - **SSH enforcement**: Token verification is enforced before granting SSH access.
 
 Replace placeholders like `YourPassword`, `your-email@example.com`, and `yourusername` with actual values. Test the setup to ensure that the entire process works as expected.
+😊😃😙😊😙😊😁😊😁☺️😁☺️😚☺️😚😌😙🤩😘🤩🥰😌🥰🥳😍🤩🥰🤩🥰🥳😍🥳🥰🥳🥰🥳🥰🥳🥰🥳🥰🥳🥰🥰🤩🥰🤩🥰🤩😘🤩😘🤩😆🤩😚🤩😘😌😘😌😘😌😘😌🥰😌😘😌😘😌😘😘😌😘😌🥰😌🥰😌🥰🤩😍🤩😍🤩🥰🤩🥰😌😘😌🥰😌🥰🤩🥰🤩🥰🤩🥰🤩🥰🤩🥰🤩
+
+To implement SSH token-based authentication purely from the database, without requiring argument passing or environmental files for token management, we need to create a system where the token is validated directly during the SSH login process. This requires querying the database on the server side to check whether the user has a valid, unexpired, and verified token. The following steps will guide you to achieve this, ensuring a clean and streamlined process.
+
+### 1. **Install MySQL Database Server**
+
+Ensure MySQL is installed and running on your server.
+
+```bash
+sudo apt-get update
+sudo apt-get install mysql-server
+```
+
+#### **Create Database and Table for Tokens**
+
+1. **Log into MySQL**:
+
+   ```bash
+   mysql -u root -p
+   ```
+
+2. **Create the Database and Table**:
+
+   ```sql
+   CREATE DATABASE ssh_tokens;
+   USE ssh_tokens;
+
+   CREATE TABLE tokens (
+       id INT AUTO_INCREMENT PRIMARY KEY,
+       token VARCHAR(64) NOT NULL,
+       user_email VARCHAR(255) NOT NULL,
+       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+       expires_at TIMESTAMP NOT NULL,
+       verified BOOLEAN DEFAULT FALSE
+   );
+   ```
+
+---
+
+### 2. **Configure `ssmtp` for Sending Emails**
+
+Install and configure `ssmtp` to send email with the token to the user.
+
+#### **Install `ssmtp`**:
+
+```bash
+sudo apt-get install ssmtp
+```
+
+#### **Configure `ssmtp`**:
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+Add the following configuration (use your actual SMTP credentials):
+
+```ini
+root=your-email@example.com
+mailhub=smtp.your-email-provider.com:587
+AuthUser=your-email@example.com
+AuthPass=your-email-password
+FromLineOverride=YES
+UseSTARTTLS=YES
+```
+
+---
+
+### 3. **Generate Token and Send via Email**
+
+Create a script to generate a token, store it in MySQL, and email it to the user.
+
+#### **Token Generation Script (`generate_send_token.sh`)**:
+
+```bash
+#!/bin/bash
+
+USER_EMAIL="user@example.com"
+TOKEN=$(openssl rand -hex 32)
+EXPIRY_TIME=$(date -d "+10 minutes" +%Y-%m-%d\ %H:%M:%S)  # Token expires in 10 minutes
+
+# Insert token into MySQL database
+mysql -u root -pYourPassword -D ssh_tokens -e "INSERT INTO tokens (token, user_email, expires_at) VALUES ('$TOKEN', '$USER_EMAIL', '$EXPIRY_TIME');"
+
+# Send email with the token link
+EMAIL_SUBJECT="SSH Authentication Token"
+EMAIL_BODY="Click to authenticate: http://yourserver.com/verify?token=${TOKEN}"
+
+echo -e "Subject:${EMAIL_SUBJECT}\n\n${EMAIL_BODY}" | ssmtp $USER_EMAIL
+```
+
+**Replace**:
+- `YourPassword`: Your MySQL root password.
+- `user@example.com`: The recipient's email.
+
+---
+
+### 4. **Verify Token via Web Interface**
+
+Create a PHP script to verify the token when the user clicks the link in the email.
+
+#### **Token Verification Script (`verify_token.php`)**:
+
+```php
+<?php
+if (isset($_GET['token'])) {
+    $token = $_GET['token'];
+    $db = new mysqli('localhost', 'root', 'YourPassword', 'ssh_tokens');
+
+    if ($db->connect_error) {
+        die("Connection failed: " . $db->connect_error);
+    }
+
+    $result = $db->query("SELECT * FROM tokens WHERE token = '$token' AND expires_at > NOW() AND verified = 0");
+
+    if ($result->num_rows > 0) {
+        $db->query("UPDATE tokens SET verified = 1 WHERE token = '$token'");
+        echo "Token valid! You can now authenticate with SSH.";
+    } else {
+        echo "Invalid or expired token.";
+    }
+
+    $db->close();
+} else {
+    echo "No token provided.";
+}
+?>
+```
+
+This script verifies the token's validity and updates its status to `verified`.
+
+---
+
+### 5. **Modify SSH Configuration for Token Validation**
+
+Configure SSH to trigger the token validation script before login using the `ForcedCommand` directive. This will prevent login until the token is verified.
+
+#### **Edit SSH Configuration (`/etc/ssh/sshd_config`)**:
+
+Add the following block to enforce token-based authentication for a specific user:
+
+```bash
+Match User yourusername
+    ForcedCommand /path/to/token_validation_script.sh
+```
+
+Replace `yourusername` with the user that will authenticate using the token.
+
+#### **Reload SSH Service**:
+
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
+### 6. **Token Validation Script**
+
+This script will validate the token directly from the database during SSH login, without relying on arguments or environmental variables.
+
+#### **Token Validation Script (`token_validation_script.sh`)**:
+
+This script is triggered every time a user attempts to log in via SSH. It checks the database to see if the user has a valid token that is not expired and has been verified.
+
+```bash
+#!/bin/bash
+
+# Fetch the user email (or use the currently logged-in user)
+USER_EMAIL=$(whoami)  # Assuming the username matches the email address in the token database
+
+# Query to check for a valid and verified token for this user
+TOKEN=$(mysql -u root -pYourPassword -D ssh_tokens -se "SELECT token FROM tokens WHERE user_email='$USER_EMAIL' AND expires_at > NOW() AND verified=1 LIMIT 1;")
+
+if [ -z "$TOKEN" ]; then
+    echo "No valid token found for this user. Authentication failed."
+    exit 1
+else
+    echo "Token verified. Proceeding with SSH login."
+    # Proceed to open the SSH session (user is authenticated)
+    exec /bin/bash
+fi
+```
+
+**Explanation**:
+- The script checks for a valid token in the `tokens` table for the specific user (`USER_EMAIL`).
+- If the token is found and is valid (not expired and marked as verified), it proceeds with the SSH login.
+- If no valid token is found, it denies access with an error message.
+
+---
+
+### 7. **Testing the Setup**
+
+1. **Generate a Token**:
+   - Run the `generate_send_token.sh` script to create a new token and send it via email to the user.
+
+2. **Verify the Token**:
+   - The user clicks the token link in the email, which invokes the `verify_token.php` script. This script verifies the token in the database and marks it as verified.
+
+3. **SSH Login**:
+   - When the user attempts to SSH into the server, the `token_validation_script.sh` script will check for a valid token associated with the user. If valid, the login will be allowed; otherwise, it will be denied.
+
+---
+
+### **Conclusion**
+
+In this setup:
+- **Token Generation**: The server generates a token and emails it to the user.
+- **Token Verification**: The user verifies the token via a web interface, marking it as verified in the database.
+- **SSH Authentication**: Upon SSH login, the `token_validation_script.sh` checks the database for the user's verified token. If valid, access is granted; if not, access is denied.
+
+This system ensures that no external configuration files or environment variables are required for token management. Everything is stored in and validated against the MySQL database, which simplifies the process and keeps the system secure and easy to maintain.
+
 
