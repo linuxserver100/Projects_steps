@@ -5158,3 +5158,12 @@ echo "User $USER_NAME has been granted SSH access with $USER_SHELL as the defaul
    - Test the entire flow by manually running each script and checking that the user is created, their shell is set correctly, and they can log in via SSH.
 
 By using this setup, you create a secure, token-based SSH login system with `$SHELL` access for users, ensuring their default shell is set correctly upon creation.
+
+
+
+
+USER_EMAIL=$(echo "$USER_EMAIL" | sed "s/'/\\'/g")
+TOKEN=$(echo "$TOKEN" | sed "s/'/\\'/g")
+EXPIRE_TIME=$(echo "$EXPIRE_TIME" | sed "s/'/\\'/g")
+
+
