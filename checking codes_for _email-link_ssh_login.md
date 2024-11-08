@@ -4495,3 +4495,203 @@ This script now queries the database to check if the token has been verified, us
 
 This setup integrates token generation, email-based verification, and SSH login validation with a MySQL database. The token is securely stored in the database, and its status is checked during the login process.
 
+😙☺️😙☺️😙😜😁☺️😄😃☺️😙☺️😚☺️😙😌😗😌😃😌😙😌😙😌😙😌😙😌😙😌😙😌😚😌😁😌😆😌😅😌😅😌🥰😌😌😅😌😅😌😘😌😚😌😚😌😘😌🥰😌😅😌😆😌😁😌😌😘😌🥰😌😅😌😆😌😁😌😄🙂‍↕️😚🙂‍↕️😘😌😘😌🥰😌😅🙂‍↕️😘🙂‍↕️😘😌😅😅😌😅😌😆😌😆🙂‍↕️🥰🙂‍↕️😅🙂‍↕️😆🙂‍↕️😆🙂‍↕️
+To extend the previous setup with token expiration functionality, we'll make a few key changes. Specifically, we'll add an expiration time (`expires_at`) field to the `tokens` table in the MySQL database and modify the validation scripts to check if the token has expired.
+
+Here's the full setup with token expiry.
+
+---
+
+### Step-by-Step Setup with Token Expiry and Database Integration
+
+---
+
+### 1. **Create Database and Table with Expiry**
+
+Modify the `tokens` table to include an `expires_at` field, which will store the expiration time for the token. We'll also use `DATE` or `DATETIME` for storing the expiration time, and we'll set a default value to be 1 hour from the token's creation time.
+
+#### Log into MySQL:
+
+```bash
+sudo mysql -u root -p
+```
+
+Create the database and table:
+
+```sql
+CREATE DATABASE token_db;
+
+USE token_db;
+
+CREATE TABLE tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    token VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL 1 HOUR,  -- Token expires in 1 hour
+    token_verified BOOLEAN DEFAULT FALSE
+);
+```
+
+This table now includes:
+- `created_at`: Timestamp of when the token was generated.
+- `expires_at`: Timestamp of when the token expires (set to 1 hour from creation by default).
+- `token_verified`: Boolean flag to indicate whether the token has been verified.
+
+---
+
+### 2. **Modify `send_token.sh` to Set Expiry Time**
+
+We'll update the `send_token.sh` script to insert the expiration time (`expires_at`) when generating the token.
+
+#### Updated `send_token.sh`:
+
+```bash
+#!/bin/bash
+
+# Email recipient
+EMAIL="recipient@example.com"
+
+# Generate a unique token
+TOKEN=$(uuidgen)
+
+# Define expiration time (1 hour from now)
+EXPIRATION_TIME=$(date -d "1 hour" +"%Y-%m-%d %H:%M:%S")
+
+# Store the token in the MySQL database with the expiration time
+mysql -u root -pYOUR_PASSWORD -e "USE token_db; INSERT INTO tokens (token, email, expires_at) VALUES ('$TOKEN', '$EMAIL', '$EXPIRATION_TIME');"
+
+# Define the verification URL
+VERIFICATION_URL="http://your-server-ip/verify_token.sh?token=$TOKEN"
+
+# Email subject and body with clickable link
+SUBJECT="Your Login Token"
+BODY="Click the following link to verify your login: $VERIFICATION_URL"
+
+# Send the email using ssmtp
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp $EMAIL
+```
+
+- `EXPIRATION_TIME` is set to 1 hour from the current time using `date -d "1 hour"`.
+- The expiration time is inserted into the `expires_at` column in the MySQL database.
+
+---
+
+### 3. **Modify `verify_token.sh` to Handle Expiry**
+
+Now, we need to modify the `verify_token.sh` script to check if the token is valid and whether it has expired. If the token has expired, it will not be valid, and the user will be denied access.
+
+#### Updated `verify_token.sh`:
+
+```bash
+#!/bin/bash
+
+# Extract the token from the query string
+QUERY_STRING=$1
+USER_TOKEN=$(echo "$QUERY_STRING" | sed 's/token=//')
+
+# Check if the token exists and is not expired
+RESULT=$(mysql -u root -pYOUR_PASSWORD -s -N -e "USE token_db; SELECT token, expires_at, token_verified FROM tokens WHERE token = '$USER_TOKEN' LIMIT 1;")
+
+# Parse the result into individual fields
+IFS='|' read -r DB_TOKEN DB_EXPIRES_AT DB_TOKEN_VERIFIED <<< "$RESULT"
+
+# If token is found
+if [[ "$DB_TOKEN" == "$USER_TOKEN" ]]; then
+    # Check if the token has expired
+    CURRENT_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+    if [[ "$DB_EXPIRES_AT" < "$CURRENT_TIME" ]]; then
+        echo "Token has expired. Please request a new token."
+    elif [[ "$DB_TOKEN_VERIFIED" == "1" ]]; then
+        echo "Token already verified. Access granted."
+    else
+        # Mark token as verified
+        mysql -u root -pYOUR_PASSWORD -e "USE token_db; UPDATE tokens SET token_verified = 1 WHERE token = '$USER_TOKEN';"
+        echo "Token verified successfully. You can now log in via SSH."
+    fi
+else
+    echo "Invalid token. Access denied."
+fi
+```
+
+### Explanation:
+- **Token Expiry**: The script compares the `expires_at` value in the database with the current time (`CURRENT_TIME`). If the token is expired, it will display an expiration message.
+- **Token Verification**: If the token is valid and not expired, it will be marked as verified in the database. If it has already been verified, access will be granted immediately.
+- **Token Query**: The result from the database query is split into `DB_TOKEN`, `DB_EXPIRES_AT`, and `DB_TOKEN_VERIFIED`.
+
+---
+
+### 4. **Modify `validate_token.sh` to Check Expiry**
+
+The `validate_token.sh` script should also be updated to check whether the token is expired in the database before allowing SSH login.
+
+#### Updated `validate_token.sh`:
+
+```bash
+#!/bin/bash
+
+# Retrieve the user's email or username (this may vary depending on your system)
+USER_EMAIL=$(whoami)
+
+# Check if the token is verified and not expired
+RESULT=$(mysql -u root -pYOUR_PASSWORD -s -N -e "USE token_db; SELECT token_verified, expires_at FROM tokens WHERE email = '$USER_EMAIL' AND token_verified = 1 LIMIT 1;")
+
+# Parse the result into individual fields
+IFS='|' read -r DB_TOKEN_VERIFIED DB_EXPIRES_AT <<< "$RESULT"
+
+if [[ "$DB_TOKEN_VERIFIED" == "1" ]]; then
+    CURRENT_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+    if [[ "$DB_EXPIRES_AT" < "$CURRENT_TIME" ]]; then
+        echo "Token has expired. Please request a new token."
+        exit 1
+    else
+        # Token is verified and not expired, grant shell access
+        echo "Token verified. Access granted."
+        exec $SHELL
+    fi
+else
+    # Token is not verified or expired
+    echo "Token not verified or has expired. Please click the verification link sent to your email."
+    exit 1
+fi
+```
+
+- **Check Expiry**: The script checks if the token's expiration time is less than the current time. If so, it denies access, indicating the token has expired.
+
+---
+
+### 5. **Testing the Process**
+
+1. **Run `send_token.sh`**:
+   Execute the token generation and email script:
+
+   ```bash
+   /var/www/html/send_token.sh
+   ```
+
+2. **Click the Verification Link**:
+   Open your email and click the verification link. This should run `verify_token.sh`, which will validate the token and mark it as verified.
+
+3. **SSH into the Server**:
+   Log in via SSH:
+
+   ```bash
+   ssh youruser@your-server-ip
+   ```
+
+   The `validate_token.sh` script will check the database for the token. If the token is valid and has not expired, access will be granted.
+
+---
+
+### 6. **Optional Enhancements**
+
+- **Shorter Token Expiry**: You can adjust the token expiration time by modifying the `EXPIRATION_TIME` calculation in `send_token.sh` (e.g., change `1 hour` to `30 minutes`).
+- **Secure MySQL Connection**: Use a MySQL user with limited permissions, and enable SSL for database connections for improved security.
+- **Audit Logging**: Log successful and failed token verifications for better tracking.
+
+---
+
+### Final Notes
+
+This setup now integrates token expiration with the database, ensuring that tokens are only valid for a limited time (1 hour by default). The process includes token generation, expiration checking, and SSH login validation. This provides an additional layer of security, ensuring that old or expired tokens cannot be used to gain access.
+
