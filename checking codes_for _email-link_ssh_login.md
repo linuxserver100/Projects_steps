@@ -4305,3 +4305,193 @@ This script checks if the token exists, has not expired, and has been marked as 
 This setup implements token-based authentication for SSH access. It uses MySQL to store token information and email-based validation. The SSH server is configured to restrict login to a validation script, and the script verifies the token before granting access. The use of `ssmtp` ensures the email is sent with the token, and `ForcedCommand` ensures users cannot perform other actions on login without successful token validation.
 
 Make sure to test all parts of the setup thoroughly before deploying it to production.
+
+
+😛😮‍💨😮‍💨😛🙃😢☹️🙂😶☹️😶😝🙂☹️😝😙☹️😝😙☹️😝🙂🙁😙😝🙁😙😝☹️😙😝☹️😝😗😤😝😗😝☹️😗😤😝😗😤😝😗☹️😝😙😤😝😗☹️😙😝☹️😝😙☹️😝😗☹️😝😙☹️😝😗☹️😝😗😗😝☹️☹️😛😗☹️😝😗😛😗☹️😗😝☹️😗😝☹️😗😛☹️😛😗☹️😗😝😗😝☹️☹️😛😗😙😝☹️😝😗☹️😝😗😝😗☹️😝😗☹️😗😝☹️😗☹️😝😗☹️😗😝😝😗☹️☹️😶😗😗😝☹️🙁😝😗☹️😶😗☹️😙😶😶😗🙁😶😗😯
+To configure the above setup with a database for token storage instead of using a simple file in `/tmp`, we'll update the process to use a database (e.g., MySQL or PostgreSQL) for storing the token. This ensures that the token is persisted in a more robust and secure manner.
+
+We'll use MySQL as an example, but this can easily be adapted for other databases like PostgreSQL.
+
+### Step-by-Step Setup with Database Integration
+
+### 1. **Install MySQL (if not already installed)**
+
+Install MySQL or MariaDB on your server. Here's how to install MySQL on a Debian-based system:
+
+```bash
+sudo apt update
+sudo apt install mysql-server
+sudo mysql_secure_installation
+```
+
+After installation, secure the MySQL installation and make sure the service is running:
+
+```bash
+sudo systemctl start mysql
+sudo systemctl enable mysql
+```
+
+### 2. **Create Database and Table for Token Storage**
+
+Log into MySQL and create a database and table to store the tokens.
+
+```bash
+sudo mysql -u root -p
+```
+
+Once in the MySQL shell, run the following commands to create the database and table:
+
+```sql
+CREATE DATABASE token_db;
+
+USE token_db;
+
+CREATE TABLE tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    token VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 3. **Install MySQL Client**
+
+Install MySQL client tools if not already installed:
+
+```bash
+sudo apt install mysql-client
+```
+
+### 4. **Update `send_token.sh` to Store Token in Database**
+
+Modify the `send_token.sh` script to insert the generated token into the MySQL database instead of storing it in a file. The script will also include the email address for the user to whom the token is being sent.
+
+#### Updated `send_token.sh`:
+
+```bash
+#!/bin/bash
+
+# Email recipient
+EMAIL="recipient@example.com"
+
+# Generate a unique token
+TOKEN=$(uuidgen)
+
+# Store the token in the MySQL database
+mysql -u root -pYOUR_PASSWORD -e "USE token_db; INSERT INTO tokens (token, email) VALUES ('$TOKEN', '$EMAIL');"
+
+# Define the verification URL
+VERIFICATION_URL="http://your-server-ip/verify_token.sh?token=$TOKEN"
+
+# Email subject and body with clickable link
+SUBJECT="Your Login Token"
+BODY="Click the following link to verify your login: $VERIFICATION_URL"
+
+# Send the email using ssmtp
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp $EMAIL
+```
+
+Make sure to replace `YOUR_PASSWORD` with the actual password for your MySQL root user. 
+
+**Make the script executable:**
+
+```bash
+chmod +x /var/www/html/send_token.sh
+```
+
+This script will now generate a unique token, store it in the `tokens` table in the MySQL database, and send an email with the verification link.
+
+### 5. **Update `verify_token.sh` to Verify Token Against Database**
+
+Modify the `verify_token.sh` script to check the token in the database instead of checking a file in `/tmp`. When the token is valid, create a marker in the database indicating the token has been verified.
+
+#### Updated `verify_token.sh`:
+
+```bash
+#!/bin/bash
+
+# Extract the token from the query string
+QUERY_STRING=$1
+USER_TOKEN=$(echo "$QUERY_STRING" | sed 's/token=//')
+
+# Check if the token exists in the database and if it has not expired
+RESULT=$(mysql -u root -pYOUR_PASSWORD -s -N -e "USE token_db; SELECT token FROM tokens WHERE token = '$USER_TOKEN' LIMIT 1;")
+
+if [[ "$RESULT" == "$USER_TOKEN" ]]; then
+    # Token is valid, mark it as verified
+    mysql -u root -pYOUR_PASSWORD -e "USE token_db; UPDATE tokens SET token_verified = 1 WHERE token = '$USER_TOKEN';"
+    echo "Token verified successfully. You can now log in via SSH."
+else
+    echo "Invalid token. Access denied."
+fi
+```
+
+Make sure to replace `YOUR_PASSWORD` with the MySQL root password.
+
+**Make the script executable:**
+
+```bash
+chmod +x /var/www/html/verify_token.sh
+```
+
+This script now checks the database for the token, and if it is valid, updates the database to mark it as verified.
+
+### 6. **Update `validate_token.sh` to Check Database for Verification**
+
+Modify the `validate_token.sh` script to check the database for a verified token instead of checking for a marker file in `/tmp`.
+
+#### Updated `validate_token.sh`:
+
+```bash
+#!/bin/bash
+
+# Retrieve the user's email or username (this may vary depending on your system)
+USER_EMAIL=$(whoami)
+
+# Check if the token is verified by querying the database
+RESULT=$(mysql -u root -pYOUR_PASSWORD -s -N -e "USE token_db; SELECT token_verified FROM tokens WHERE email = '$USER_EMAIL' AND token_verified = 1 LIMIT 1;")
+
+if [[ "$RESULT" == "1" ]]; then
+    # Token is verified, grant shell access
+    echo "Token verified. Access granted."
+    exec $SHELL
+else
+    # Token is not verified
+    echo "Token not verified. Please click the verification link sent to your email."
+    exit 1
+fi
+```
+
+This script now queries the database to check if the token has been verified, using the email address of the user who is logging in.
+
+### 7. **Testing the Process**
+
+1. **Run `send_token.sh`**:
+   Execute the token generation and email script:
+
+   ```bash
+   /var/www/html/send_token.sh
+   ```
+
+2. **Click the Verification Link**:
+   Open your email and click the link. This should run `verify_token.sh`, which updates the database to mark the token as verified.
+
+3. **SSH into the Server**:
+   Log in via SSH:
+
+   ```bash
+   ssh youruser@your-server-ip
+   ```
+
+   The `validate_token.sh` script will check the database to see if the token has been verified. If verified, access will be granted.
+
+### 8. **Optional Enhancements**
+
+- **Token Expiry**: You can add a `expires_at` field in the `tokens` table and modify the `verify_token.sh` and `validate_token.sh` scripts to enforce token expiration.
+- **Secure MySQL Connection**: Consider using a more secure method to authenticate MySQL, such as using a user with limited permissions and securing connections with SSL.
+- **Audit Logging**: Log successful and failed token verifications to track login attempts.
+
+### Final Notes
+
+This setup integrates token generation, email-based verification, and SSH login validation with a MySQL database. The token is securely stored in the database, and its status is checked during the login process.
+
