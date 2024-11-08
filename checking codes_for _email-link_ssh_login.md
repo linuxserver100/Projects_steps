@@ -4950,4 +4950,184 @@ In this setup:
 
 This system ensures that no external configuration files or environment variables are required for token management. Everything is stored in and validated against the MySQL database, which simplifies the process and keeps the system secure and easy to maintain.
 
+😃☺️😄☺️😚☺️😚☺️😙☺️😃😍😚🤩😚🤩😄🤩😙🤩🙁😍😊☺️😊☺️😊☺️😊😊😌😊😌😊😌😊😌😊😌😊😌😊😊😌😊😌😊😌😊😌😊😌😊😌😊😌😊😌😊☺️😊😃☺️🙂‍↕️☺️🙂‍↕️😌😊😌😊😌😊🤩😊🤩😊🤩😃🤩😝🤩🙂‍↕️😃🤩😃🤩😃🤩😃😌😊🙂‍↕️😊🙂‍↕️😊🙂‍↕️😊🙂‍↕️😊🙂‍↕️😁🙂‍↕️😁
 
+To complete the process with `$SHELL` access for users, we will ensure that the user’s login shell is properly configured in the `set_ssh_access.sh` script. The `$SHELL` variable will be used to check and set the user's shell. I'll walk through the complete process, making sure that each component is in place.
+
+Here’s the updated and complete code with `$SHELL` access integration:
+
+### 1. **MySQL Database and User Table Setup**
+
+This step remains unchanged and sets up the database and user tables for storing tokens and user details.
+
+```sql
+-- Create a database
+CREATE DATABASE ssh_verification;
+
+-- Create a table to store email tokens
+USE ssh_verification;
+
+CREATE TABLE user_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    token VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP
+);
+
+-- Create a table to store users
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Grant all privileges to your MySQL user for this database
+GRANT ALL PRIVILEGES ON ssh_verification.* TO 'mysql_auth'@'localhost' IDENTIFIED BY 'your_password';
+FLUSH PRIVILEGES;
+```
+
+### 2. **Sending the Verification Email (send_email.sh)**
+
+The script generates a verification token and sends the token to the user's email.
+
+```bash
+#!/bin/bash
+
+# Set variables
+MYSQL_USER="mysql_auth"
+MYSQL_PASS="your_password"
+MYSQL_DB="ssh_verification"
+USER_EMAIL=$1
+BASE_URL="https://yourdomain.com/verify"  # URL to verify login
+TOKEN=$(openssl rand -base64 32)  # Generate random token
+
+# Store token in MySQL
+EXPIRE_TIME=$(date -d "+1 hour" "+%Y-%m-%d %H:%M:%S")  # Token expiry time
+mysql -u $MYSQL_USER -p$MYSQL_PASS $MYSQL_DB -e "INSERT INTO user_tokens (email, token, expires_at) VALUES ('$USER_EMAIL', '$TOKEN', '$EXPIRE_TIME');"
+
+# Send email with verification link
+echo -e "Subject: SSH Login Verification\n\nClick the following link to verify your SSH login: $BASE_URL?token=$TOKEN" | ssmtp $USER_EMAIL
+```
+
+### 3. **PHP Token Verification (verify_token.php)**
+
+The PHP script verifies the token received in the URL, and if valid, it returns the email of the user, indicating successful verification.
+
+```php
+<?php
+// Connect to the MySQL database
+$mysqli = new mysqli('localhost', 'mysql_auth', 'your_password', 'ssh_verification');
+
+// Check connection
+if ($mysqli->connect_error) {
+    die("Connection failed: " . $mysqli->connect_error);
+}
+
+$token = $_GET['token'];  // Token from the URL
+
+// Query the database to find the token
+$sql = "SELECT * FROM user_tokens WHERE token = ? AND expires_at > NOW() LIMIT 1";
+$stmt = $mysqli->prepare($sql);
+$stmt->bind_param("s", $token);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows > 0) {
+    $row = $result->fetch_assoc();
+    $email = $row['email'];
+
+    // Mark token as used (optional)
+    $stmt = $mysqli->prepare("DELETE FROM user_tokens WHERE token = ?");
+    $stmt->bind_param("s", $token);
+    $stmt->execute();
+
+    // Generate a one-time password (or any other mechanism) for SSH login
+    echo "Token verified! You can now proceed with SSH login as user: $email";
+} else {
+    echo "Invalid or expired token.";
+}
+
+$mysqli->close();
+?>
+```
+
+### 4. **Creating SSH Access (set_ssh_access.sh)**
+
+This script will handle creating the user, setting their default shell, and granting them SSH access. The `$SHELL` variable will ensure the shell is set correctly.
+
+#### Full `set_ssh_access.sh` Script
+
+```bash
+#!/bin/bash
+
+USER_EMAIL=$1
+USER_NAME=$(echo $USER_EMAIL | cut -d'@' -f1)  # Use the email part as the username
+USER_SHELL="${SHELL}"  # Default shell from the current environment or set a specific one (e.g., /bin/bash)
+
+# Check if the user already exists
+if id "$USER_NAME" &>/dev/null; then
+    echo "User $USER_NAME already exists!"
+else
+    # Add user with a specific login shell
+    useradd -m -s $USER_SHELL $USER_NAME
+    echo "User $USER_NAME created successfully."
+fi
+
+# Grant all privileges (if needed, use sudo for superuser rights)
+usermod -aG sudo $USER_NAME  # This gives the user sudo access, you can omit if not needed
+
+# Set up SSH key for the user (this assumes you will provide the public key or the user will upload it)
+mkdir -p /home/$USER_NAME/.ssh
+touch /home/$USER_NAME/.ssh/authorized_keys
+chmod 700 /home/$USER_NAME/.ssh
+chmod 600 /home/$USER_NAME/.ssh/authorized_keys
+
+# Example: Add a sample public SSH key (this would be replaced by user's actual public key)
+echo "your-ssh-public-key-here" >> /home/$USER_NAME/.ssh/authorized_keys
+
+# Ensure correct permissions
+chown -R $USER_NAME:$USER_NAME /home/$USER_NAME/.ssh
+
+# Confirm that the user now has access
+echo "User $USER_NAME has been granted SSH access with $USER_SHELL as the default shell."
+```
+
+### Explanation:
+
+- **$SHELL Variable**: 
+  - The `$SHELL` environment variable is automatically populated by the system to indicate the default shell for the current user. When you run the script, `$SHELL` will either be `/bin/bash` or any other shell specified in your environment (e.g., `/bin/zsh`).
+  - In the script above, `$USER_SHELL="${SHELL}"` uses the shell environment of the person running the script to set the default shell for the new user.
+  - Alternatively, you can manually set the shell to a specific value like `/bin/bash`.
+
+- **Adding User**:
+  - The `useradd` command is used to create the user with the specified shell. If the user already exists, it will skip creation.
+  
+- **SSH Key Setup**:
+  - The script assumes you will either provide the user’s SSH public key or have a mechanism for them to upload it. A sample public key is added as a placeholder (`your-ssh-public-key-here`), but in a real application, you should replace this with the actual public key.
+
+- **Sudo Access**:
+  - The script adds the user to the `sudo` group, which grants them administrative privileges. This is optional and can be omitted if not required.
+
+### 5. **Usage Flow**
+
+1. **User Requests SSH Login**: The user submits their email to request SSH access.
+2. **Token Generation and Email**: The `send_email.sh` script generates a token and sends an email with a verification link.
+3. **User Clicks the Link**: The user clicks the link, triggering `verify_token.php` to validate the token.
+4. **SSH Access Creation**: Once the token is verified, the `set_ssh_access.sh` script creates the user, assigns the default shell (`$SHELL`), and sets up their SSH access.
+5. **User Logs In**: The user can now log in using SSH with the shell specified in the script and their SSH public key.
+
+### Final Notes:
+
+1. **Security Considerations**:
+   - Ensure that SSH keys are securely handled and only valid keys are added to the `authorized_keys` file.
+   - Implement additional security checks such as rate limiting or email confirmation to avoid abuse.
+
+2. **Customization**:
+   - If you want to allow the user to specify their preferred shell or SSH key during the verification process, you can further enhance this workflow by modifying the PHP script or using a user interface for key upload.
+
+3. **Testing**:
+   - Test the entire flow by manually running each script and checking that the user is created, their shell is set correctly, and they can log in via SSH.
+
+By using this setup, you create a secure, token-based SSH login system with `$SHELL` access for users, ensuring their default shell is set correctly upon creation.
