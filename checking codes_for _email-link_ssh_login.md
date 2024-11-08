@@ -4636,29 +4636,56 @@ Create a simple PHP script to verify the token.
 #### **Token Verification Script (`verify_token.php`)**:
 
 ```php
-<?php
+      <?php
 if (isset($_GET['token'])) {
     $token = $_GET['token'];
-    $db = new mysqli('localhost', 'root', 'YourPassword', 'ssh_tokens');
 
+    // Database connection with error handling
+    $db = new mysqli('localhost', 'root', 'YourPassword', 'ssh_tokens');
+    
     if ($db->connect_error) {
-        die("Connection failed: " . $db->connect_error);
+        // Log the error in a secure location
+        error_log("Connection failed: " . $db->connect_error);
+        die("Database connection error.");
     }
 
-    $result = $db->query("SELECT * FROM tokens WHERE token = '$token' AND expires_at > NOW() AND verified = 0");
+    // Use prepared statements to prevent SQL injection
+    $stmt = $db->prepare("SELECT * FROM tokens WHERE token = ? AND expires_at > NOW() AND verified = 0");
+    if ($stmt === false) {
+        // Log and handle error if preparation fails
+        error_log("Failed to prepare query: " . $db->error);
+        die("Query preparation error.");
+    }
+
+    // Bind the token to the prepared statement
+    $stmt->bind_param('s', $token);  // 's' means the token is a string
+
+    // Execute the query
+    $stmt->execute();
+    $result = $stmt->get_result();
 
     if ($result->num_rows > 0) {
-        $db->query("UPDATE tokens SET verified = 1 WHERE token = '$token'");
+        // Token is valid and unverified, so we verify it
+        $update_stmt = $db->prepare("UPDATE tokens SET verified = 1 WHERE token = ?");
+        $update_stmt->bind_param('s', $token);
+        $update_stmt->execute();
+
         echo "Token valid! You can now authenticate with SSH.";
     } else {
         echo "Invalid or expired token.";
     }
 
+    // Close the prepared statements and the database connection
+    $stmt->close();
+    $update_stmt->close();
     $db->close();
 } else {
     echo "No token provided.";
 }
 ?>
+
+    
+
 ```
 
 This script checks if the token exists, is not expired, and marks it as verified.
