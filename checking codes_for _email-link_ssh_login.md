@@ -6486,7 +6486,7 @@ fi
 
 This setup ensures secure **email verification** before granting **SSH access**, using a **remote MySQL server** to store and validate verification links. The system uses **ssmtp** for email sending, **PHP** for link verification, and restricts SSH access until the user verifies their email.
 
-
+🫥🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥🫥🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂😋😂😋🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥🫥😯🫥😯🫥😯🫥😯🫥
 
 To set up a complete system for **remote MySQL access**, **email verification**, and **SSH access restriction** without using a database, we will modify the previous steps to handle email verification and SSH login checks directly via scripts and configurations, without storing the verification data in a MySQL database.
 
