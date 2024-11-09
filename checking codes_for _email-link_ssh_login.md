@@ -6164,6 +6164,793 @@ fi
 This setup ensures that your email system is securely configured to send emails via SSL/TLS, and the verification process is securely handled using **MySQL** and **PHP**. Sensitive credentials are stored securely, and **SSH access** is only granted once the user has verified their email.
 
 
+🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥☹️🫥🫥☹️🫥
+To configure the above system with proper **remote MySQL database connection** for the root user and ensure the complete setup works correctly with the necessary modifications, here's the updated step-by-step guide. This includes secure MySQL remote access, correct shell access control, and email verification flow via **ssmtp**, **PHP**, and **MySQL**.
+
+---
+
+## **Full Setup for Remote MySQL Connection, Email Verification, and SSH Access Restriction**
+
+---
+
+### **1. Install `ssmtp` for Sending Emails Securely**
+
+Follow the installation steps for `ssmtp`, which will handle sending emails securely via Gmail’s SMTP server.
+
+```bash
+sudo apt-get update
+sudo apt-get install ssmtp
+```
+
+---
+
+### **2. Configure `ssmtp.conf` to Use Gmail's SMTP Securely**
+
+Edit the `ssmtp.conf` configuration file, typically located at `/etc/ssmtp/ssmtp.conf`:
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+Add the following configuration (make sure to replace the credentials with your own):
+
+```plaintext
+root=your-email@gmail.com
+mailhub=smtp.gmail.com:465
+UseSTARTTLS=NO
+AuthUser=your-email@gmail.com
+AuthPass=your-email-app-password  # Use app-specific password (generated via Google account security)
+FromLineOverride=YES
+```
+
+- **AuthUser**: Your Gmail email.
+- **AuthPass**: The app-specific password generated from Google (for security purposes).
+- **mailhub**: Gmail SMTP server and port 465 for SSL.
+
+Make sure the file is only readable by the root user for security purposes:
+
+```bash
+sudo chmod 600 /etc/ssmtp/ssmtp.conf
+```
+
+---
+
+### **3. Create Email Sending Script (send_verification_email.sh)**
+
+Create a script that generates a unique verification link and stores it in the MySQL database, then sends the email using `ssmtp`.
+
+```bash
+#!/bin/bash
+
+# Arguments: $1 = username, $2 = email
+user=$1
+email=$2
+
+# Generate a unique verification link (UUID for uniqueness)
+link=$(uuidgen)
+
+# Set an expiration time for the verification link (e.g., 10 minutes from now)
+expiration_time=$(date -d "+10 minutes" +"%Y-%m-%d %H:%M:%S")
+
+# Insert the verification link and expiration into MySQL database
+mysql -u root -p"$MYSQL_ROOT_PASSWORD" -h YOUR_REMOTE_MYSQL_HOST -e "INSERT INTO ssh_verification (user, link, expiration_time) VALUES ('$user', '$link', '$expiration_time');"
+
+# Send the verification email with the link using ssmtp
+echo -e "Subject: SSH Login Verification\n\nHello $user,\n\nPlease click the following link to verify your SSH login:\n\nhttp://yourdomain.com/verify?link=$link" | ssmtp $email
+```
+
+Explanation:
+- **`$1`**: Username of the person trying to log in.
+- **`$2`**: Email address of the user.
+- **`uuidgen`**: Generates a unique identifier to serve as the verification link.
+- **MySQL**: The verification link and expiration time are stored in a table (`ssh_verification`).
+- **`ssmtp`**: Sends an email with the link to the user.
+
+#### **Security Consideration: Secure MySQL Password Handling**
+
+To avoid hardcoding the MySQL root password, use an environment variable:
+
+```bash
+export MYSQL_ROOT_PASSWORD="your_mysql_password"
+```
+
+Alternatively, you can store the password securely in a `.my.cnf` file for MySQL:
+
+```ini
+[client]
+user=root
+password=your_mysql_password
+```
+
+Ensure the file is only accessible by the root user:
+
+```bash
+chmod 600 ~/.my.cnf
+```
+
+---
+
+### **4. Configure MySQL for Remote Access**
+
+Ensure that your MySQL server is configured to allow remote connections.
+
+#### a. **Edit MySQL Configuration for Remote Access**
+
+Open the MySQL configuration file (`/etc/mysql/mysql.conf.d/mysqld.cnf` on Ubuntu):
+
+```bash
+sudo nano /etc/mysql/mysql.conf.d/mysqld.cnf
+```
+
+Find the `bind-address` line and change it to `0.0.0.0` to allow connections from any IP:
+
+```plaintext
+bind-address = 0.0.0.0
+```
+
+Restart MySQL to apply the change:
+
+```bash
+sudo systemctl restart mysql
+```
+
+#### b. **Grant Remote Access to MySQL Root User**
+
+Log into MySQL to grant remote access to the root user (or another MySQL user created specifically for this purpose):
+
+```bash
+mysql -u root -p
+```
+
+Run the following SQL command to grant remote access:
+
+```sql
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'your_mysql_password';
+FLUSH PRIVILEGES;
+```
+
+This allows the `root` user to connect from any host (`%`). For added security, you can specify a particular IP address or range instead of `%`.
+
+#### c. **Allow MySQL Port in Firewall**
+
+Ensure your firewall allows traffic on MySQL's default port (3306). For `ufw`:
+
+```bash
+sudo ufw allow 3306
+```
+
+---
+
+### **5. Configure SSH to Trigger the Email Script**
+
+To trigger the email verification script when a user logs in via SSH, modify the SSH configuration.
+
+#### a. **Modify SSH Configuration to Trigger the Script**
+
+Edit the `/etc/ssh/sshd_config` file:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add or modify the following line:
+
+```plaintext
+ForceCommand /path/to/send_verification_email.sh $USER $USER@yourdomain.com
+```
+
+This forces SSH to run the `send_verification_email.sh` script whenever a user attempts to log in. The `$USER` variable will automatically be replaced with the username of the user trying to log in.
+
+#### b. **Restart the SSH Service**
+
+After modifying the SSH configuration, restart the SSH service:
+
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
+### **6. Set Up MySQL Database for Link Verification**
+
+Create a MySQL database to store the verification links and their expiration times.
+
+#### a. **Create the Database and Table**
+
+Log into MySQL and create the database and table:
+
+```bash
+mysql -u root -p
+```
+
+Run the following SQL commands to create the necessary database and table:
+
+```sql
+CREATE DATABASE ssh_verification;
+USE ssh_verification;
+
+CREATE TABLE verification_links (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user VARCHAR(255),
+    link VARCHAR(255) UNIQUE,
+    expiration_time DATETIME,
+    verified BOOLEAN DEFAULT FALSE
+);
+```
+
+#### b. **Create a MySQL User for the Script**
+
+It’s a good practice to create a dedicated MySQL user for the script, granting it the necessary permissions.
+
+```sql
+CREATE USER 'sshd_user'@'localhost' IDENTIFIED BY 'your_secure_password';
+GRANT SELECT, INSERT, UPDATE ON ssh_verification.* TO 'sshd_user'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+---
+
+### **7. Create the PHP Script for Link Verification**
+
+Create a PHP script (`verify.php`) that will check the verification link when the user clicks it.
+
+#### a. **PHP Script for Verification (`verify.php`)**
+
+Place this PHP script in your web directory (e.g., `/var/www/html/verify.php`):
+
+```php
+<?php
+$link = $_GET['link'];  // Get the link from the query parameter
+
+// Connect to MySQL
+$mysqli = new mysqli("localhost", "sshd_user", "your_secure_password", "ssh_verification");
+
+if ($mysqli->connect_error) {
+    die("Connection failed: " . $mysqli->connect_error);
+}
+
+// Query to check if the link exists and is not expired
+$query = "SELECT * FROM verification_links WHERE link = ? AND expiration_time > NOW() AND verified = FALSE LIMIT 1";
+$stmt = $mysqli->prepare($query);
+$stmt->bind_param("s", $link);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows > 0) {
+    // Link is valid, mark it as verified
+    $update_query = "UPDATE verification_links SET verified = TRUE WHERE link = ?";
+    $update_stmt = $mysqli->prepare($update_query);
+    $update_stmt->bind_param("s", $link);
+    $update_stmt->execute();
+
+    echo "Verification successful! You can now log in.";
+} else {
+    echo "Invalid or expired verification link.";
+}
+
+$stmt->close();
+$mysqli->close();
+?>
+```
+
+Explanation:
+- The script checks if the verification link exists, is not expired, and has not been marked as verified.
+- If valid, it updates the database to mark the link as verified.
+- If invalid or expired, it shows an error message.
+
+---
+
+### **8. Restrict SSH Access Until Verification**
+
+To restrict SSH access until the user has clicked the verification link, modify the login script (`send_verification_email.sh`) to deny access if the user has not verified the link.
+
+#### a. **Modify the Login Script to Check for Verification**
+
+Edit `/path/to/send_verification_email.sh` to check if the user is verified before allowing SSH access:
+
+```bash
+#!/bin/bash
+
+# Arguments: $1 = username, $2 = email
+user=$1
+email=$2
+
+# Check if the user has verified their link
+verified=$(mysql -u root -p"$MYSQL_ROOT_PASSWORD" -h YOUR_REMOTE_MYSQL_HOST -s -N -e "SELECT verified FROM ssh_verification WHERE user='$user' AND verified=TRUE
+
+ LIMIT 1;")
+
+if [ "$verified" == "TRUE" ]; then
+    # Allow access to shell
+    echo "Verification successful. Granting shell access."
+    exit 0
+else
+    # User hasn't verified, send email again and deny access
+    echo "Verification pending. Please check your email to complete verification."
+    exit 1
+fi
+```
+
+---
+
+### **9. Testing the Setup**
+
+1. **User Attempts SSH Login**: A user attempts to log in via SSH.
+2. **Verification Email Sent**: The email verification link is sent using the `ssmtp` script.
+3. **User Clicks the Link**: The user clicks the link in the email, which triggers the PHP script to verify the link.
+4. **Shell Access Granted**: Once the link is verified, the user gains access to the shell.
+
+---
+
+### **Conclusion**
+
+This setup ensures secure **email verification** before granting **SSH access**, using a **remote MySQL server** to store and validate verification links. The system uses **ssmtp** for email sending, **PHP** for link verification, and restricts SSH access until the user verifies their email.
+
+
+
+To set up a complete system for **remote MySQL access**, **email verification**, and **SSH access restriction** without using a database, we will modify the previous steps to handle email verification and SSH login checks directly via scripts and configurations, without storing the verification data in a MySQL database.
+
+### **1. Install `ssmtp` for Sending Emails Securely**
+
+Ensure that you have `ssmtp` installed to send emails securely via Gmail’s SMTP server.
+
+```bash
+sudo apt-get update
+sudo apt-get install ssmtp
+```
+
+---
+
+### **2. Configure `ssmtp.conf` for Gmail's SMTP**
+
+Edit the `ssmtp.conf` file, typically located at `/etc/ssmtp/ssmtp.conf`:
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+Add the following configuration (make sure to replace with your credentials):
+
+```plaintext
+root=your-email@gmail.com
+mailhub=smtp.gmail.com:465
+UseSTARTTLS=NO
+AuthUser=your-email@gmail.com
+AuthPass=your-email-app-password  # Use an app-specific password generated from Google account security
+FromLineOverride=YES
+```
+
+- **AuthUser**: Your Gmail address.
+- **AuthPass**: The app-specific password (for enhanced security).
+
+Make sure the configuration file is readable only by root:
+
+```bash
+sudo chmod 600 /etc/ssmtp/ssmtp.conf
+```
+
+---
+
+### **3. Create the Email Verification Script**
+
+We will create a shell script that generates a unique verification link and sends it via email using `ssmtp`. The script will check a local file to verify the link without using MySQL.
+
+#### a. **Create the Verification Email Script (`send_verification_email.sh`)**
+
+```bash
+#!/bin/bash
+
+# Arguments: $1 = username, $2 = email
+user=$1
+email=$2
+
+# Generate a unique verification link (UUID for uniqueness)
+link=$(uuidgen)
+
+# Set an expiration time for the verification link (e.g., 10 minutes from now)
+expiration_time=$(date -d "+10 minutes" +"%Y-%m-%d %H:%M:%S")
+
+# Store the verification link in a local file (e.g., /var/www/html/verification_links.txt)
+echo "$user,$link,$expiration_time" >> /var/www/html/verification_links.txt
+
+# Send the verification email using ssmtp
+echo -e "Subject: SSH Login Verification\n\nHello $user,\n\nPlease click the following link to verify your SSH login:\n\nhttp://yourdomain.com/verify?link=$link" | ssmtp $email
+```
+
+- **UUID generation**: This generates a unique identifier to serve as the verification link.
+- **Expiration time**: Links expire after a defined period (10 minutes in this case).
+- **Local file**: The script writes the username, link, and expiration time into a file (`verification_links.txt`) for future validation.
+
+#### b. **Make the script executable**
+
+```bash
+chmod +x /path/to/send_verification_email.sh
+```
+
+---
+
+### **4. Configure SSH to Trigger the Verification Script**
+
+Modify SSH to trigger the email verification script whenever a user tries to log in.
+
+#### a. **Modify SSH Configuration (`/etc/ssh/sshd_config`)**
+
+Open the SSH configuration file and modify it:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add the following line to the end of the file:
+
+```plaintext
+ForceCommand /path/to/send_verification_email.sh $USER $USER@yourdomain.com
+```
+
+- **$USER**: This variable represents the username of the person trying to log in via SSH.
+- **$USER@yourdomain.com**: The email address associated with the username.
+
+This forces SSH to execute the verification email script when a user logs in.
+
+#### b. **Restart SSH Service**
+
+After saving the changes, restart the SSH service to apply them:
+
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
+### **5. Create the PHP Script to Verify the Link**
+
+Create a PHP script (`verify.php`) that the user can click on to verify their login attempt. This will match the link and expiration time stored in the local text file.
+
+#### a. **PHP Script for Link Verification (`verify.php`)**
+
+Place this PHP script in your web server's document root (e.g., `/var/www/html/verify.php`):
+
+```php
+<?php
+$link = $_GET['link'];  // Get the verification link from the query string
+
+// File containing verification links and expiration times
+$verification_file = '/var/www/html/verification_links.txt';
+
+$lines = file($verification_file);
+$valid = false;
+
+foreach ($lines as $line) {
+    list($user, $stored_link, $expiration_time) = explode(',', $line);
+    
+    // Check if the link exists and has not expired
+    if ($stored_link == $link && strtotime($expiration_time) > time()) {
+        // Mark the link as verified by removing it from the file
+        $valid = true;
+        $new_lines = array_filter($lines, function($line) use ($link) {
+            return !str_contains($line, $link);
+        });
+        file_put_contents($verification_file, implode("\n", $new_lines));
+        break;
+    }
+}
+
+if ($valid) {
+    echo "Verification successful! You can now log in.";
+} else {
+    echo "Invalid or expired verification link.";
+}
+?>
+```
+
+Explanation:
+- **`$link`**: This retrieves the verification link passed in the query string.
+- **`$verification_file`**: The script reads from a file (`verification_links.txt`) where the links and expiration times are stored.
+- **Validation**: The script checks if the link exists, if it is valid (not expired), and removes it from the file once verified.
+
+#### b. **Make sure your web server is running**
+
+Ensure your web server (like Apache or Nginx) is running and serving the PHP file. You can check if Apache is running with:
+
+```bash
+sudo systemctl status apache2
+```
+
+---
+
+### **6. Create a Login Script to Check Verification**
+
+This script will be triggered when the user attempts to log in via SSH. It checks the verification file to see if the user has already clicked the verification link.
+
+#### a. **Modify the Login Script**
+
+Edit the `send_verification_email.sh` to add a check for verification before granting SSH access:
+
+```bash
+#!/bin/bash
+
+# Arguments: $1 = username, $2 = email
+user=$1
+email=$2
+
+# Check if the user has verified their link by checking the verification file
+verification_file="/var/www/html/verification_links.txt"
+verified=false
+
+# Look for the user's verification status in the file
+while IFS=, read -r file_user file_link file_expiration_time
+do
+    if [ "$file_user" == "$user" ] && [ "$file_link" == "$2" ]; then
+        # Check if the link has expired
+        if [ "$(date +%s)" -lt "$(date -d "$file_expiration_time" +%s)" ]; then
+            verified=true
+            break
+        else
+            echo "Your verification link has expired. Please check your email again."
+            exit 1
+        fi
+    fi
+done < $verification_file
+
+if [ "$verified" == "true" ]; then
+    echo "Verification successful. You may now proceed with SSH login."
+    exit 0
+else
+    echo "Verification pending. Please check your email to complete the verification."
+    exit 1
+fi
+```
+
+Explanation:
+- **Verification check**: The script checks if the user has successfully verified their login.
+- **Link expiration check**: It ensures that the verification link is still valid based on the expiration time.
+
+---
+
+### **7. Testing the Setup**
+
+To test the setup:
+
+1. **SSH Login Attempt**: A user attempts to log in via SSH.
+2. **Verification Email Sent**: The `send_verification_email.sh` script sends the email with the verification link.
+3. **User Clicks the Link**: The user clicks on the link in the email.
+4. **Link Verification**: The PHP script checks the verification link and expires the link if necessary.
+5. **SSH Access Granted**: Once the link is verified, the user can log in via SSH.
+
+---
+
+### **Conclusion**
+
+This setup provides a **secure email verification system** for **SSH logins** without using a MySQL database. The system:
+- **Generates a unique verification link** sent to the user.
+- **Validates the link** through a simple PHP script without relying on a database.
+- **Restricts SSH access** until the user has clicked the verification link.
+🫥🫥😶🫥😢🫥😢🫥😢🫥🫥🫥😶🫥😶🫥😶🫥🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥🙂😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶😶🫥😶🫥😶🫥😶🫥🫥😶
+To ensure that your Duo Security setup for SSH login persists across reboots, you need to make sure that the necessary configurations are properly applied and that essential services are enabled to start automatically. This includes ensuring that the Duo PAM module is correctly configured, Duo's required services are running on boot, and the necessary PAM (Pluggable Authentication Module) settings persist.
+
+Here’s the **complete code setup** for the Duo SSH login, which will work after a reboot:
+
+---
+
+### **Step 1: Sign Up for Duo Security**
+1. Go to [Duo Security](https://www.duo.com/) and sign up for an account.
+2. Once logged in, go to **Applications** > **Protect an Application**.
+3. Choose **Unix Application** or **SSH Application** and click **Protect this Application**.
+4. **Note down** the **Integration Key**, **Secret Key**, and **API Hostname** from the Duo Admin Panel. You will need these for configuring the server.
+
+---
+
+### **Step 2: Install Duo Unix on Your Server**
+
+1. **Install the necessary dependencies**:
+
+   For **Debian/Ubuntu**:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y libpam0g-dev libssl-dev
+   ```
+
+   For **CentOS/RHEL**:
+   ```bash
+   sudo yum install -y libpam-devel openssl-devel
+   ```
+
+2. **Install Duo Unix**:
+
+   Download the Duo Unix package from [Duo's download page](https://dl.duosecurity.com/).
+
+   For **Debian/Ubuntu**:
+   ```bash
+   sudo apt-get install -y duo-unix
+   ```
+
+   For **CentOS/RHEL**:
+   ```bash
+   sudo yum install -y duo-unix
+   ```
+
+   Alternatively, you can download it manually:
+   - **For Debian-based systems**:
+     ```bash
+     sudo dpkg -i duo-unix-X.X.X.deb
+     ```
+   - **For RHEL/CentOS systems**:
+     ```bash
+     sudo rpm -i duo-unix-X.X.X.rpm
+     ```
+
+---
+
+### **Step 3: Configure Duo PAM (Pluggable Authentication Module)**
+
+1. **Edit the PAM configuration for SSH**:
+
+   Open the PAM configuration file for SSH (`/etc/pam.d/sshd`):
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+   Add the following line **at the top** of the file:
+   ```bash
+   auth required pam_duo.so
+   ```
+
+2. **Configure the Duo PAM settings**:
+
+   The Duo PAM module configuration file is typically located at `/etc/duo/pam_duo.conf`. Create it if it doesn't exist:
+   ```bash
+   sudo nano /etc/duo/pam_duo.conf
+   ```
+
+   Add the following configuration, replacing `YOUR_INTEGRATION_KEY`, `YOUR_SECRET_KEY`, and `YOUR_API_HOSTNAME` with the values from your Duo Admin Panel:
+   ```bash
+   # Duo Security configuration for PAM
+   ikey=YOUR_INTEGRATION_KEY       # Your Integration Key
+   skey=YOUR_SECRET_KEY            # Your Secret Key
+   host=YOUR_API_HOSTNAME         # Your API Hostname (e.g., api-xxxxxxxx.duosecurity.com)
+   ```
+
+---
+
+### **Step 4: Enable SSH with Duo MFA**
+
+1. **Edit the SSH configuration file**:
+
+   Open `/etc/ssh/sshd_config` to enable challenge-response authentication:
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Ensure the following lines are configured:
+   ```bash
+   ChallengeResponseAuthentication yes
+   UsePAM yes
+   ```
+
+2. **Enable Duo to start after reboot**:
+
+   Ensure that the Duo service is enabled to start on boot:
+   ```bash
+   sudo systemctl enable duo
+   ```
+
+3. **Restart SSH**:
+
+   After modifying the SSH configuration, restart the SSH service:
+   ```bash
+   sudo systemctl restart sshd
+   ```
+
+---
+
+### **Step 5: Install the Duo Mobile App on Your Phone**
+
+1. **Install the Duo Mobile app**:
+
+   - Download and install the **Duo Mobile** app from the **App Store** (iOS) or **Google Play Store** (Android).
+
+2. **Activate your Duo account**:
+
+   - Log into the Duo Admin Panel and add your user.
+   - Follow the instructions to enroll your phone using the **Push** authentication method.
+
+---
+
+### **Step 6: Test SSH Login with Duo Push Authentication**
+
+1. **SSH into your server**:
+   ```bash
+   ssh your_username@your_server_ip
+   ```
+
+2. **Approve the Duo push notification**:
+
+   - You should receive a push notification on your phone.
+   - Open the **Duo Mobile app** on your phone and approve the request to authenticate.
+
+---
+
+### **Optional: Step 7 - Set Up TOTP as a Fallback Method**
+
+If you prefer to set up **TOTP (Time-Based One-Time Password)** as a fallback or secondary factor (e.g., using Google Authenticator or Authy), follow these steps:
+
+1. **Install the TOTP PAM module**:
+
+   For **Debian/Ubuntu**:
+   ```bash
+   sudo apt-get install libpam-google-authenticator
+   ```
+
+   For **CentOS/RHEL**:
+   ```bash
+   sudo yum install google-authenticator
+   ```
+
+2. **Modify PAM to use TOTP as a fallback**:
+
+   Open the SSH PAM configuration file:
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+   Add the following line **below** the Duo PAM line:
+   ```bash
+   auth required pam_google_authenticator.so
+   ```
+
+3. **Configure TOTP for each user**:
+
+   Each user who wants to enable TOTP needs to run:
+   ```bash
+   google-authenticator
+   ```
+
+   This will generate a QR code for Google Authenticator or Authy. Follow the prompts to complete the setup.
+
+4. **Ensure SSH allows both MFA methods**:
+
+   Make sure your SSH configuration (`/etc/ssh/sshd_config`) allows multiple authentication methods:
+   ```bash
+   ChallengeResponseAuthentication yes
+   UsePAM yes
+   ```
+
+5. **Restart SSH again**:
+   ```bash
+   sudo systemctl restart sshd
+   ```
+
+---
+
+### **Important Notes for Reboot Persistence**
+
+1. **Ensure Duo's PAM module is enabled** on every boot:
+   - The Duo Unix package's PAM integration should automatically persist after reboots if it’s correctly configured. To double-check, ensure that the Duo module is properly configured by running:
+     ```bash
+     sudo systemctl enable duo
+     ```
+
+2. **Ensure SSH and PAM settings persist**:
+   - The configuration changes you made to `/etc/ssh/sshd_config` and `/etc/pam.d/sshd` should persist across reboots since they are saved as configuration files. You can verify this by rebooting your server and checking the status of the SSH service.
+   - Run the following after reboot to ensure that SSH uses PAM and Duo:
+     ```bash
+     sudo systemctl status sshd
+     ```
+
+---
+
+### **Summary of All Steps**
+
+1. **Sign up for Duo Security** and create an SSH/Unix application in the Duo Admin Panel. Note the **Integration Key**, **Secret Key**, and **API Hostname**.
+2. **Install Duo Unix** on your server by installing necessary dependencies and the `duo-unix` package.
+3. **Configure the PAM module** to use Duo for authentication by editing `/etc/pam.d/sshd` and `/etc/duo/pam_duo.conf`.
+4. **Enable Duo MFA in SSH** by modifying `/etc/ssh/sshd_config` to allow challenge-response authentication, enabling Duo's service to start on boot, and restarting SSH.
+5. **Install the Duo Mobile app** on your phone and enroll it in your Duo account.
+6. **Test SSH login** by SSHing into your server and approving the Duo push notification on your phone.
+7. Optionally, **set up TOTP** (Google Authenticator or Authy) as a fallback MFA method.
+
+By following these steps, you ensure that Duo MFA for SSH will work not only immediately but will persist even after the server reboots.
+
 
 
 
