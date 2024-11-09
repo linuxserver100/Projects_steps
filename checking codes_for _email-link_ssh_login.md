@@ -6486,263 +6486,520 @@ fi
 
 This setup ensures secure **email verification** before granting **SSH access**, using a **remote MySQL server** to store and validate verification links. The system uses **ssmtp** for email sending, **PHP** for link verification, and restricts SSH access until the user verifies their email.
 
-🫥🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥🫥🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂😋😂😋🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥🫥😯🫥😯🫥😯🫥😯🫥
+🫥🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥🫥🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂😋😂😋🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥🫥😯🫥😯🫥😯🫥😯🫥Your setup is well-structured, but there are a few enhancements and refinements that could improve security and usability. Below is a comprehensive and detailed walkthrough, with additions where necessary.
 
-To set up a complete system for **remote MySQL access**, **email verification**, and **SSH access restriction** without using a database, we will modify the previous steps to handle email verification and SSH login checks directly via scripts and configurations, without storing the verification data in a MySQL database.
+### 1. **MySQL Database Setup (with Secure Password)**
 
-### **1. Install `ssmtp` for Sending Emails Securely**
+#### 1.1. **Create MySQL Database and Table**
 
-Ensure that you have `ssmtp` installed to send emails securely via Gmail’s SMTP server.
-
-```bash
-sudo apt-get update
-sudo apt-get install ssmtp
-```
-
----
-
-### **2. Configure `ssmtp.conf` for Gmail's SMTP**
-
-Edit the `ssmtp.conf` file, typically located at `/etc/ssmtp/ssmtp.conf`:
+First, log into MySQL as root and create the necessary database and table for email verification.
 
 ```bash
-sudo nano /etc/ssmtp/ssmtp.conf
+sudo mysql -u root -p
 ```
 
-Add the following configuration (make sure to replace with your credentials):
+Run the following SQL commands to create the database, table, and a MySQL user:
 
-```plaintext
-root=your-email@gmail.com
-mailhub=smtp.gmail.com:465
-UseSTARTTLS=NO
-AuthUser=your-email@gmail.com
-AuthPass=your-email-app-password  # Use an app-specific password generated from Google account security
-FromLineOverride=YES
+```sql
+CREATE DATABASE user_verification;
+
+USE user_verification;
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    verification_token VARCHAR(255) NOT NULL,
+    verified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE USER 'verify_user'@'%' IDENTIFIED BY 'your_secure_password';
+GRANT ALL PRIVILEGES ON user_verification.* TO 'verify_user'@'%';
+FLUSH PRIVILEGES;
 ```
 
-- **AuthUser**: Your Gmail address.
-- **AuthPass**: The app-specific password (for enhanced security).
+Replace `'your_secure_password'` with a strong password. 
 
-Make sure the configuration file is readable only by root:
+#### 1.2. **Configure MySQL for Remote Access**
+
+Make sure MySQL is configured to accept remote connections.
+
+1. **Edit MySQL Configuration File**:
+
+   ```bash
+   sudo nano /etc/mysql/my.cnf
+   ```
+
+2. **Set the bind-address** to `0.0.0.0`:
+
+   ```ini
+   bind-address = 0.0.0.0
+   ```
+
+3. **Restart MySQL**:
+
+   ```bash
+   sudo systemctl restart mysql
+   ```
+
+4. **Allow MySQL Port through Firewall**:
+
+   ```bash
+   sudo ufw allow 3306
+   ```
+
+#### 1.3. **Security Consideration for Password**
+
+To ensure security, don't store the MySQL password directly in scripts. Use an environment variable.
+
+### 2. **Environment Variable for MySQL Password**
+
+#### 2.1. **Set Environment Variable**
+
+You can set the MySQL password as an environment variable for secure access. Add the following line to `~/.bashrc` or `/etc/profile` for global access:
 
 ```bash
-sudo chmod 600 /etc/ssmtp/ssmtp.conf
+export MYSQL_PASSWORD="your_secure_password"
 ```
 
----
+After adding it, source the file to apply changes:
 
-### **3. Create the Email Verification Script**
+```bash
+source ~/.bashrc
+```
 
-We will create a shell script that generates a unique verification link and sends it via email using `ssmtp`. The script will check a local file to verify the link without using MySQL.
+Now the password can be accessed securely in your scripts using `$MYSQL_PASSWORD`.
 
-#### a. **Create the Verification Email Script (`send_verification_email.sh`)**
+#### 2.2. **Modify Scripts to Use the Environment Variable**
+
+Update your scripts (e.g., `send_script.sh`, `verify_ssh.sh`) to use the `MYSQL_PASSWORD` environment variable instead of hardcoding the password.
+
+For example, **`send_script.sh`** can be updated as follows:
 
 ```bash
 #!/bin/bash
 
-# Arguments: $1 = username, $2 = email
-user=$1
-email=$2
+EMAIL=$1
+TOKEN=$(openssl rand -base64 32)
 
-# Generate a unique verification link (UUID for uniqueness)
-link=$(uuidgen)
+# Store the verification token in the database
+mysql -u verify_user -p"$MYSQL_PASSWORD" -e "INSERT INTO user_verification.users (email, verification_token) VALUES ('$EMAIL', '$TOKEN')"
 
-# Set an expiration time for the verification link (e.g., 10 minutes from now)
-expiration_time=$(date -d "+10 minutes" +"%Y-%m-%d %H:%M:%S")
+VERIFICATION_LINK="https://yourdomain.com/verify.php?email=$EMAIL&token=$TOKEN"
 
-# Store the verification link in a local file (e.g., /var/www/html/verification_links.txt)
-echo "$user,$link,$expiration_time" >> /var/www/html/verification_links.txt
+# Send the email using ssmtp or msmtp
+echo -e "Subject: Email Verification\n\nPlease click the link below to verify your email address:\n$VERIFICATION_LINK" | ssmtp $EMAIL
 
-# Send the verification email using ssmtp
-echo -e "Subject: SSH Login Verification\n\nHello $user,\n\nPlease click the following link to verify your SSH login:\n\nhttp://yourdomain.com/verify?link=$link" | ssmtp $email
+echo "Verification email sent to $EMAIL"
 ```
 
-- **UUID generation**: This generates a unique identifier to serve as the verification link.
-- **Expiration time**: Links expire after a defined period (10 minutes in this case).
-- **Local file**: The script writes the username, link, and expiration time into a file (`verification_links.txt`) for future validation.
+In this script, the password is securely loaded from the environment variable `$MYSQL_PASSWORD`.
 
-#### b. **Make the script executable**
+#### 2.3. **Modify `verify_ssh.sh` to Use the Environment Variable**
+
+Update **`verify_ssh.sh`** to use the environment variable for MySQL authentication:
 
 ```bash
-chmod +x /path/to/send_verification_email.sh
+#!/bin/bash
+
+USER_EMAIL="${USER}@yourdomain.com"
+RESULT=$(mysql -u verify_user -p"$MYSQL_PASSWORD" -e "SELECT verified FROM user_verification.users WHERE email='$USER_EMAIL'")
+
+if [[ "$RESULT" == *"1"* ]]; then
+    exit 0  # Email is verified, allow login
+else
+    echo "Email not verified. Access denied."
+    exit 1  # Deny access
+fi
 ```
 
----
+### 3. **Email Sending Setup with SSL/TLS (ssmtp)**
 
-### **4. Configure SSH to Trigger the Verification Script**
+We will use `ssmtp` or `msmtp` for sending emails securely. Below is an updated and secure setup for `ssmtp.conf`.
 
-Modify SSH to trigger the email verification script whenever a user tries to log in.
+#### 3.1. **Install ssmtp or msmtp**
 
-#### a. **Modify SSH Configuration (`/etc/ssh/sshd_config`)**
+If using **ssmtp**:
 
-Open the SSH configuration file and modify it:
+```bash
+sudo apt-get install ssmtp  # Older systems
+```
+
+If using **msmtp** (recommended for newer systems):
+
+```bash
+sudo apt-get install msmtp
+```
+
+#### 3.2. **Configure `ssmtp.conf` for Secure Email Sending**
+
+For Gmail SMTP (replace placeholders with your details):
+
+1. **Edit the `ssmtp` configuration file**:
+
+   ```bash
+   sudo nano /etc/ssmtp/ssmtp.conf
+   ```
+
+2. **Gmail SMTP Setup**:
+
+   ```ini
+   root=your_email@gmail.com
+   mailhub=smtp.gmail.com:587
+   UseSTARTTLS=YES
+   AuthUser=your_email@gmail.com
+   AuthPass=your_email_password  # Use app-specific password if 2FA is enabled
+   FromLineOverride=YES
+   ```
+
+   - **Security Tip**: If you have two-factor authentication (2FA) enabled, use an app-specific password instead of your regular Gmail password. You can create this in your Google account settings.
+
+#### 3.3. **Configure `msmtp` for Secure Email Sending (Alternative)**
+
+If you're using `msmtp` (recommended for newer systems), here's the configuration:
+
+1. **Create/Update the configuration file** at `~/.msmtprc`:
+
+   ```ini
+   account default
+   host smtp.gmail.com
+   port 587
+   auth on
+   user your_email@gmail.com
+   password your_email_password
+   tls on
+   tls_starttls on
+   from your_email@gmail.com
+   logfile ~/.msmtp.log
+   ```
+
+   Ensure the file is readable only by the user to protect sensitive information:
+
+   ```bash
+   chmod 600 ~/.msmtprc
+   ```
+
+2. **Test Email Sending**:
+
+   To test the email setup:
+
+   ```bash
+   echo "Test email body" | msmtp your_email@gmail.com
+   ```
+
+### 4. **PHP Verification Script (`verify.php`)**
+
+Here’s the PHP script that will validate the token and verify the user's email:
+
+```php
+<?php
+$servername = "localhost";
+$username = "verify_user";
+$password = getenv('MYSQL_PASSWORD');  // Get the password from the environment
+$dbname = "user_verification";
+
+// Create connection
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+// Check connection
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+$email = $_GET['email'];
+$token = $_GET['token'];
+
+// Prepare SQL statement to prevent SQL injection
+$stmt = $conn->prepare("SELECT * FROM users WHERE email = ? AND verification_token = ? AND verified = FALSE");
+$stmt->bind_param("ss", $email, $token);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows > 0) {
+    $update_stmt = $conn->prepare("UPDATE users SET verified = TRUE WHERE email = ? AND verification_token = ?");
+    $update_stmt->bind_param("ss", $email, $token);
+    if ($update_stmt->execute()) {
+        echo "Email verified successfully!";
+    } else {
+        echo "Error updating record: " . $conn->error;
+    }
+} else {
+    echo "Invalid or expired verification token.";
+}
+
+$conn->close();
+?>
+```
+
+This script uses `getenv('MYSQL_PASSWORD')` to load the password from the environment variable and prevents SQL injection by using prepared statements.
+
+### 5. **SSH Configuration with `ForceCommand`**
+
+Enforce SSH login only for verified users by using `ForceCommand`.
+
+#### 5.1. **Edit SSH Configuration**
+
+Open the SSH configuration file:
 
 ```bash
 sudo nano /etc/ssh/sshd_config
 ```
 
-Add the following line to the end of the file:
+Add the following line to force the execution of the verification script:
 
-```plaintext
-ForceCommand /path/to/send_verification_email.sh $USER $USER@yourdomain.com
+```bash
+ForceCommand /usr/local/bin/verify_ssh.sh
 ```
 
-- **$USER**: This variable represents the username of the person trying to log in via SSH.
-- **$USER@yourdomain.com**: The email address associated with the username.
+#### 5.2. **Create the SSH Verification Script**
 
-This forces SSH to execute the verification email script when a user logs in.
+Create `/usr/local/bin/verify_ssh.sh`:
 
-#### b. **Restart SSH Service**
+```bash
+#!/bin/bash
 
-After saving the changes, restart the SSH service to apply them:
+USER_EMAIL="${USER}@yourdomain.com"
+RESULT=$(mysql -u verify_user -p"$MYSQL_PASSWORD" -e "SELECT verified FROM user_verification.users WHERE email='$USER_EMAIL'")
+
+if [[ "$RESULT" == *"1"* ]]; then
+    exit 0  # Email verified, allow login
+else
+    echo "Email not verified. Access denied."
+    exit 1  # Deny access
+fi
+```
+
+#### 5.3. **Make the Script Executable**
+
+```bash
+chmod +x /usr/local/bin/verify_ssh.sh
+```
+
+#### 5.4. **Restart SSH**
+
+Restart SSH to apply the changes:
 
 ```bash
 sudo systemctl restart sshd
 ```
 
+### 6. **Testing the Setup**
+
+1. **Send a verification email** using `send_script.sh`.
+2. **Verify the email** by clicking the link in the email (handled by `verify.php`).
+3. **Test SSH login**: After email verification, attempt to log into the server. If the email is verified, login should succeed; otherwise, access is denied.
+
+### Conclusion
+
+- **Secure Password Handling**: The MySQL password is stored securely using environment variables.
+
+
+- **Email Verification**: Emails are sent securely with SSL/TLS configuration for `ssmtp` or `msmtp`.
+- **SSH Access Control**: SSH login is controlled based on email verification, ensuring that only verified users can access the system.
+
+This setup ensures a secure and streamlined process for email verification and SSH access control.
+.
+🫥🫥😶🫥😢🫥😢🫥😢🫥🫥🫥😶🫥😶🫥😶🫥🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥🙂😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶😶🫥😶🫥😶🫥😶🫥🫥😶
+To establish a two-factor SSH login mechanism with an approval step on a separate device, you'll need to:
+
+- Set up SSH key authentication for the first factor.
+- Configure a forced command (`ForceCommand`) in SSH to trigger a custom script for the second factor (the approval step).
+- Use a notification service (e.g., Pushbullet) to send the login request to the second device.
+- Use the second device to approve or deny the login by creating a file on the server.
+
+Let's break down the detailed steps for each part:
+
 ---
 
-### **5. Create the PHP Script to Verify the Link**
+### 1. **SSH Key Authentication**
 
-Create a PHP script (`verify.php`) that the user can click on to verify their login attempt. This will match the link and expiration time stored in the local text file.
+First, set up SSH key-based authentication so that SSH login is allowed with a key rather than a password. This provides the first factor of authentication.
 
-#### a. **PHP Script for Link Verification (`verify.php`)**
-
-Place this PHP script in your web server's document root (e.g., `/var/www/html/verify.php`):
-
-```php
-<?php
-$link = $_GET['link'];  // Get the verification link from the query string
-
-// File containing verification links and expiration times
-$verification_file = '/var/www/html/verification_links.txt';
-
-$lines = file($verification_file);
-$valid = false;
-
-foreach ($lines as $line) {
-    list($user, $stored_link, $expiration_time) = explode(',', $line);
-    
-    // Check if the link exists and has not expired
-    if ($stored_link == $link && strtotime($expiration_time) > time()) {
-        // Mark the link as verified by removing it from the file
-        $valid = true;
-        $new_lines = array_filter($lines, function($line) use ($link) {
-            return !str_contains($line, $link);
-        });
-        file_put_contents($verification_file, implode("\n", $new_lines));
-        break;
-    }
-}
-
-if ($valid) {
-    echo "Verification successful! You can now log in.";
-} else {
-    echo "Invalid or expired verification link.";
-}
-?>
-```
-
-Explanation:
-- **`$link`**: This retrieves the verification link passed in the query string.
-- **`$verification_file`**: The script reads from a file (`verification_links.txt`) where the links and expiration times are stored.
-- **Validation**: The script checks if the link exists, if it is valid (not expired), and removes it from the file once verified.
-
-#### b. **Make sure your web server is running**
-
-Ensure your web server (like Apache or Nginx) is running and serving the PHP file. You can check if Apache is running with:
+#### 1.1 Generate SSH Key Pair (If not already done)
+On your local machine, run:
 
 ```bash
-sudo systemctl status apache2
+ssh-keygen -t rsa -b 4096
 ```
 
----
+This will create a public/private key pair, typically stored in `~/.ssh/id_rsa` (private key) and `~/.ssh/id_rsa.pub` (public key).
 
-### **6. Create a Login Script to Check Verification**
+#### 1.2 Copy Public Key to Server
+To allow key-based authentication, copy your public key to the server using `ssh-copy-id` or manually:
 
-This script will be triggered when the user attempts to log in via SSH. It checks the verification file to see if the user has already clicked the verification link.
+```bash
+ssh-copy-id user@server_ip
+```
 
-#### a. **Modify the Login Script**
+This copies your public key (`id_rsa.pub`) to the server’s `~/.ssh/authorized_keys` file. You may also manually append the public key to `~/.ssh/authorized_keys` on the server.
 
-Edit the `send_verification_email.sh` to add a check for verification before granting SSH access:
+### 2. **Forced Command with SSH Configuration**
+
+We will now configure SSH to run a forced command that executes a custom script whenever a user logs in.
+
+#### 2.1 Edit the SSH Configuration
+On the server, open the SSH configuration file for editing:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add or modify the following settings:
+
+```bash
+# Force the execution of a custom script on every SSH login
+ForceCommand /usr/local/bin/approve_login.sh
+AllowUsers your_ssh_user
+```
+
+The `ForceCommand` directive ensures that every SSH login triggers the execution of `/usr/local/bin/approve_login.sh`. This custom script will handle the approval process.
+
+#### 2.2 Restart SSH Service
+After modifying the configuration, restart the SSH service for the changes to take effect:
+
+```bash
+sudo systemctl restart sshd
+```
+
+### 3. **Creating the Approval Script (`approve_login.sh`)**
+
+This script will run every time someone attempts to log in via SSH. The script will:
+
+- Log the attempt.
+- Send a notification to the second device using Pushbullet.
+- Wait for approval from the second device.
+
+#### 3.1 Create the Script on the Server
+Create the approval script at `/usr/local/bin/approve_login.sh`:
+
+```bash
+sudo nano /usr/local/bin/approve_login.sh
+```
+
+Paste the following code into the script:
 
 ```bash
 #!/bin/bash
 
-# Arguments: $1 = username, $2 = email
-user=$1
-email=$2
+# Log the SSH login attempt
+echo "$(date): Login attempt from $SSH_CLIENT" >> /var/log/ssh_login_attempts.log
 
-# Check if the user has verified their link by checking the verification file
-verification_file="/var/www/html/verification_links.txt"
-verified=false
+# Push notification to the second device using Pushbullet API
+# Replace 'YOUR_PUSHBULLET_API_KEY' with your actual Pushbullet API key
+curl -u "YOUR_PUSHBULLET_API_KEY" \
+     -d type="note" \
+     -d title="SSH Login Request" \
+     -d body="Approve login attempt from $SSH_CLIENT?" \
+     https://api.pushbullet.com/v2/pushes
 
-# Look for the user's verification status in the file
-while IFS=, read -r file_user file_link file_expiration_time
-do
-    if [ "$file_user" == "$user" ] && [ "$file_link" == "$2" ]; then
-        # Check if the link has expired
-        if [ "$(date +%s)" -lt "$(date -d "$file_expiration_time" +%s)" ]; then
-            verified=true
-            break
-        else
-            echo "Your verification link has expired. Please check your email again."
-            exit 1
-        fi
-    fi
-done < $verification_file
+# Wait for approval by checking for a specific file on the server
+while [ ! -f /tmp/ssh_login_approved ]; do
+  sleep 1  # Check every second
+done
 
-if [ "$verified" == "true" ]; then
-    echo "Verification successful. You may now proceed with SSH login."
-    exit 0
-else
-    echo "Verification pending. Please check your email to complete the verification."
-    exit 1
-fi
+# Once the file is created, remove it and allow login
+rm /tmp/ssh_login_approved
+
+# Exit the script, granting access to the user
+exit 0
 ```
 
-Explanation:
-- **Verification check**: The script checks if the user has successfully verified their login.
-- **Link expiration check**: It ensures that the verification link is still valid based on the expiration time.
+#### 3.2 Make the Script Executable
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/approve_login.sh
+```
+
+### 4. **Pushbullet Notification Setup**
+
+You need to install and set up Pushbullet to send notifications to the second device.
+
+#### 4.1 Create a Pushbullet Account
+- Go to [Pushbullet](https://www.pushbullet.com) and sign up for an account.
+- Get your **API key** from the Pushbullet settings page.
+
+#### 4.2 Install Pushbullet on Your Second Device
+- Install the Pushbullet app on your smartphone or tablet, or use a browser extension.
+- Log in to the app with your Pushbullet account.
+
+#### 4.3 Modify the Script with Your API Key
+In the script `/usr/local/bin/approve_login.sh`, replace `"YOUR_PUSHBULLET_API_KEY"` with your actual Pushbullet API key that you retrieved earlier.
+
+### 5. **Approval Process on the Second Device**
+
+The second device is responsible for approving or denying the login attempt.
+
+- **Upon login attempt**: The server will run the `approve_login.sh` script, which sends a notification to your second device using Pushbullet.
+- **Approve the login**: To approve the login, manually create a file on the server:
+  
+  ```bash
+  touch /tmp/ssh_login_approved
+  ```
+
+This will signal the script to proceed, and the SSH login will be granted.
+
+- **Deny the login**: If you do not create the `/tmp/ssh_login_approved` file, the login attempt will remain blocked, as the script is waiting for the file to be created.
+
+### 6. **Testing the Setup**
+
+#### 6.1 Test the SSH Login
+On the client machine, try to SSH into the server:
+
+```bash
+ssh user@server_ip
+```
+
+The login attempt will trigger the `approve_login.sh` script. A notification will be sent to the second device (your phone) asking you to approve the login.
+
+#### 6.2 Approve the Login on the Second Device
+- When you receive the notification on your second device, manually create the file `/tmp/ssh_login_approved` on the server. You can do this by SSHing into the server or using a remote tool.
+  
+```bash
+touch /tmp/ssh_login_approved
+```
+
+This will allow the login to proceed.
+
+#### 6.3 Deny the Login (Optional)
+- If you do not create the `/tmp/ssh_login_approved` file, the login will remain blocked.
+
+### 7. **Optional: Automating Approval (for convenience)**
+
+If you want to automate the approval process on the second device, you can use a script or Pushbullet API on the device to automatically create the `/tmp/ssh_login_approved` file after receiving the notification. This is optional and depends on your preferred level of automation.
 
 ---
 
-### **7. Testing the Setup**
+### Summary of the Workflow:
+1. **SSH Login Attempt**: The user tries to log in using SSH with their key.
+2. **Forced Command**: The `ForceCommand` in `sshd_config` ensures that the `approve_login.sh` script runs.
+3. **Notification to Second Device**: The script sends a Pushbullet notification to your second device asking for approval.
+4. **Approval on Second Device**: You approve by creating `/tmp/ssh_login_approved` on the server.
+5. **Access Granted**: The script exits, allowing SSH login.
 
-To test the setup:
+By using this setup, you have established a two-factor SSH login system, where the second factor is the approval from your second device.
 
-1. **SSH Login Attempt**: A user attempts to log in via SSH.
-2. **Verification Email Sent**: The `send_verification_email.sh` script sends the email with the verification link.
-3. **User Clicks the Link**: The user clicks on the link in the email.
-4. **Link Verification**: The PHP script checks the verification link and expires the link if necessary.
-5. **SSH Access Granted**: Once the link is verified, the user can log in via SSH.
+😃😍☺️🫥🫥☺️🫥☺️☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌😯😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌😯😌😯😌😯😌😯🤩😯🤩😯😯🤩😯🤩😯🤩🫥🤩🫥🤩🫥🤩🫥🫥🤩🫥🤩🤩🫥🤩🫥🤩🫥
 
----
 
-### **Conclusion**
+To ensure Duo Security's SSH login with Multi-Factor Authentication (MFA) persists after reboot, while using `ForceCommand` to restrict remote access only to SSH, you need to adjust a few things in your configuration. Below is a **complete script-based setup** with detailed explanations to integrate **Duo MFA** and enforce security with `ForceCommand`.
 
-This setup provides a **secure email verification system** for **SSH logins** without using a MySQL database. The system:
-- **Generates a unique verification link** sent to the user.
-- **Validates the link** through a simple PHP script without relying on a database.
-- **Restricts SSH access** until the user has clicked the verification link.
-🫥🫥😶🫥😢🫥😢🫥😢🫥🫥🫥😶🫥😶🫥😶🫥🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥🙂😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶😶🫥😶🫥😶🫥😶🫥🫥😶
-To ensure that your Duo Security setup for SSH login persists across reboots, you need to make sure that the necessary configurations are properly applied and that essential services are enabled to start automatically. This includes ensuring that the Duo PAM module is correctly configured, Duo's required services are running on boot, and the necessary PAM (Pluggable Authentication Module) settings persist.
-
-Here’s the **complete code setup** for the Duo SSH login, which will work after a reboot:
+### **Step-by-Step Setup for Duo Security with ForcedCommand and Reboot Persistence**
 
 ---
 
 ### **Step 1: Sign Up for Duo Security**
+
 1. Go to [Duo Security](https://www.duo.com/) and sign up for an account.
-2. Once logged in, go to **Applications** > **Protect an Application**.
-3. Choose **Unix Application** or **SSH Application** and click **Protect this Application**.
-4. **Note down** the **Integration Key**, **Secret Key**, and **API Hostname** from the Duo Admin Panel. You will need these for configuring the server.
+2. Once logged in, navigate to **Applications** > **Protect an Application**.
+3. Select **Unix Application** (or **SSH Application**) and click **Protect this Application**.
+4. Note down the **Integration Key**, **Secret Key**, and **API Hostname**—you will need them for configuration.
 
 ---
 
 ### **Step 2: Install Duo Unix on Your Server**
 
-1. **Install the necessary dependencies**:
+1. **Install dependencies**:
 
    For **Debian/Ubuntu**:
    ```bash
@@ -6756,25 +7013,24 @@ Here’s the **complete code setup** for the Duo SSH login, which will work afte
    ```
 
 2. **Install Duo Unix**:
+   - **Debian/Ubuntu**:
+     ```bash
+     sudo apt-get install -y duo-unix
+     ```
 
-   Download the Duo Unix package from [Duo's download page](https://dl.duosecurity.com/).
+   - **CentOS/RHEL**:
+     ```bash
+     sudo yum install -y duo-unix
+     ```
 
-   For **Debian/Ubuntu**:
-   ```bash
-   sudo apt-get install -y duo-unix
-   ```
+   Alternatively, manually download the Duo Unix package:
 
-   For **CentOS/RHEL**:
-   ```bash
-   sudo yum install -y duo-unix
-   ```
-
-   Alternatively, you can download it manually:
-   - **For Debian-based systems**:
+   - **Debian-based systems**:
      ```bash
      sudo dpkg -i duo-unix-X.X.X.deb
      ```
-   - **For RHEL/CentOS systems**:
+   
+   - **RHEL/CentOS systems**:
      ```bash
      sudo rpm -i duo-unix-X.X.X.rpm
      ```
@@ -6783,96 +7039,105 @@ Here’s the **complete code setup** for the Duo SSH login, which will work afte
 
 ### **Step 3: Configure Duo PAM (Pluggable Authentication Module)**
 
-1. **Edit the PAM configuration for SSH**:
+1. **Edit the PAM SSH configuration**:
 
-   Open the PAM configuration file for SSH (`/etc/pam.d/sshd`):
+   Open the `/etc/pam.d/sshd` file for editing:
    ```bash
    sudo nano /etc/pam.d/sshd
    ```
 
-   Add the following line **at the top** of the file:
+   Add the following line **at the top** of the file to enable Duo PAM:
    ```bash
    auth required pam_duo.so
    ```
 
-2. **Configure the Duo PAM settings**:
+2. **Configure Duo PAM settings**:
 
-   The Duo PAM module configuration file is typically located at `/etc/duo/pam_duo.conf`. Create it if it doesn't exist:
+   Create the Duo PAM configuration file `/etc/duo/pam_duo.conf` if it doesn't exist:
    ```bash
    sudo nano /etc/duo/pam_duo.conf
    ```
 
-   Add the following configuration, replacing `YOUR_INTEGRATION_KEY`, `YOUR_SECRET_KEY`, and `YOUR_API_HOSTNAME` with the values from your Duo Admin Panel:
+   Add your **Integration Key**, **Secret Key**, and **API Hostname** as follows:
    ```bash
-   # Duo Security configuration for PAM
-   ikey=YOUR_INTEGRATION_KEY       # Your Integration Key
-   skey=YOUR_SECRET_KEY            # Your Secret Key
-   host=YOUR_API_HOSTNAME         # Your API Hostname (e.g., api-xxxxxxxx.duosecurity.com)
+   # Duo Security PAM configuration
+   ikey=YOUR_INTEGRATION_KEY        # Your Integration Key
+   skey=YOUR_SECRET_KEY             # Your Secret Key
+   host=YOUR_API_HOSTNAME          # Your API Hostname (e.g., api-xxxxxxxx.duosecurity.com)
    ```
 
 ---
 
-### **Step 4: Enable SSH with Duo MFA**
+### **Step 4: Configure SSH to Use Duo MFA**
 
-1. **Edit the SSH configuration file**:
+1. **Edit SSH configuration**:
 
-   Open `/etc/ssh/sshd_config` to enable challenge-response authentication:
+   Open the SSH configuration file `/etc/ssh/sshd_config`:
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-   Ensure the following lines are configured:
+   Ensure the following lines are set:
    ```bash
    ChallengeResponseAuthentication yes
    UsePAM yes
    ```
 
-2. **Enable Duo to start after reboot**:
+2. **Restrict SSH to Duo Authentication Using `ForceCommand`**:
 
-   Ensure that the Duo service is enabled to start on boot:
+   Add the following line to the end of `/etc/ssh/sshd_config` to enforce Duo MFA on all SSH logins and restrict command execution to SSH logins:
    ```bash
-   sudo systemctl enable duo
+   ForceCommand /usr/sbin/nologin
    ```
 
-3. **Restart SSH**:
+   This command ensures that only Duo-authenticated users can SSH into the server, and it prevents the execution of any remote commands.
 
-   After modifying the SSH configuration, restart the SSH service:
+3. **Restart SSH service**:
+
+   After updating the configuration, restart SSH:
    ```bash
    sudo systemctl restart sshd
    ```
 
 ---
 
-### **Step 5: Install the Duo Mobile App on Your Phone**
+### **Step 5: Enable Duo Service to Start Automatically After Reboot**
 
-1. **Install the Duo Mobile app**:
+Ensure that the Duo service is enabled to start at boot time:
+```bash
+sudo systemctl enable duo
+```
 
-   - Download and install the **Duo Mobile** app from the **App Store** (iOS) or **Google Play Store** (Android).
-
-2. **Activate your Duo account**:
-
-   - Log into the Duo Admin Panel and add your user.
-   - Follow the instructions to enroll your phone using the **Push** authentication method.
+This command ensures that Duo’s PAM module continues functioning after a system reboot.
 
 ---
 
-### **Step 6: Test SSH Login with Duo Push Authentication**
+### **Step 6: Install Duo Mobile App on Your Phone**
 
-1. **SSH into your server**:
+1. **Install the Duo Mobile app** from either the **App Store** (iOS) or **Google Play Store** (Android).
+
+2. **Enroll your phone in Duo**:
+   - Log into the Duo Admin Panel.
+   - Add your user account and follow the prompts to enroll your device with **Push** authentication.
+
+---
+
+### **Step 7: Test SSH Login with Duo Push Authentication**
+
+1. **SSH into the server**:
    ```bash
    ssh your_username@your_server_ip
    ```
 
-2. **Approve the Duo push notification**:
-
-   - You should receive a push notification on your phone.
-   - Open the **Duo Mobile app** on your phone and approve the request to authenticate.
+2. **Approve Duo Push Authentication**:
+   - You should receive a Duo push notification on your mobile phone.
+   - Open the Duo Mobile app on your phone and approve the login attempt.
 
 ---
 
-### **Optional: Step 7 - Set Up TOTP as a Fallback Method**
+### **Optional Step 8: Configure TOTP as a Fallback MFA (Optional)**
 
-If you prefer to set up **TOTP (Time-Based One-Time Password)** as a fallback or secondary factor (e.g., using Google Authenticator or Authy), follow these steps:
+If you prefer to set up **TOTP** (Time-Based One-Time Password) as a secondary or fallback MFA method, such as with **Google Authenticator** or **Authy**, follow these steps:
 
 1. **Install the TOTP PAM module**:
 
@@ -6886,9 +7151,9 @@ If you prefer to set up **TOTP (Time-Based One-Time Password)** as a fallback or
    sudo yum install google-authenticator
    ```
 
-2. **Modify PAM to use TOTP as a fallback**:
+2. **Modify PAM to Include TOTP**:
 
-   Open the SSH PAM configuration file:
+   Open the `/etc/pam.d/sshd` file:
    ```bash
    sudo nano /etc/pam.d/sshd
    ```
@@ -6898,9 +7163,9 @@ If you prefer to set up **TOTP (Time-Based One-Time Password)** as a fallback or
    auth required pam_google_authenticator.so
    ```
 
-3. **Configure TOTP for each user**:
+3. **Enable TOTP for each user**:
 
-   Each user who wants to enable TOTP needs to run:
+   Run the following command for each user you want to enable TOTP for:
    ```bash
    google-authenticator
    ```
@@ -6909,13 +7174,13 @@ If you prefer to set up **TOTP (Time-Based One-Time Password)** as a fallback or
 
 4. **Ensure SSH allows both MFA methods**:
 
-   Make sure your SSH configuration (`/etc/ssh/sshd_config`) allows multiple authentication methods:
+   Make sure your SSH configuration file (`/etc/ssh/sshd_config`) allows multiple authentication methods:
    ```bash
    ChallengeResponseAuthentication yes
    UsePAM yes
    ```
 
-5. **Restart SSH again**:
+5. **Restart SSH service again**:
    ```bash
    sudo systemctl restart sshd
    ```
@@ -6924,32 +7189,39 @@ If you prefer to set up **TOTP (Time-Based One-Time Password)** as a fallback or
 
 ### **Important Notes for Reboot Persistence**
 
-1. **Ensure Duo's PAM module is enabled** on every boot:
-   - The Duo Unix package's PAM integration should automatically persist after reboots if it’s correctly configured. To double-check, ensure that the Duo module is properly configured by running:
+1. **Ensure Duo's PAM module remains enabled**:
+   - Duo’s PAM module should automatically persist after a reboot if correctly configured. To verify this, run:
      ```bash
-     sudo systemctl enable duo
+     sudo systemctl status duo
      ```
-
+   
 2. **Ensure SSH and PAM settings persist**:
-   - The configuration changes you made to `/etc/ssh/sshd_config` and `/etc/pam.d/sshd` should persist across reboots since they are saved as configuration files. You can verify this by rebooting your server and checking the status of the SSH service.
-   - Run the following after reboot to ensure that SSH uses PAM and Duo:
-     ```bash
-     sudo systemctl status sshd
-     ```
+   - The changes you made to `/etc/ssh/sshd_config` and `/etc/pam.d/sshd` should remain persistent after a reboot, as these are standard configuration files.
+   
+3. **Check after reboot**:
+   After rebooting the server, verify that SSH uses PAM and Duo by running:
+   ```bash
+   sudo systemctl status sshd
+   ```
+
+4. **ForceCommand Enforces Security**:
+   The `ForceCommand /usr/sbin/nologin` ensures that SSH users cannot execute commands unless they authenticate via Duo MFA, making it more secure.
 
 ---
 
-### **Summary of All Steps**
+### **Summary of Key Steps**
 
-1. **Sign up for Duo Security** and create an SSH/Unix application in the Duo Admin Panel. Note the **Integration Key**, **Secret Key**, and **API Hostname**.
-2. **Install Duo Unix** on your server by installing necessary dependencies and the `duo-unix` package.
-3. **Configure the PAM module** to use Duo for authentication by editing `/etc/pam.d/sshd` and `/etc/duo/pam_duo.conf`.
-4. **Enable Duo MFA in SSH** by modifying `/etc/ssh/sshd_config` to allow challenge-response authentication, enabling Duo's service to start on boot, and restarting SSH.
-5. **Install the Duo Mobile app** on your phone and enroll it in your Duo account.
-6. **Test SSH login** by SSHing into your server and approving the Duo push notification on your phone.
-7. Optionally, **set up TOTP** (Google Authenticator or Authy) as a fallback MFA method.
+1. **Sign up for Duo Security**, and obtain the **Integration Key**, **Secret Key**, and **API Hostname**.
+2. **Install Duo Unix** on your server and configure the PAM module.
+3. **Edit SSH configuration** to enable PAM, Duo MFA, and set `ForceCommand` to restrict command execution to Duo-authenticated users.
+4. **Enable Duo service** to start at boot.
+5. **Install and configure the Duo Mobile app** on your phone.
+6. **Test the login** process to ensure MFA works as expected.
+7. Optionally, **set up TOTP** as a fallback authentication method.
+8. **Ensure all configurations persist** across reboots by verifying PAM, Duo, and SSH configurations.
 
-By following these steps, you ensure that Duo MFA for SSH will work not only immediately but will persist even after the server reboots.
+By following these steps, you can configure Duo Security with SSH login, restrict SSH access using `ForceCommand`, and ensure that the setup persists even after server reboots.
+.
 
 
 
