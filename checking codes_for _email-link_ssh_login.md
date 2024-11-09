@@ -5633,5 +5633,245 @@ This updated setup uses **remote MySQL** for storing tokens, along with PHP for 
 This setup ensures a secure and scalable solution for token-based SSH authentication. Let me know if you need
 
 
+🫥🫥🙃🫥🫥🙃🫥🙃🫥🙃🫥🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃😋🙃😋😋🙃😋🙃😋🙃🤩🙃😋🙃😋🙃😋🙃😋🙃🤩😋🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥🙃🫥😮‍💨🫥🙃🫥🙃🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥🫥😮‍💨🫥😮‍💨🫥🙃🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥😮‍💨😮‍💨🫥🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥😮‍💨🫥🫥😮‍💨🫥😮‍💨🫥😮‍💨
+Sure, let's go through the full SSH login verification process with email-based verification, using `ssmtp.conf` and ensuring the `$SHELL` access is granted only after the user verifies their email.
+
+### Full Setup Walkthrough:
+
+---
+
+### 1. **Install and Configure Email Sending using `ssmtp`**
+
+**Note**: `ssmtp` is deprecated, but still works for simple use cases. You may also use `msmtp` as a modern alternative.
+
+#### a. **Install `ssmtp`**
+
+```bash
+sudo apt-get install ssmtp
+```
+
+#### b. **Configure `ssmtp.conf`** for Gmail
+
+You need to configure `ssmtp` to send emails via Gmail or your email provider. Create or edit the configuration file `/etc/ssmtp/ssmtp.conf`.
+
+```plaintext
+root=postmaster@yourdomain.com
+mailhub=smtp.gmail.com:587
+AuthUser=your-email@gmail.com
+AuthPass=your-email-password
+UseTLS=YES
+UseSTARTTLS=YES
+FromLineOverride=YES
+```
+
+Replace `your-email@gmail.com` and `your-email-password` with your Gmail credentials or use an app password if 2FA is enabled.
+
+---
+
+### 2. **Create the Script to Send the Verification Email** (`send_script.sh`)
+
+This script will send a verification email with a unique link that the user must click before they can proceed with their SSH login.
+
+#### a. **Script: `send_script.sh`**
+
+Create the script `/path/to/send_script.sh`:
+
+```bash
+#!/bin/bash
+
+# Arguments: $1 = username, $2 = email
+user=$1
+email=$2
+
+# Generate a random verification link using openssl
+link=$(openssl rand -base64 32)  # Random string for verification link
+expiration_time=$(date -d "+10 minutes" +%Y-%m-%d\ %H:%M:%S)  # Expiry time for the link (10 minutes)
+
+# Insert the verification link and expiration into the MySQL database
+mysql -u root -pYourPassword -e "INSERT INTO ssh_verification (user, link, expiration_time) VALUES ('$user', '$link', '$expiration_time');"
+
+# Send the verification email with the link
+echo -e "Subject: SSH Login Verification\n\nHello $user,\n\nClick the link below to verify your SSH login:\n\nhttp://yourdomain.com/verify?link=$link" | ssmtp $email
+```
+
+Make the script executable:
+
+```bash
+chmod +x /path/to/send_script.sh
+```
+
+---
+
+### 3. **Configure SSH Daemon to Trigger the Script**
+
+#### a. **Edit SSH Configuration** (`/etc/ssh/sshd_config`)
+
+We will ensure the script is executed when a user logs in via SSH, and we will deny shell access until the email is verified.
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add the following line to force the execution of the `send_script.sh` script on login:
+
+```plaintext
+ForceCommand /path/to/send_script.sh $USER $USER@yourdomain.com
+```
+
+This will ensure that every time a user attempts to log in, the script is executed. However, it does **not grant access to the shell** directly. We will modify this behavior in the script itself.
+
+#### b. **Restart the SSH Service**
+
+After modifying `sshd_config`, restart the SSH service:
+
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
+### 4. **Set Up MySQL Database for Link Verification**
+
+#### a. **Create the Database and Table**
+
+Log into MySQL and create a database for storing the verification links:
+
+```bash
+mysql -u root -p
+```
+
+Then, create the `ssh_verification` database and table:
+
+```sql
+CREATE DATABASE ssh_verification;
+USE ssh_verification;
+
+CREATE TABLE verification_links (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user VARCHAR(255),
+    link VARCHAR(255),
+    expiration_time DATETIME,
+    verified BOOLEAN DEFAULT FALSE
+);
+```
+
+#### b. **Create MySQL User for Verification**
+
+Create a user with limited access to the `ssh_verification` database:
+
+```sql
+CREATE USER 'sshd_user'@'localhost' IDENTIFIED BY 'your_secure_password';
+GRANT SELECT, INSERT ON ssh_verification.* TO 'sshd_user'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+---
+
+### 5. **Create the PHP Script to Handle Link Clicks** (`verify.php`)
+
+This PHP script will handle the user clicking on the verification link and marking the link as verified.
+
+#### a. **PHP Script for Link Verification** (`verify.php`)
+
+Create a PHP file at `/var/www/html/verify.php` (or the appropriate web server directory):
+
+```php
+<?php
+$link = $_GET['link'];  // Get the link from the URL
+
+// Database connection
+$mysqli = new mysqli("localhost", "sshd_user", "your_secure_password", "ssh_verification");
+
+if ($mysqli->connect_error) {
+    die("Connection failed: " . $mysqli->connect_error);
+}
+
+$query = "SELECT * FROM verification_links WHERE link = '$link' AND expiration_time > NOW() AND verified = FALSE";
+$result = $mysqli->query($query);
+
+if ($result->num_rows > 0) {
+    // Link is valid, verify the user
+    $row = $result->fetch_assoc();
+    $user = $row['user'];
+
+    // Mark the link as verified
+    $update_query = "UPDATE verification_links SET verified = TRUE WHERE link = '$link'";
+    $mysqli->query($update_query);
+
+    echo "Verification successful for $user!";
+} else {
+    echo "Invalid or expired verification link.";
+}
+
+$mysqli->close();
+?>
+```
+
+Make sure your web server is running (Apache or Nginx) and that this script is publicly accessible at `http://yourdomain.com/verify?link=<random_link>`.
+
+---
+
+### 6. **Grant `$SHELL` Access Only After Verification**
+
+#### a. **Check Verification Status Before Granting Shell Access**
+
+The login process will only allow access to the shell if the user has verified their email. We modify the `send_script.sh` to check whether the user is verified before allowing the shell access.
+
+#### b. **Modify the `send_script.sh` to Check Verification**
+
+Update the script `/path/to/send_script.sh` to check the user's verification status before allowing the shell access:
+
+```bash
+#!/bin/bash
+
+# Arguments: $1 = username, $2 = email
+user=$1
+email=$2
+
+# Check if the user has already verified the link
+verification_status=$(mysql -u root -pYourPassword -s -N -e "SELECT verified FROM ssh_verification WHERE user='$user' AND verified=TRUE LIMIT 1;")
+
+if [ "$verification_status" == "TRUE" ]; then
+    # Allow access to shell
+    echo "Verification successful. Granting shell access."
+    exit 0
+else
+    # User hasn't verified, force re-check via email
+    echo "Please verify your email first."
+    exit 1
+fi
+```
+
+#### c. **Explanation**
+
+- The script checks if the user has a verified email link in the database.
+- If the user is verified, they are granted access to the shell (`exit 0`).
+- If the user is not verified, the script exits with a message prompting them to verify their email (`exit 1`).
+
+---
+
+### 7. **Testing the Setup**
+
+1. **SSH Login**: The user attempts to SSH into the server. The script `send_script.sh` is triggered, and a verification email is sent.
+2. **Clicking the Verification Link**: The user clicks on the link in their email, and the `verify.php` script validates and marks the link as verified in the database.
+3. **Granting `$SHELL` Access**: After the user has verified the link, they can log in to their shell as usual. If not verified, they are denied access.
+
+---
+
+### Conclusion
+
+This configuration ensures that the user can only access the system after successfully verifying their email. The flow includes:
+
+- **Email sending** using `ssmtp` and a verification link.
+- **SSH login control** with `ForceCommand` in `sshd_config` to trigger a verification script.
+- **MySQL database** to store verification links and check user status.
+- **PHP script** to handle the link validation process.
+- **Shell access control** based on email verification.
+
+By implementing these steps, you significantly enhance the security of your SSH logins, ensuring that only verified users can access the shell.
+
+
+
+
 
 
