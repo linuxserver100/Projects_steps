@@ -6600,17 +6600,29 @@ In this script, the password is securely loaded from the environment variable `$
 Update **`verify_ssh.sh`** to use the environment variable for MySQL authentication:
 
 ```bash
-#!/bin/bash
+   
+      #!/bin/bash
 
 USER_EMAIL="${USER}@yourdomain.com"
+MYSQL_PASSWORD="${MYSQL_PASSWORD}"  # Secure environment variable
+
+# Check if the user is verified
 RESULT=$(mysql -u verify_user -p"$MYSQL_PASSWORD" -e "SELECT verified FROM user_verification.users WHERE email='$USER_EMAIL'")
 
+# If verified, allow access and delete the user from the database
 if [[ "$RESULT" == *"1"* ]]; then
-    exit 0  # Email is verified, allow login
+    # Delete user from the database after verification and access granted
+    mysql -u verify_user -p"$MYSQL_PASSWORD" -e "DELETE FROM user_verification.users WHERE email='$USER_EMAIL'"
+    
+    # Proceed with the shell access
+    exit 0
 else
+    # If not verified, deny access
     echo "Email not verified. Access denied."
-    exit 1  # Deny access
+    exit 1
 fi
+
+   
 ```
 
 ### 3. **Email Sending Setup with SSL/TLS (ssmtp)**
@@ -6684,7 +6696,7 @@ If you're using `msmtp` (recommended for newer systems), here's the configuratio
    To test the email setup:
 
    ```bash
-   echo "Test email body" | msmtp your_email@gmail.com
+   echo "Test email body" | msmtp your_emaill@gmail.com
    ```
 
 ### 4. **PHP Verification Script (`verify.php`)**
@@ -6692,6 +6704,8 @@ If you're using `msmtp` (recommended for newer systems), here's the configuratio
 Here’s the PHP script that will validate the token and verify the user's email:
 
 ```php
+
+   
 <?php
 $servername = "localhost";
 $username = "verify_user";
@@ -6716,6 +6730,7 @@ $stmt->execute();
 $result = $stmt->get_result();
 
 if ($result->num_rows > 0) {
+    // Mark the user as verified
     $update_stmt = $conn->prepare("UPDATE users SET verified = TRUE WHERE email = ? AND verification_token = ?");
     $update_stmt->bind_param("ss", $email, $token);
     if ($update_stmt->execute()) {
@@ -6729,6 +6744,7 @@ if ($result->num_rows > 0) {
 
 $conn->close();
 ?>
+
 ```
 
 This script uses `getenv('MYSQL_PASSWORD')` to load the password from the environment variable and prevents SQL injection by using prepared statements.
@@ -6776,7 +6792,8 @@ Instead of directly calling `send_script.sh` in the `ForceCommand` line, you can
 verify_and_shell.sh (optional wrapper)
 
 ```bash
-    #!/bin/bash
+       
+   #!/bin/bash
 
 # Send verification email first
 /usr/local/bin/send_script.sh $USER
@@ -6788,7 +6805,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Now check if email is verified
-/usr/local/bin/verify_script.sh
+/usr/local/bin/verify_ssh.sh
 
 # Proceed to the shell if verified
 if [ $? -eq 0 ]; then
@@ -6797,6 +6814,7 @@ else
     echo "Email verification required to access the system."
     exit 1
 fi
+
 
 
 ```
