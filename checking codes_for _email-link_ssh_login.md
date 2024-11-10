@@ -6501,7 +6501,8 @@ sudo mysql -u root -p
 Run the following SQL commands to create the database, table, and a MySQL user:
 
 ```sql
-CREATE DATABASE user_verification;
+
+   CREATE DATABASE user_verification;
 
 USE user_verification;
 
@@ -6516,6 +6517,9 @@ CREATE TABLE users (
 CREATE USER 'verify_user'@'%' IDENTIFIED BY 'your_secure_password';
 GRANT ALL PRIVILEGES ON user_verification.* TO 'verify_user'@'%';
 FLUSH PRIVILEGES;
+
+
+
 ```
 
 Replace `'your_secure_password'` with a strong password. 
@@ -6577,7 +6581,8 @@ Update your scripts (e.g., `send_script.sh`, `verify_ssh.sh`) to use the `MYSQL_
 For example, **`send_script.sh`** can be updated as follows:
 
 ```bash
-#!/bin/bash
+
+   #!/bin/bash
 
 EMAIL=$1
 TOKEN=$(openssl rand -base64 32)
@@ -6585,12 +6590,16 @@ TOKEN=$(openssl rand -base64 32)
 # Store the verification token in the database
 mysql -u verify_user -p"$MYSQL_PASSWORD" -e "INSERT INTO user_verification.users (email, verification_token) VALUES ('$EMAIL', '$TOKEN')"
 
-VERIFICATION_LINK="https://yourdomain.com/verify.php?email=$EMAIL&token=$TOKEN"
+VERIFICATION_LINK="https://yourdomain.com/verify.php?token=$TOKEN"
 
-# Send the email using ssmtp or msmtp
-echo -e "Subject: Email Verification\n\nPlease click the link below to verify your email address:\n$VERIFICATION_LINK" | ssmtp $EMAIL
+# Send the email with verification link
+echo -e "Subject: Email Verification\n\nPlease click the link below to verify your email address:\n$VERIFICATION_LINK" | msmtp $EMAIL
 
 echo "Verification email sent to $EMAIL"
+
+
+
+
 ```
 
 In this script, the password is securely loaded from the environment variable `$MYSQL_PASSWORD`.
@@ -6601,26 +6610,30 @@ Update **`verify_ssh.sh`** to use the environment variable for MySQL authenticat
 
 ```bash
    
-      #!/bin/bash
+     #!/bin/bash
 
 USER_EMAIL="${USER}@yourdomain.com"
 MYSQL_PASSWORD="${MYSQL_PASSWORD}"  # Secure environment variable
 
-# Check if the user is verified
-RESULT=$(mysql -u verify_user -p"$MYSQL_PASSWORD" -e "SELECT verified FROM user_verification.users WHERE email='$USER_EMAIL'")
+# Fetch the verification token for the user
+RESULT=$(mysql -u verify_user -p"$MYSQL_PASSWORD" -e "SELECT verification_token, verified FROM user_verification.users WHERE email='$USER_EMAIL'")
 
-# If verified, allow access and delete the user from the database
-if [[ "$RESULT" == *"1"* ]]; then
-    # Delete user from the database after verification and access granted
+# Extract the token and verified status from the result
+TOKEN=$(echo "$RESULT" | awk 'NR==2 {print $1}')
+VERIFIED=$(echo "$RESULT" | awk 'NR==2 {print $2}')
+
+# If token is valid and email is verified, grant access
+if [[ "$VERIFIED" == "1" && -n "$TOKEN" ]]; then
+    # Delete the token after successful verification
     mysql -u verify_user -p"$MYSQL_PASSWORD" -e "DELETE FROM user_verification.users WHERE email='$USER_EMAIL'"
     
-    # Proceed with the shell access
+    # Allow SSH access by exiting successfully
     exit 0
 else
-    # If not verified, deny access
-    echo "Email not verified. Access denied."
+    echo "Email not verified or invalid token. Access denied."
     exit 1
 fi
+
 
    
 ```
@@ -6705,11 +6718,10 @@ Here’s the PHP script that will validate the token and verify the user's email
 
 ```php
 
-   
-<?php
+     <?php
 $servername = "localhost";
 $username = "verify_user";
-$password = getenv('MYSQL_PASSWORD');  // Get the password from the environment
+$password = getenv('MYSQL_PASSWORD');  // Get the password from the environment variable
 $dbname = "user_verification";
 
 // Create connection
@@ -6720,20 +6732,24 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-$email = $_GET['email'];
 $token = $_GET['token'];
 
 // Prepare SQL statement to prevent SQL injection
-$stmt = $conn->prepare("SELECT * FROM users WHERE email = ? AND verification_token = ? AND verified = FALSE");
-$stmt->bind_param("ss", $email, $token);
+$stmt = $conn->prepare("SELECT * FROM users WHERE verification_token = ? AND verified = FALSE");
+$stmt->bind_param("s", $token);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if ($result->num_rows > 0) {
     // Mark the user as verified
-    $update_stmt = $conn->prepare("UPDATE users SET verified = TRUE WHERE email = ? AND verification_token = ?");
-    $update_stmt->bind_param("ss", $email, $token);
+    $update_stmt = $conn->prepare("UPDATE users SET verified = TRUE WHERE verification_token = ?");
+    $update_stmt->bind_param("s", $token);
     if ($update_stmt->execute()) {
+        // Delete the token after successful verification
+        $delete_stmt = $conn->prepare("DELETE FROM users WHERE verification_token = ?");
+        $delete_stmt->bind_param("s", $token);
+        $delete_stmt->execute();
+        
         echo "Email verified successfully!";
     } else {
         echo "Error updating record: " . $conn->error;
@@ -6744,6 +6760,7 @@ if ($result->num_rows > 0) {
 
 $conn->close();
 ?>
+
 
 ```
 
