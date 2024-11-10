@@ -6486,23 +6486,28 @@ fi
 
 This setup ensures secure **email verification** before granting **SSH access**, using a **remote MySQL server** to store and validate verification links. The system uses **ssmtp** for email sending, **PHP** for link verification, and restricts SSH access until the user verifies their email.
 
-🫥🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥🫥🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂😋😂😋🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥🫥😯🫥😯🫥😯🫥😯🫥Your setup is well-structured, but there are a few enhancements and refinements that could improve security and usability. Below is a comprehensive and detailed walkthrough, with additions where necessary.
+🫥🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥🫥🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂😋😂😋🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥🫥😯🫥😯🫥😯🫥😯
+
+Certainly! Below is the revised and reset code setup, incorporating the use of `ssmtp.conf` for email sending and ensuring that the user is removed from the MySQL database once they are granted access to the shell.
+
+---
 
 ### 1. **MySQL Database Setup (with Secure Password)**
 
+First, we set up the MySQL database to store user verification data.
+
 #### 1.1. **Create MySQL Database and Table**
 
-First, log into MySQL as root and create the necessary database and table for email verification.
+Log into MySQL as the root user and set up the database and table:
 
 ```bash
 sudo mysql -u root -p
 ```
 
-Run the following SQL commands to create the database, table, and a MySQL user:
+Create the database, user table, and user:
 
 ```sql
-
-   CREATE DATABASE user_verification;
+CREATE DATABASE user_verification;
 
 USE user_verification;
 
@@ -6514,214 +6519,108 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE USER 'verify_user'@'%' IDENTIFIED BY 'your_secure_password';
+CREATE USER 'verify_user'@'%' IDENTIFIED BY 'your_secure_password'; 
 GRANT ALL PRIVILEGES ON user_verification.* TO 'verify_user'@'%';
 FLUSH PRIVILEGES;
-
-
-
 ```
 
-Replace `'your_secure_password'` with a strong password. 
+Replace `'your_secure_password'` with a strong password.
 
-#### 1.2. **Configure MySQL for Remote Access**
+---
 
-Make sure MySQL is configured to accept remote connections.
-
-1. **Edit MySQL Configuration File**:
-
-   ```bash
-   sudo nano /etc/mysql/my.cnf
-   ```
-
-2. **Set the bind-address** to `0.0.0.0`:
-
-   ```ini
-   bind-address = 0.0.0.0
-   ```
-
-3. **Restart MySQL**:
-
-   ```bash
-   sudo systemctl restart mysql
-   ```
-
-4. **Allow MySQL Port through Firewall**:
-
-   ```bash
-   sudo ufw allow 3306
-   ```
-
-#### 1.3. **Security Consideration for Password**
-
-To ensure security, don't store the MySQL password directly in scripts. Use an environment variable.
-
-### 2. **Environment Variable for MySQL Password**
+### 2. **Environment Variables for MySQL Password**
 
 #### 2.1. **Set Environment Variable**
 
-You can set the MySQL password as an environment variable for secure access. Add the following line to `~/.bashrc` or `/etc/profile` for global access:
+To secure your MySQL password, use an environment variable. Add the password to `~/.bashrc` or `/etc/profile`:
 
 ```bash
 export MYSQL_PASSWORD="your_secure_password"
 ```
 
-After adding it, source the file to apply changes:
+Then source the file to apply the changes:
 
 ```bash
 source ~/.bashrc
 ```
 
-Now the password can be accessed securely in your scripts using `$MYSQL_PASSWORD`.
+Now, you can reference `$MYSQL_PASSWORD` in scripts for secure access.
 
-#### 2.2. **Modify Scripts to Use the Environment Variable**
+---
 
-Update your scripts (e.g., `send_script.sh`, `verify_ssh.sh`) to use the `MYSQL_PASSWORD` environment variable instead of hardcoding the password.
+### 3. **Script to Send Verification Email (send_script.sh)**
 
-For example, **`send_script.sh`** can be updated as follows:
+This script generates a verification token and sends it via email. It uses `ssmtp` for sending emails securely.
+
+#### 3.1. **Install `ssmtp`**
+
+Install `ssmtp` for secure email sending:
 
 ```bash
+sudo apt-get install ssmtp
+```
 
-   #!/bin/bash
+#### 3.2. **Configure `ssmtp`**
+
+Create the configuration file at `/etc/ssmtp/ssmtp.conf`:
+
+```ini
+root=your_email@gmail.com
+mailhub=smtp.gmail.com:587
+AuthUser=your_email@gmail.com
+AuthPass=your_email_password
+UseTLS=YES
+UseSTARTTLS=YES
+FromLineOverride=YES
+```
+
+Make the file readable only by the user:
+
+```bash
+chmod 600 /etc/ssmtp/ssmtp.conf
+```
+
+#### 3.3. **send_script.sh**
+
+Here’s the script to generate a token and send the verification email:
+
+```bash
+#!/bin/bash
 
 EMAIL=$1
 TOKEN=$(openssl rand -base64 32)
 
-# Store the verification token in the database
+# Insert the verification token into the database
 mysql -u verify_user -p"$MYSQL_PASSWORD" -e "INSERT INTO user_verification.users (email, verification_token) VALUES ('$EMAIL', '$TOKEN')"
 
+# Generate the verification link
 VERIFICATION_LINK="https://yourdomain.com/verify.php?token=$TOKEN"
 
-# Send the email with verification link
-echo -e "Subject: Email Verification\n\nPlease click the link below to verify your email address:\n$VERIFICATION_LINK" | msmtp $EMAIL
+# Send the email with the verification link
+echo -e "Subject: Email Verification\n\nPlease click the link below to verify your email address:\n$VERIFICATION_LINK" | ssmtp $EMAIL
 
 echo "Verification email sent to $EMAIL"
-
-
-
-
 ```
 
-In this script, the password is securely loaded from the environment variable `$MYSQL_PASSWORD`.
-
-#### 2.3. **Modify `verify_ssh.sh` to Use the Environment Variable**
-
-Update **`verify_ssh.sh`** to use the environment variable for MySQL authentication:
+You can run this script with the user's email as an argument:
 
 ```bash
-   
-     #!/bin/bash
-
-USER_EMAIL="${USER}@yourdomain.com"
-MYSQL_PASSWORD="${MYSQL_PASSWORD}"  # Secure environment variable
-
-# Fetch the verification token for the user
-RESULT=$(mysql -u verify_user -p"$MYSQL_PASSWORD" -e "SELECT verification_token, verified FROM user_verification.users WHERE email='$USER_EMAIL'")
-
-# Extract the token and verified status from the result
-TOKEN=$(echo "$RESULT" | awk 'NR==2 {print $1}')
-VERIFIED=$(echo "$RESULT" | awk 'NR==2 {print $2}')
-
-# If token is valid and email is verified, grant access
-if [[ "$VERIFIED" == "1" && -n "$TOKEN" ]]; then
-    # Delete the token after successful verification
-    mysql -u verify_user -p"$MYSQL_PASSWORD" -e "DELETE FROM user_verification.users WHERE email='$USER_EMAIL'"
-    
-    # Allow SSH access by exiting successfully
-    exit 0
-else
-    echo "Email not verified or invalid token. Access denied."
-    exit 1
-fi
-
-
-   
+./send_script.sh user@example.com
 ```
 
-### 3. **Email Sending Setup with SSL/TLS (ssmtp)**
+---
 
-We will use `ssmtp` or `msmtp` for sending emails securely. Below is an updated and secure setup for `ssmtp.conf`.
+### 4. **PHP Script to Handle Email Verification (verify.php)**
 
-#### 3.1. **Install ssmtp or msmtp**
+When the user clicks the verification link, the following PHP script verifies the token and updates the user record.
 
-If using **ssmtp**:
-
-```bash
-sudo apt-get install ssmtp  # Older systems
-```
-
-If using **msmtp** (recommended for newer systems):
-
-```bash
-sudo apt-get install msmtp
-```
-
-#### 3.2. **Configure `ssmtp.conf` for Secure Email Sending**
-
-For Gmail SMTP (replace placeholders with your details):
-
-1. **Edit the `ssmtp` configuration file**:
-
-   ```bash
-   sudo nano /etc/ssmtp/ssmtp.conf
-   ```
-
-2. **Gmail SMTP Setup**:
-
-   ```ini
-   root=your_email@gmail.com
-   mailhub=smtp.gmail.com:587
-   UseSTARTTLS=YES
-   AuthUser=your_email@gmail.com
-   AuthPass=your_email_password  # Use app-specific password if 2FA is enabled
-   FromLineOverride=YES
-   ```
-
-   - **Security Tip**: If you have two-factor authentication (2FA) enabled, use an app-specific password instead of your regular Gmail password. You can create this in your Google account settings.
-
-#### 3.3. **Configure `msmtp` for Secure Email Sending (Alternative)**
-
-If you're using `msmtp` (recommended for newer systems), here's the configuration:
-
-1. **Create/Update the configuration file** at `~/.msmtprc`:
-
-   ```ini
-   account default
-   host smtp.gmail.com
-   port 587
-   auth on
-   user your_email@gmail.com
-   password your_email_password
-   tls on
-   tls_starttls on
-   from your_email@gmail.com
-   logfile ~/.msmtp.log
-   ```
-
-   Ensure the file is readable only by the user to protect sensitive information:
-
-   ```bash
-   chmod 600 ~/.msmtprc
-   ```
-
-2. **Test Email Sending**:
-
-   To test the email setup:
-
-   ```bash
-   echo "Test email body" | msmtp your_emaill@gmail.com
-   ```
-
-### 4. **PHP Verification Script (`verify.php`)**
-
-Here’s the PHP script that will validate the token and verify the user's email:
+#### 4.1. **verify.php**
 
 ```php
-
-     <?php
+<?php
 $servername = "localhost";
 $username = "verify_user";
-$password = getenv('MYSQL_PASSWORD');  // Get the password from the environment variable
+$password = getenv('MYSQL_PASSWORD');  // Get password from environment variable
 $dbname = "user_verification";
 
 // Create connection
@@ -6734,7 +6633,7 @@ if ($conn->connect_error) {
 
 $token = $_GET['token'];
 
-// Prepare SQL statement to prevent SQL injection
+// Prepare the SQL statement to prevent SQL injection
 $stmt = $conn->prepare("SELECT * FROM users WHERE verification_token = ? AND verified = FALSE");
 $stmt->bind_param("s", $token);
 $stmt->execute();
@@ -6745,11 +6644,6 @@ if ($result->num_rows > 0) {
     $update_stmt = $conn->prepare("UPDATE users SET verified = TRUE WHERE verification_token = ?");
     $update_stmt->bind_param("s", $token);
     if ($update_stmt->execute()) {
-        // Delete the token after successful verification
-        $delete_stmt = $conn->prepare("DELETE FROM users WHERE verification_token = ?");
-        $delete_stmt->bind_param("s", $token);
-        $delete_stmt->execute();
-        
         echo "Email verified successfully!";
     } else {
         echo "Error updating record: " . $conn->error;
@@ -6760,33 +6654,17 @@ if ($result->num_rows > 0) {
 
 $conn->close();
 ?>
-
-
 ```
 
-This script uses `getenv('MYSQL_PASSWORD')` to load the password from the environment variable and prevents SQL injection by using prepared statements.
+---
 
-### 5. **SSH Configuration with `ForceCommand`**
+### 5. **SSH Configuration to Enforce Email Verification**
 
-Enforce SSH login only for verified users by using `ForceCommand`.
+Now, we’ll ensure that only verified users can access the system via SSH by using a custom verification script.
 
-#### 5.1. **Edit SSH Configuration**
+#### 5.1. **Create SSH Verification Script (verify_ssh.sh)**
 
-Open the SSH configuration file:
-
-```bash
-sudo nano /etc/ssh/sshd_config
-```
-
-Add the following line to force the execution of the verification script:
-
-```bash
-ForceCommand /usr/local/bin/verify_ssh.sh
-```
-
-#### 5.2. **Create the SSH Verification Script**
-
-Create `/usr/local/bin/verify_ssh.sh`:
+Create a script to check if the user has verified their email:
 
 ```bash
 #!/bin/bash
@@ -6795,88 +6673,109 @@ USER_EMAIL="${USER}@yourdomain.com"
 RESULT=$(mysql -u verify_user -p"$MYSQL_PASSWORD" -e "SELECT verified FROM user_verification.users WHERE email='$USER_EMAIL'")
 
 if [[ "$RESULT" == *"1"* ]]; then
-    exit 0  # Email verified, allow login
+    exit 0  # Allow login if email is verified
 else
     echo "Email not verified. Access denied."
-    exit 1  # Deny access
+    exit 1  # Deny access if email is not verified
 fi
 ```
 
-#### 5.3. **Make the Script Executable**
-
-Instead of directly calling `send_script.sh` in the `ForceCommand` line, you can set up a wrapper script that runs the verification first and then provides an interactive shell:
-
-verify_and_shell.sh (optional wrapper)
+Make the script executable:
 
 ```bash
-       
-   #!/bin/bash
+chmod +x /usr/local/bin/verify_ssh.sh
+```
 
-# Send verification email first
+#### 5.2. **Enforce Script in SSH Configuration**
+
+Edit `/etc/ssh/sshd_config` and add the following line:
+
+```bash
+ForceCommand /usr/local/bin/verify_ssh.sh
+```
+
+Restart SSH to apply the changes:
+
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
+### 6. **Wrapper Script for Verification and Shell Access**
+
+We can use a wrapper script to send a verification email before allowing SSH access. Additionally, we will delete the user from the MySQL database once they are granted shell access.
+
+#### 6.1. **Create Wrapper Script (verify_and_shell.sh)**
+
+```bash
+#!/bin/bash
+
+# Send the verification email
 /usr/local/bin/send_script.sh $USER
 
-# Check if the email sending was successful (exit status 0)
+# Check if email was sent successfully
 if [ $? -ne 0 ]; then
     echo "Failed to send verification email. Exiting."
     exit 1
 fi
 
-# Now check if email is verified
+# Check if email is verified
 /usr/local/bin/verify_ssh.sh
 
-# Proceed to the shell if verified
+# If verified, allow shell access and remove the user from the database
 if [ $? -eq 0 ]; then
+    # Delete the user from the database after successful login
+    mysql -u verify_user -p"$MYSQL_PASSWORD" -e "DELETE FROM user_verification.users WHERE email='$USER@yourdomain.com'"
+    
+    # Proceed with shell access
     exec /bin/bash
 else
     echo "Email verification required to access the system."
     exit 1
 fi
-
-
-
 ```
 
-Save this as `/usr/local/bin/verify_and_shell.sh`, make it executable:
+Make this script executable:
 
 ```bash
 chmod +x /usr/local/bin/verify_and_shell.sh
 ```
 
-Then, modify your `sshd_config` to use this wrapper script:
+#### 6.2. **Update SSH Configuration to Use Wrapper Script**
+
+Modify `/etc/ssh/sshd_config` to use the wrapper script:
 
 ```bash
 ForceCommand /usr/local/bin/verify_and_shell.sh
 ```
 
-
-sudo systemctl restart sshd
-
-
-### 3. **Enforce Verification Before Allowing SSH Access**
-
-To enforce email verification before allowing SSH login, modify your `verify_ssh.sh` to return a denial if the user hasn’t verified their email address. The script can remain as previously outlined, checking the `verified` column before allowing SSH login.
+Restart SSH:
 
 ```bash
-
+sudo systemctl restart sshd
 ```
 
-### 6. **Testing the Setup**
+---
+
+### 7. **Testing the Setup**
 
 1. **Send a verification email** using `send_script.sh`.
-2. **Verify the email** by clicking the link in the email (handled by `verify.php`).
-3. **Test SSH login**: After email verification, attempt to log into the server. If the email is verified, login should succeed; otherwise, access is denied.
+2. **Click the link** in the email to verify the user (handled by `verify.php`).
+3. **Attempt to log in via SSH**: If the email is verified, SSH access will be granted, and the user will be removed from the database; otherwise, access will be denied.
+
+---
 
 ### Conclusion
 
-- **Secure Password Handling**: The MySQL password is stored securely using environment variables.
+- **MySQL Database**: Stores user emails and verification tokens securely.
+- **Email Verification**: Users receive a verification email, and their status is updated in the database.
+- **SSH Access Control**: SSH access is granted only to users who have verified their email. Once granted access, the user is deleted from the database.
+- **Security**: Passwords and other sensitive data are handled securely using environment variables.
 
+This setup ensures a robust, secure system for email verification and SSH access control, with the added step of cleaning up the user from the database after granting access.
 
-- **Email Verification**: Emails are sent securely with SSL/TLS configuration for `ssmtp` or `msmtp`.
-- **SSH Access Control**: SSH login is controlled based on email verification, ensuring that only verified users can access the system.
-
-This setup ensures a secure and streamlined process for email verification and SSH access control.
-.
-🫥🫥😶🫥😢🫥😢🫥😢🫥🫥🫥😶🫥😶🫥😶🫥🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥🙂😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶😶🫥😶🫥😶🫥😶🫥🫥😶
+🫥😶🫥😢🫥😢🫥😢🫥🫥🫥😶🫥😶🫥😶🫥🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥🙂😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶😶🫥😶🫥😶🫥😶🫥🫥😶
 To establish a two-factor SSH login mechanism with an approval step on a separate device, you'll need to:
 
 - Set up SSH key authentication for the first factor.
