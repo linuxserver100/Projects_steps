@@ -6620,43 +6620,80 @@ When the user clicks the verification link, the following PHP script verifies th
 #### 4.1. **verify.php**
 
 ```php
-<?php
+
+    <?php
+// Enable error reporting for development (disable or adjust in production)
+ini_set('display_errors', 0); // Disable displaying errors to the user
+ini_set('log_errors', 1); // Enable error logging
+ini_set('error_log', '/path/to/your/error_log.log'); // Specify your error log file
+
 $servername = "localhost";
 $username = "verify_user";
 $password = getenv('MYSQL_PASSWORD');  // Get password from environment variable
 $dbname = "user_verification";
 
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
+// Error handling: Use try-catch for database connection and operations
+try {
+    // Create connection
+    $conn = new mysqli($servername, $username, $password, $dbname);
 
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
-
-$token = $_GET['token'];
-
-// Prepare the SQL statement to prevent SQL injection
-$stmt = $conn->prepare("SELECT * FROM users WHERE verification_token = ?");
-$stmt->bind_param("s", $token);
-$stmt->execute();
-$result = $stmt->get_result();
-
-if ($result->num_rows > 0) {
-    // Mark the user as verified
-    $update_stmt = $conn->prepare("UPDATE users SET verified = TRUE WHERE verification_token = ?");
-    $update_stmt->bind_param("s", $token);
-    if ($update_stmt->execute()) {
-        echo "Email verified successfully!";
-    } else {
-        echo "Error updating record: " . $conn->error;
+    // Check connection and throw an exception if it fails
+    if ($conn->connect_error) {
+        throw new Exception("Connection failed: " . $conn->connect_error);
     }
-} else {
-    echo "Invalid or expired verification token.";
-}
 
-$conn->close();
+    $token = $_GET['token'];
+
+    // Check if token exists
+    if (empty($token)) {
+        throw new Exception("Verification token is missing.");
+    }
+
+    // Prepare the SQL statement to prevent SQL injection
+    $stmt = $conn->prepare("SELECT * FROM users WHERE verification_token = ?");
+    if ($stmt === false) {
+        throw new Exception("Error preparing SQL statement: " . $conn->error);
+    }
+
+    $stmt->bind_param("s", $token);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows > 0) {
+        // Mark the user as verified
+        $update_stmt = $conn->prepare("UPDATE users SET verified = TRUE WHERE verification_token = ?");
+        if ($update_stmt === false) {
+            throw new Exception("Error preparing update statement: " . $conn->error);
+        }
+
+        $update_stmt->bind_param("s", $token);
+        if ($update_stmt->execute()) {
+            echo "Email verified successfully!";
+        } else {
+            throw new Exception("Error updating record: " . $conn->error);
+        }
+    } else {
+        throw new Exception("Invalid or expired verification token.");
+    }
+
+} catch (Exception $e) {
+    // Log the error to the server
+    error_log($e->getMessage());
+    
+    // Send a generic message to the user
+    http_response_code(500);  // Set the HTTP status code to 500 (Internal Server Error)
+    echo "An error occurred while processing your request. Please try again later.";
+} finally {
+    // Close the database connection
+    if (isset($conn) && $conn instanceof mysqli) {
+        $conn->close();
+    }
+}
 ?>
+
+
+
+
 ```
 
 ---
