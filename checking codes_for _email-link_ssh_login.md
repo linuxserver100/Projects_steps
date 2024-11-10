@@ -6581,21 +6581,28 @@ chmod 600 /etc/ssmtp/ssmtp.conf
 Here’s the script to generate a token and send the verification email:
 
 ```bash
-#!/bin/bash
+
+    #!/bin/bash
 
 EMAIL=$1
 TOKEN=$(openssl rand -base64 32)
 
+# URL encode the TOKEN to ensure it works properly in the link
+ENCODED_TOKEN=$(echo -n "$TOKEN" | jq -sRr @uri)
+
 # Insert the verification token into the database
 mysql -u verify_user -p"$MYSQL_PASSWORD" -e "INSERT INTO user_verification.users (email, verification_token) VALUES ('$EMAIL', '$TOKEN')"
 
-# Generate the verification link
-VERIFICATION_LINK="https://yourdomain.com/verify.php?token=$TOKEN"
+# Generate the verification link with the encoded token
+VERIFICATION_LINK="https://yourdomain.com/verify.php?token=$ENCODED_TOKEN"
 
 # Send the email with the verification link
 echo -e "Subject: Email Verification\n\nPlease click the link below to verify your email address:\n$VERIFICATION_LINK" | ssmtp $EMAIL
 
 echo "Verification email sent to $EMAIL"
+
+
+
 ```
 
 You can run this script with the user's email as an argument:
