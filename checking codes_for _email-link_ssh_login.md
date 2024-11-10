@@ -6771,16 +6771,51 @@ fi
 
 #### 5.3. **Make the Script Executable**
 
+Instead of directly calling `send_script.sh` in the `ForceCommand` line, you can set up a wrapper script that runs the verification first and then provides an interactive shell:
+
+verify_and_shell.sh (optional wrapper)
+
 ```bash
-chmod +x /usr/local/bin/verify_ssh.sh
+   #!/bin/bash
+
+# Send verification email first
+/usr/local/bin/send_script.sh $USER
+
+# Now check if email is verified
+/usr/local/bin/verify_script.sh
+
+# Proceed to the shell if verified
+if [ $? -eq 0 ]; then
+    exec /bin/bash
+else
+    echo "Email verification required to access the system."
+    exit 1
+fi
+
 ```
 
-#### 5.4. **Restart SSH**
-
-Restart SSH to apply the changes:
+Save this as `/usr/local/bin/verify_and_shell.sh`, make it executable:
 
 ```bash
+chmod +x /usr/local/bin/verify_and_shell.sh
+```
+
+Then, modify your `sshd_config` to use this wrapper script:
+
+```bash
+ForceCommand /usr/local/bin/verify_and_shell.sh
+```
+
+
 sudo systemctl restart sshd
+
+
+### 3. **Enforce Verification Before Allowing SSH Access**
+
+To enforce email verification before allowing SSH login, modify your `verify_ssh.sh` to return a denial if the user hasn’t verified their email address. The script can remain as previously outlined, checking the `verified` column before allowing SSH login.
+
+```bash
+
 ```
 
 ### 6. **Testing the Setup**
