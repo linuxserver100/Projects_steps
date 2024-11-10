@@ -6776,10 +6776,16 @@ Instead of directly calling `send_script.sh` in the `ForceCommand` line, you can
 verify_and_shell.sh (optional wrapper)
 
 ```bash
-   #!/bin/bash
+    #!/bin/bash
 
 # Send verification email first
 /usr/local/bin/send_script.sh $USER
+
+# Check if the email sending was successful (exit status 0)
+if [ $? -ne 0 ]; then
+    echo "Failed to send verification email. Exiting."
+    exit 1
+fi
 
 # Now check if email is verified
 /usr/local/bin/verify_script.sh
@@ -6791,6 +6797,7 @@ else
     echo "Email verification required to access the system."
     exit 1
 fi
+
 
 ```
 
