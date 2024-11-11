@@ -386,18 +386,23 @@ This solution provides a basic implementation for adding SMS-based two-factor au
 
 😢😙😢😙😐😙😛😮‍💨😗😛😢😛😮‍💨😛😗😢😐😗😢😐😗😢😐😮‍💨😐😗😢😗😢😐😗😢😐😗😢😐😗😢😐😗😢😐😗😢😶🙃☹️😶☹️☹️😶😗☹️😶🙃☹️😶😗☹️😶😗☹️😶🙃☹️😶😗☹️😗🫠☹️😝😗☹️😶😗☹️😶😗😯🙃☹️😶😗😢😐😗☹️🙃🫠☹️😝😗😮‍💨😮‍💨😛😗😮‍💨😝😗😤😛😃😮‍💨😃😤😝😃😮‍💨
 .
-To implement SSH authentication with SMS without relying on external services like Vonage or Twilio, we would need to use a local SMS gateway or service that can send SMS messages directly from your server. In this case, I'll provide a solution where the SMS is sent using a local GSM modem or mobile phone connected to the server, assuming you have the appropriate hardware.
+To .To configure your system to send an SMS when an SSH login is triggered, and only allow the user to proceed after verifying the SMS code, we need to update the scripts accordingly. Below is a complete guide with each step reset, updated, and more clearly explained.
 
 ### Prerequisites:
-1. **GSM Modem or Mobile Phone**: Your server needs a GSM modem or mobile phone connected via USB or Bluetooth that supports sending SMS.
-2. **SMSC Library**: A tool like `gammu` or `smstools` to interface with the GSM device and send SMS.
+1. **Gammu**: Used to send SMS via a GSM device (e.g., USB dongle or mobile phone).
+2. **Cron Jobs**: To handle periodic tasks (though we will focus on SSH-based triggering in this case).
+3. **SSH Configuration**: SSH is configured to require a verification step (via SMS) before shell access is granted.
+4. **`ForceCommand`**: To ensure SSH sessions are restricted to your custom SMS verification script.
 
-We'll use **Gammu** in this case, which can send SMS messages via a GSM modem or mobile phone.
+---
 
-### Step-by-Step Implementation
+### Step-by-Step Guide:
+
+### Part 1: Set up SMS Sending with Gammu
 
 #### Step 1: Install Gammu
-First, install Gammu and its dependencies.
+
+To send SMS from your Linux server, you need to install **Gammu**. This tool interacts with your GSM device and sends the SMS messages.
 
 ```bash
 sudo apt update
@@ -405,67 +410,23 @@ sudo apt install gammu gammu-smsd
 ```
 
 #### Step 2: Configure Gammu
-You need to configure Gammu to work with your GSM modem or mobile phone. Run the following command to configure it:
+
+You need to configure Gammu to interface with your GSM device (e.g., USB modem or mobile phone). This typically involves creating a `gammu` configuration file. You can find the configuration steps in the [Gammu documentation](https://wammu.eu/docs/).
+
+Run the following command to generate a `gammurc` configuration file:
 
 ```bash
 gammu-config
 ```
 
-This will walk you through the process of setting up the configuration for your device. After completing the setup, Gammu will be able to send SMS messages through your modem or phone.
+This will guide you through the setup to ensure Gammu is able to send SMS messages.
 
-Alternatively, you can manually create a configuration file at `~/.gammurc` (or `/etc/gammu/config` if you want it system-wide) with the following structure:
+#### Step 3: Create a Send SMS Script
 
-```plaintext
-[gammu]
-port = /dev/ttyUSB0   # Adjust with the port your device is connected to
-connection = at115200  # Or another connection string if needed
-```
-
-#### Step 3: Create the SMS Sending Script
-Create a script to send an SMS via Gammu.
+Create a script that will send an SMS using **Gammu**. The script should accept a phone number and a message as parameters.
 
 ```bash
 sudo nano /usr/local/bin/send_sms.sh
-```
-
-Add the following content to the script:
-
-```bash
-#!/bin/bash
-
-# User's phone number
-TO_NUMBER="$1"
-MESSAGE="$2"
-
-# Send SMS using Gammu
-gammu sendsms TEXT "$TO_NUMBER" -text "$MESSAGE"
-```
-
-Make the script executable:
-
-```bash
-sudo chmod +x /usr/local/bin/send_sms.sh
-```
-
-#### Step 4: Set Up the Custom SSH Command
-Now, you will configure SSH to use a custom script for user authentication. Edit the SSH configuration file:
-
-```bash
-sudo nano /etc/ssh/sshd_config
-```
-
-Add or modify the following lines:
-
-```plaintext
-Match User your_username
-    ForceCommand /usr/local/bin/authenticate.sh
-```
-
-#### Step 5: Create the Authentication Script
-Create a script that will handle the SMS-based authentication. This script will generate a random code, send it via SMS, and then prompt the user to enter the code.
-
-```bash
-sudo nano /usr/local/bin/authenticate.sh
 ```
 
 Add the following content:
@@ -473,55 +434,139 @@ Add the following content:
 ```bash
 #!/bin/bash
 
-# User's phone number
-PHONE_NUMBER="user_phone_number"  # Replace with the actual user's phone number
+# First parameter: Phone number to send SMS to
+TO_NUMBER="$1"
+# Second parameter: Message to send
+MESSAGE="$2"
 
-# Generate a random 6-digit code
+# Send the SMS using Gammu
+gammu sendsms TEXT "$TO_NUMBER" -text "$MESSAGE"
+```
+
+Make this script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/send_sms.sh
+```
+
+This script will allow you to send SMS messages via Gammu.
+
+---
+
+### Part 2: Force SMS Verification on SSH Login
+
+The key step here is using `ForceCommand` in the SSH configuration to make sure that SSH logins are forced to execute a script (which will handle SMS verification) before a user gets shell access.
+
+#### Step 1: Create an SMS Authentication Script
+
+This script will trigger an SMS message with a verification code when an SSH login occurs, and it will ask the user to enter the code before proceeding.
+
+```bash
+sudo nano /usr/local/bin/ssh_sms_auth.sh
+```
+
+Add the following content:
+
+```bash
+#!/bin/bash
+
+# Define the phone number (change this to your desired phone number)
+PHONE_NUMBER="your_phone_number"  # Replace with the actual phone number
+
+# Generate a random 6-digit code for SMS authentication
 CODE=$(shuf -i 100000-999999 -n 1)
 
-# Send the SMS code to the user
+# Send the authentication code to the user's phone number
 /usr/local/bin/send_sms.sh "$PHONE_NUMBER" "Your SSH authentication code is: $CODE"
 
 # Prompt the user to enter the code
 echo -n "Enter the SMS code: "
 read INPUT_CODE
 
-# Validate the code entered by the user
+# Validate the entered code against the generated code
 if [[ "$INPUT_CODE" == "$CODE" ]]; then
-    echo "Authentication successful. Starting shell..."
-    exec $SHELL
+    echo "Authentication successful. Granting shell access..."
+    exec $SHELL  # Allow the user to continue with shell access
 else
-    echo "Authentication failed."
-    exit 1
+    echo "Authentication failed. Please try again."
+    exit 1  # Deny access if the code doesn't match
 fi
 ```
 
 Make this script executable:
 
 ```bash
-sudo chmod +x /usr/local/bin/authenticate.sh
+sudo chmod +x /usr/local/bin/ssh_sms_auth.sh
 ```
 
-#### Step 6: Restart SSH Service
-After making these changes, restart the SSH service to apply the new configuration:
+This script does the following:
+1. It generates a random 6-digit authentication code.
+2. Sends the code via SMS to the user’s phone number.
+3. Prompts the user to enter the code.
+4. Verifies the code. If correct, it allows shell access; otherwise, it denies access.
+
+#### Step 2: Configure SSH to Use the SMS Script
+
+Now, we need to configure SSH to enforce this SMS authentication script upon login.
+
+Edit the SSH configuration file (`/etc/ssh/sshd_config`):
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add or modify the following line:
+
+```bash
+ForceCommand /usr/local/bin/ssh_sms_auth.sh
+```
+
+This directive forces every SSH session to run `/usr/local/bin/ssh_sms_auth.sh` instead of a regular shell. Therefore, users must pass the SMS authentication before being granted shell access.
+
+#### Step 3: Restart SSH Service
+
+After modifying the SSH configuration, restart the SSH service to apply the changes:
 
 ```bash
 sudo systemctl restart ssh
 ```
 
-### Step 7: Testing
-1. Attempt to SSH into the server as the specified user.
-2. You should receive an SMS with the authentication code.
-3. Enter the code when prompted to gain access.
+Now, whenever someone logs in via SSH, they will be forced to run the SMS authentication script.
 
-### Important Considerations:
-1. **Security**: SMS-based authentication is less secure than other methods like TOTP or hardware tokens. SMS is vulnerable to attacks such as SIM swapping and interception.
-2. **Phone Number Management**: Hardcoding phone numbers directly in the script is not ideal. Ideally, store phone numbers in a secure database or configuration file.
-3. **Device Management**: The GSM modem or mobile phone must be kept available and functioning at all times to ensure authentication works.
-4. **SMS Limits**: Depending on your GSM provider and the modem, there might be restrictions or costs associated with sending SMS messages.
-5. **Error Handling**: More robust error handling should be added to account for issues like device disconnections, network failures, or invalid phone numbers.
+---
+
+### Part 3: Test the SSH Login and SMS Verification
+
+1. **Login via SSH**: Try logging in to the server via SSH from another terminal or machine.
+
+```bash
+ssh your_user@your_server_ip
+```
+
+2. **SMS Code**: You should receive an SMS with a 6-digit authentication code on the phone number you configured in `/usr/local/bin/ssh_sms_auth.sh`.
+
+3. **Enter the Code**: Enter the 6-digit code when prompted. If the code is correct, you will gain shell access.
+
+   If the code is incorrect, the system will deny access.
+
+---
+
+### Troubleshooting
+
+- **No SMS received**: Ensure that Gammu is properly configured and can send SMS. You can test sending an SMS manually using:
+
+  ```bash
+  gammu sendsms TEXT "your_phone_number" -text "Test message"
+  ```
+
+- **SSH not working as expected**: If users can't log in after these changes, check `/var/log/auth.log` for SSH errors, and ensure that the `ForceCommand` directive is correctly set.
+
+- **Permissions**: Ensure that the scripts `/usr/local/bin/ssh_sms_auth.sh` and `/usr/local/bin/send_sms.sh` are executable and have the right permissions.
+
+---
 
 ### Conclusion
-This solution leverages a local GSM modem or mobile phone connected to your server to send SMS messages for SSH authentication, bypassing the need for external SMS services like Twilio or Vonage. However, it's important to consider the security implications of SMS-based authentication and the need to maintain the hardware and configuration for it to function properly.
+
+In this setup, we've configured the server to send an SMS message with a verification code whenever an SSH login is triggered. The user must enter the code to gain access to the shell. By using `ForceCommand`, we’ve ensured that the login process is restricted to running only the SMS authentication script, enhancing security.
 
 
