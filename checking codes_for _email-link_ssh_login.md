@@ -6699,7 +6699,60 @@ $conn->close();
 
 
 ```
+           OR Bbelow script easy and simple 
 
+```php
+
+
+       <?php
+// Database credentials
+$servername = "localhost";
+$username = "verify_user";
+$password = getenv('MYSQL_PASSWORD');  // Get password from environment variable
+$dbname = "user_verification";
+
+// Create connection
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+// Check connection
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+$token = $_GET['token'];
+
+// Check if token is provided
+if (empty($token)) {
+    echo "Verification token is missing.";
+    exit;
+}
+
+// Prepare and execute query to check the token
+$stmt = $conn->prepare("SELECT * FROM users WHERE verification_token = ?");
+$stmt->bind_param("s", $token);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows > 0) {
+    // Token found, update user verification
+    $update_stmt = $conn->prepare("UPDATE users SET verified = TRUE WHERE verification_token = ?");
+    $update_stmt->bind_param("s", $token);
+    if ($update_stmt->execute()) {
+        echo "Email verified successfully!";
+    } else {
+        echo "Failed to verify email.";
+    }
+} else {
+    echo "Invalid or expired verification token.";
+}
+
+// Close the database connection
+$conn->close();
+?>
+
+
+
+```
 ---
 
 ### 5. **SSH Configuration to Enforce Email Verification**
