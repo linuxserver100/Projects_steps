@@ -7212,6 +7212,330 @@ If you prefer to set up **TOTP** (Time-Based One-Time Password) as a secondary o
 By following these steps, you can configure Duo Security with SSH login, restrict SSH access using `ForceCommand`, and ensure that the setup persists even after server reboots.
 .
 
+🫥🫥😏🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😘🫥🫥😘🫥🫥😘🤩🫥😘🤩🤩😘🤩🤩🫥😘😘🫥🫥🫥😘😘🫥🫥🫥🫥🫥😘🫥🫥😘😘🫥😘🫥🫥🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥🫥🫥😘🫥😘🫥😘🫥🫥🫥😘🫥🫥😘🫥😘🫥🫥🫥🫥🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥🫥🫥😘🫥😘🫥To implement a fully functional email verification system with MySQL, PHP, and SSH login control, follow the detailed step-by-step guide. This setup includes database creation, SSH configuration, email verification with PHP, and enforcing email verification for SSH access. Each step is explained thoroughly for clarity.
+
+### **1. MySQL Database Setup**
+
+#### **1.1. Create Database and User Table**
+
+First, log in to MySQL and create the necessary database, user, and table.
+
+```bash
+sudo mysql -u root -p
+```
+
+Inside MySQL, run the following commands to create the `user_verification` database and a table for storing users' emails and verification tokens.
+
+```sql
+CREATE DATABASE user_verification;
+
+USE user_verification;
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    verification_token VARCHAR(255) NOT NULL,
+    verified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### **1.2. Grant Permissions for Remote MySQL Access**
+
+To allow MySQL to accept remote connections, you'll need to modify the MySQL configuration file.
+
+1. **Edit MySQL configuration**:
+
+   ```bash
+   sudo nano /etc/mysql/mysql.conf.d/mysqld.cnf
+   ```
+
+   Change the `bind-address` to `0.0.0.0` to allow connections from any IP:
+
+   ```ini
+   bind-address = 0.0.0.0
+   ```
+
+2. **Grant privileges to a remote MySQL user**:
+
+   Run the following SQL command to allow the root user (or another MySQL user) to connect from any host. Replace `your_password` with a secure password.
+
+   ```sql
+   GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'your_password' WITH GRANT OPTION;
+   FLUSH PRIVILEGES;
+   ```
+
+3. **Restart MySQL** to apply the changes:
+
+   ```bash
+   sudo systemctl restart mysql
+   ```
+
+---
+
+### **2. Email Sending Script (`send_script.sh`)**
+
+This script generates a unique verification token, inserts it into the database, and sends a verification email to the user.
+
+#### **2.1. Install `ssmtp` for Email Sending**
+
+To send emails from the server, install `ssmtp`:
+
+```bash
+sudo apt-get install ssmtp
+```
+
+#### **2.2. Configure `ssmtp`**
+
+Edit the `ssmtp` configuration to use your email provider (e.g., Gmail):
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+Replace the placeholders with your actual email account credentials:
+
+```ini
+root=your_email@gmail.com
+mailhub=smtp.gmail.com:587
+AuthUser=your_email@gmail.com
+AuthPass=your_email_password
+UseTLS=YES
+UseSTARTTLS=YES
+FromLineOverride=YES
+```
+
+Ensure the configuration is private by setting the correct permissions:
+
+```bash
+chmod 600 /etc/ssmtp/ssmtp.conf
+```
+
+#### **2.3. Create `send_script.sh`**
+
+Create the shell script that will generate a token, insert it into the database, and send the verification email.
+
+```bash
+#!/bin/bash
+
+EMAIL=$1
+TOKEN=$(openssl rand -base64 32)  # Generate a random token
+
+# URL encode the token
+ENCODED_TOKEN=$(echo -n "$TOKEN" | jq -sRr @uri)
+
+# Insert the token into the database
+mysql -u root -p"your_password" -e "INSERT INTO user_verification.users (email, verification_token) VALUES ('$EMAIL', '$TOKEN')"
+
+# Create the verification link
+VERIFICATION_LINK="https://yourdomain.com/verify.php?token=$ENCODED_TOKEN"
+
+# Send the verification email
+echo -e "Subject: Email Verification\n\nPlease click the link below to verify your email address:\n$VERIFICATION_LINK" | ssmtp $EMAIL
+
+# Check if the email was sent successfully
+if [ $? -eq 0 ]; then
+    echo "Verification email sent to $EMAIL"
+else
+    echo "Error sending verification email."
+    exit 1
+fi
+```
+
+Make the script executable:
+
+```bash
+chmod +x /usr/local/bin/send_script.sh
+```
+
+---
+
+### **3. PHP Script for Email Verification (`verify.php`)**
+
+The PHP script will handle the verification of the token when the user clicks the verification link.
+
+#### **3.1. Install Apache and PHP**
+
+If not already installed, install Apache and PHP:
+
+```bash
+sudo apt-get install apache2 php libapache2-mod-php php-mysqli
+```
+
+#### **3.2. Create `verify.php`**
+
+Create the `verify.php` file in your Apache document root (usually `/var/www/html/verify.php`):
+
+```php
+<?php
+
+// Enable error reporting for development
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+ini_set('error_log', '/var/log/php_errors.log');  // Adjust log path if needed
+
+$servername = "localhost";
+$username = "root";
+$password = "your_password";
+$dbname = "user_verification";
+
+// Create connection
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+// Check connection
+if ($conn->connect_error) {
+    error_log("Connection failed: " . $conn->connect_error);
+    die("Database connection failed. Please try again later.");
+}
+
+$token = isset($_GET['token']) ? $_GET['token'] : null;
+
+if (empty($token)) {
+    error_log("Verification token is missing.");
+    echo "Verification token is missing.";
+    exit;
+}
+
+// Prepare and execute the query to check the token
+$stmt = $conn->prepare("SELECT * FROM users WHERE verification_token = ?");
+if (!$stmt) {
+    error_log("Error preparing SQL statement: " . $conn->error);
+    echo "An error occurred. Please try again later.";
+    exit;
+}
+
+$stmt->bind_param("s", $token);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows > 0) {
+    // Token found, update the user's verification status
+    $update_stmt = $conn->prepare("UPDATE users SET verified = TRUE WHERE verification_token = ?");
+    if (!$update_stmt) {
+        error_log("Error preparing update statement: " . $conn->error);
+        echo "An error occurred. Please try again later.";
+        exit;
+    }
+
+    $update_stmt->bind_param("s", $token);
+    if ($update_stmt->execute()) {
+        echo "Email verified successfully!";
+    } else {
+        error_log("Error updating record: " . $conn->error);
+        echo "An error occurred while processing your request. Please try again later.";
+    }
+} else {
+    error_log("Invalid or expired verification token.");
+    echo "Invalid or expired verification token.";
+}
+
+$conn->close();
+?>
+```
+
+#### **3.3. Test PHP Page**
+
+To test the PHP page, navigate to `http://yourdomain.com/verify.php?token=YOUR_TOKEN_HERE`. Replace `YOUR_TOKEN_HERE` with an actual token from the database.
+
+---
+
+### **4. Shell Script for SSH Login Verification (`verify_and_shell.sh`)**
+
+This script ensures that only users with verified emails can log in via SSH.
+
+#### **4.1. Create `verify_and_shell.sh`**
+
+Create a shell script that will check whether the user's email has been verified before allowing them to log in.
+
+```bash
+#!/bin/bash
+
+USER_EMAIL="${USER}@yourdomain.com"
+
+# Send the verification email
+/usr/local/bin/send_script.sh $USER_EMAIL
+
+# Check if the email was sent successfully
+if [ $? -ne 0 ]; then
+    echo "Failed to send verification email. Exiting."
+    exit 1
+fi
+
+# Sleep for a short time to simulate user receiving and clicking the link
+sleep 60
+
+# Check if email is verified
+RESULT=$(mysql -u root -p"your_password" -e "SELECT verified FROM user_verification.users WHERE email='$USER_EMAIL'")
+
+# If verified, allow shell access
+if [[ "$RESULT" == *"1"* ]]; then
+    echo "Email verified. Granting access to shell."
+else
+    echo "Email not verified. Access denied."
+    exit 1
+fi
+
+# Delete the user from the database
+mysql -u root -p"your_password" -e "DELETE FROM user_verification.users WHERE email='$USER_EMAIL'"
+
+# Proceed with shell access
+exec /bin/bash
+```
+
+Make the script executable:
+
+```bash
+chmod +x /usr/local/bin/verify_and_shell.sh
+```
+
+---
+
+### **5. Enforce Script in SSH Configuration**
+
+To ensure that the `verify_and_shell.sh` script is run on every SSH login, modify the SSH configuration.
+
+1. **Edit `/etc/ssh/sshd_config`**:
+
+   Open the SSH configuration file:
+
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Add the following line to enforce the script:
+
+   ```bash
+   ForceCommand /usr/local/bin/verify_and_shell.sh
+   ```
+
+2. **Restart SSH service**:
+
+   Restart the SSH service to apply the changes:
+
+   ```bash
+   sudo systemctl restart sshd
+   ```
+
+---
+
+### **6. Testing the Setup**
+
+1. **Send Verification Email**: Use the `send_script.sh` to send the verification email to a user’s email address.
+2. **Verify the Email**: Have the user click on the verification link in the email.
+3. **Test SSH Login**:
+   - If the user has verified their email, SSH login will be granted.
+
+
+   - If not, SSH login will be denied.
+4. The user is deleted from the database after a successful SSH login.
+
+---
+
+### **Conclusion**
+
+This solution sets up a comprehensive system for verifying user emails before granting SSH access. It involves configuring MySQL, Apache, PHP, shell scripts, and SSH. The process ensures that only users who have verified their email address are able to log in to the system.
+
+
 
 
 
