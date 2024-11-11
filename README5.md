@@ -152,7 +152,7 @@ curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_SID/Messages.jso
 --data-urlencode "To=$TO_NUMBER" \
 --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
 --data-urlencode "Body=$MESSAGE" \
--u "$TWILIO_SID:$TWILIO_AUTH_TOKEN"
+-u "$TWILIO_SID:$TWILIO_AUTH_TOKEN" > /dev/null 2>&1
 ```
 
 Make the script executable:
