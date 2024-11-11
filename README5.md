@@ -1196,6 +1196,194 @@ By following the steps above, you can successfully implement SMS-based SSH authe
 
 
 
+🫥☺️🫥☺️🫥☺️🫥🫥🫥☺️🫥🫥🫥🫥😤🫥😙🫥🫥😙🫥😙🫥😙🫥😙🫥😙🫥😙🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😙🫥🫥😙🫥😄🫥😙🫥😙🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥😄🫥🫥😄🫥😄
+
+To implement SMS-based SSH authentication using a free SMS provider instead of Gammu, we can use **Twilio** or a similar service. However, Twilio typically requires an API key, and most services have a limited number of free messages. For a fully free solution, we'll explore **email-to-SMS gateways**, which many mobile carriers provide.
+
+Here’s a modified version of your script that uses **email-to-SMS** gateways, which are typically free but depend on the carrier (such as Verizon, AT&T, T-Mobile, etc.). This method allows you to send an SMS by sending an email to a special address provided by the carrier.
+
+---
+
+### Step-by-Step Guide with Free Email-to-SMS Provider
+
+### Prerequisites:
+
+1. **SMTP Tools**: We will use the `mail` or `msmtp` tool to send an email to the SMS gateway.
+2. **SSH Configuration**: SSH will be configured to require verification via an SMS code before granting shell access.
+3. **Email-to-SMS Gateway**: We will use an email-to-SMS gateway, which works by sending an email to an address like `1234567890@txt.att.net` (for AT&T) or similar addresses for other carriers.
+
+### Part 1: Set up Email-to-SMS using `msmtp`
+
+#### Step 1: Install Required Packages
+
+You’ll need `msmtp`, a simple SMTP client that can send email. It will be used to send an email to the SMS gateway.
+
+```bash
+sudo apt update
+sudo apt install msmtp msmtp-mta mailutils
+```
+
+#### Step 2: Configure `msmtp`
+
+Create or edit the `~/.msmtprc` file to configure `msmtp` for sending email to the SMS gateway. This file will store your email-to-SMS gateway configuration.
+
+```bash
+nano ~/.msmtprc
+```
+
+Add the following configuration for an email-to-SMS gateway. For example, for AT&T, the format is `number@txt.att.net`.
+
+```bash
+account default
+host smtp.gmail.com
+port 587
+from your_email@gmail.com
+auth on
+user your_email@gmail.com
+password "your_email_password"
+tls on
+tls_starttls on
+```
+
+**Note**: You’ll need a Gmail account or another email service provider that supports SMTP. Make sure to allow less secure apps in your Gmail settings if you're using Gmail.
+
+#### Step 3: Create the Send SMS Script
+
+Create a script that uses `msmtp` to send the SMS via the email-to-SMS gateway.
+
+```bash
+sudo nano /usr/local/bin/send_sms.sh
+```
+
+Add the following content:
+
+```bash
+#!/bin/bash
+
+# First parameter: Phone number to send SMS to (10-digit phone number)
+TO_NUMBER="$1"
+# Second parameter: Message to send
+MESSAGE="$2"
+
+# Define the carrier's email-to-SMS gateway
+CARRIER_GATEWAY="txt.att.net"  # Replace with the appropriate carrier's SMS gateway
+
+# Send the SMS via email-to-SMS gateway
+echo "$MESSAGE" | msmtp "$TO_NUMBER@$CARRIER_GATEWAY"
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/send_sms.sh
+```
+
+This script sends a text message to the specified phone number via the email-to-SMS gateway.
+
+---
+
+### Part 2: Force SMS Verification on SSH Login
+
+#### Step 1: Create the SMS Authentication Script
+
+Create a script that will be triggered during SSH login to send an SMS with a verification code and ask the user to enter it.
+
+```bash
+sudo nano /usr/local/bin/ssh_sms_auth.sh
+```
+
+Add the following content:
+
+```bash
+#!/bin/bash
+
+# Define the phone number (change this to your desired phone number)
+PHONE_NUMBER="your_phone_number"  # Replace with the actual phone number
+
+# Generate a random 6-digit code for SMS authentication
+CODE=$(shuf -i 100000-999999 -n 1)
+
+# Send the authentication code to the user's phone number
+/usr/local/bin/send_sms.sh "$PHONE_NUMBER" "Your SSH authentication code is: $CODE"
+
+# Prompt the user to enter the code
+echo -n "Enter the SMS code: "
+read INPUT_CODE
+
+# Validate the entered code against the generated code
+if [[ "$INPUT_CODE" == "$CODE" ]]; then
+    echo "Authentication successful. Granting shell access..."
+    exec $SHELL  # Allow the user to continue with shell access
+else
+    echo "Authentication failed. Please try again."
+    exit 1  # Deny access if the code doesn't match
+fi
+```
+
+Make this script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/ssh_sms_auth.sh
+```
+
+#### Step 2: Configure SSH to Use the SMS Script
+
+Now, we need to modify the SSH configuration to use this SMS authentication script.
+
+Edit the SSH configuration file (`/etc/ssh/sshd_config`):
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add or modify the following line:
+
+```bash
+ForceCommand /usr/local/bin/ssh_sms_auth.sh
+```
+
+This ensures that every SSH login is forced to run the SMS verification script.
+
+#### Step 3: Restart SSH Service
+
+Restart the SSH service to apply the changes:
+
+```bash
+sudo systemctl restart ssh
+```
+
+---
+
+### Part 3: Test the SSH Login and SMS Verification
+
+1. **Login via SSH**: Try logging in to the server via SSH.
+
+```bash
+ssh your_user@your_server_ip
+```
+
+2. **Receive SMS**: You will receive an SMS on the phone number you configured with a 6-digit code.
+
+3. **Enter the Code**: Enter the 6-digit code when prompted. If correct, you will gain shell access; otherwise, the system will deny access.
+
+---
+
+### Troubleshooting
+
+- **No SMS received**: Ensure that the SMS gateway and carrier are correctly configured. For example, check the format of the email-to-SMS gateway (e.g., `number@txt.att.net`, `number@tmomail.net`, etc.). Each carrier has its own gateway.
+- **Email delivery issues**: If the SMS isn't being sent, verify that `msmtp` is working by testing it manually. For example:
+
+  ```bash
+  echo "Test message" | msmtp your_phone_number@txt.att.net
+  ```
+
+- **SSH not working as expected**: If users can't log in, check `/var/log/auth.log` for errors and ensure that the `ForceCommand` directive is properly set.
+
+---
+
+### Conclusion
+
+This guide walks you through configuring SSH to require SMS-based authentication using an email-to-SMS gateway. By leveraging free tools like `msmtp` and carrier-provided gateways, you can implement SMS verification without needing a paid service like Gammu or Twilio. Keep in mind that email-to-SMS gateways are dependent on the user's carrier, and some carriers might block this method. Always test thoroughly before deploying.
 
 
 
