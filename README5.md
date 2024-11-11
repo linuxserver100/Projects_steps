@@ -99,208 +99,52 @@ Now, configure SSH to use this script as a `ForceCommand` to enforce OTP verific
 
 This configuration should provide you with a basic OTP-enforced SSH login setup.
 
-😯🥲🥱🤭🙂😢🙂😢🤭😢😐🙃😢😐🙃😢😐🙂😢🤭🙂😢🤭🙂😢🤭🙃😢🙃🤭😮🤭😥🤭🙃😦🙃😦🤭🙃🙃🤭😦🙃🤭🤭🙂😮🤭🙃🤭🤧😬🤧😬😢🤧😢🤫🤧😮🤫😢🤫🤧🤫😮🤧😯🤫🤧☹️🤫🤧☹️🤫🤒🤫☹️🤒☹️🫢☹️🤒☹️🤫🤒🙁🫢🤒🤒☹️😑🤒☹️😑🤒😑☹️🤒☹️😑🤒😑🤒☹️😑🤒☹️🫢🤒🫢☹️🤒🫢☹️🤒☹️🤫🤒🙁😑🤒☹️😑🤒☹️🫢🤒☹️😑🤒🙁🤒🙁😑🤒🙁😑🙁🤒😑🤒☹️😑🤒☹️🫢🤒☹️🫢☹️🤒☹️🤫🥸☹️🫢🤒☹️🫢
-To enforce an email link click authentication using SSH and `ForceCommand`, you can use a combination of a custom script, email generation, and an SSH `ForceCommand` directive. Here's a step-by-step outline on how you could implement this:
+😯🥲🥱🤭🙂😢🙂😢🤭😢😐🙃😢😐🙃😢😐🙂😢🤭🙂😢🤭🙂😢🤭🙃😢🙃🤭😮🤭😥🤭🙃😦🙃😦🤭🙃🙃🤭😦🙃🤭🤭🙂😮🤭🙃🤭🤧😬🤧😬😢🤧😢🤫🤧😮🤫😢🤫🤧🤫😮🤧😯🤫🤧☹️🤫🤧☹️🤫🤒🤫☹️🤒☹️🫢☹️🤒☹️🤫🤒🙁🫢🤒🤒☹️😑🤒☹️😑🤒😑☹️🤒☹️😑🤒😑🤒☹️�🫢🤒🫢☹️🤒🫢☹️🤒☹️🤫🤒🙁😑🤒☹️😑🤒☹️🫢🤒☹️😑🤒🙁🤒🙁😑🤒🙁😑🙁🤒😑🤒☹️😑🤒☹️🫢🤒☹️🫢☹️🤒☹️🤫🥸☹️🫢🤒☹️🫢
 
-### 1. **Prerequisites**
-Ensure that the following tools and configurations are available on your system:
-- **ssmtp or msmtp**: For sending emails via SMTP from your server.
-- **SSH server**: Running and configured properly.
-- **Web server**: A simple HTTP server to handle the link validation (you can use something lightweight like `nginx` or `apache2`).
-- **SSH client with `ForceCommand`**: This allows you to specify a specific command to run when a user logs in via SSH.
-
-### 2. **Setup Email Script**
-The main idea is to send a unique authentication link to the user’s email address when they try to authenticate. This link should contain a token that is only valid for a limited time.
-
-#### 2.1 **Install Required Tools**
-First, make sure you have `ssmtp` or `msmtp` configured to send emails.
-
-```bash
-sudo apt-get install ssmtp
-```
-
-Make sure to configure `ssmtp` or `msmtp` with your SMTP credentials. For example, edit `/etc/ssmtp/ssmtp.conf` to include your SMTP server settings:
-
-```bash
-root=postmaster@example.com
-mailhub=smtp.example.com:587
-AuthUser=username@example.com
-AuthPass=yourpassword
-FromLineOverride=YES
-UseSTARTTLS=YES
-```
-
-#### 2.2 **Script for Sending Email**
-Write a script that generates a random token and sends an email with a validation link.
-
-```bash
-#!/bin/bash
-
-# Generate a unique token (could be a hash or UUID)
-TOKEN=$(uuidgen)
-
-# Store the token temporarily (could also use a database)
-echo "Token: $TOKEN" > /tmp/token_${TOKEN}.txt
-
-# Prepare the authentication link (replace with your server's address)
-LINK="http://yourserver.com/verify_login?token=$TOKEN"
-
-# Send the email using msmtp (or any mail tool you prefer)
-echo -e "Subject: SSH Authentication\n\nClick the following link to authenticate your SSH login:\n\n$LINK" | msmtp recipient@example.com
-
-```
-
-Make sure this script is executable:
-
-```bash
-chmod +x /path/to/send_auth_email.sh
-```
-
-### 3. **Create a Validation Endpoint**
-You need to create an HTTP endpoint on your server that will handle the token validation. This can be a simple web application.
-
-#### Example using a simple PHP script:
-
-```php
-<?php
-$valid_tokens = file_get_contents('/tmp/valid_tokens.txt');
-$valid_tokens = explode("\n", $valid_tokens);
-
-$token = $_GET['token'];
-
-foreach ($valid_tokens as $line) {
-    list($email, $valid_token) = explode(":", $line);
-    if ($token === $valid_token) {
-        // Token is valid, allow SSH login
-        echo "Token valid. You may now log in.";
-        exit(0);
-    }
-}
-
-echo "Invalid or expired token.";
-exit(1);
-?>
-```
-
-Place this script on your web server, e.g., `/var/www/html/validate.php`.
-
-### 4. **ForceCommand Setup in SSH Configuration**
-Now, modify the SSH server configuration (`/etc/ssh/sshd_config`) to enforce the use of a custom script via `ForceCommand`.
-
-#### 4.1 **Configure `ForceCommand`**
-Modify `/etc/ssh/sshd_config` to force the execution of a script that will handle the token check:
-
-```bash
-ForceCommand /path/to/authentication_check.sh
-```
-
-This script will be executed whenever a user logs in via SSH. 
-
-#### 4.2 **Script for Authentication Check**
-Write a script (`/path/to/authentication_check.sh`) that will verify whether the user clicked the link before allowing SSH access.
-
-```bash
-#!/bin/bash
-
-USER_EMAIL=$(whoami)  # or use a method to get the user email
-VALIDATION_URL="https://yourserver.com/validate?token=$TOKEN"
-
-# Check if the user clicked the link and if the token is valid
-if curl --silent --fail $VALIDATION_URL | grep -q "Token valid"; then
-    # Token is valid, proceed with SSH login
-    exec $SHELL
-else
-    echo "Invalid or expired token. Please check your email and click the link to authenticate."
-    exit 1
-fi
-```
-
-This script checks if the user clicked the link and whether the token is valid. If valid, it allows the user to proceed with the SSH session (`exec $SHELL`). If invalid, it denies access.
-
-### 5. **Restart SSH Service**
-Finally, restart the SSH service to apply the changes:
-
-```bash
-sudo systemctl restart sshd
-```
-
-### 6. **Testing**
-- When a user tries to log in via SSH, the `ForceCommand` will trigger the `authentication_check.sh` script.
-- The script will send an email with the unique authentication link.
-- The user will need to click the link, which will verify their identity before allowing the SSH session.
-
-### Caveats and Considerations
-- **Security**: Tokens should be time-limited, and you should ensure that they are only valid for a short period of time (e.g., 10-15 minutes).
-- **Scalability**: For a larger setup, using a database to store tokens and manage sessions might be more appropriate than using a flat file.
-- **Error Handling**: Ensure proper error handling and logging in your scripts for better debugging and auditing.
-
-This approach can be a good way to add an additional layer of authentication, but keep in mind that it introduces potential delays and complexity to the login process.
-
-
-
-😢😙😢😙😐😙😛😮‍💨😗😛😢😛😮‍💨😛😗😢😐😗😢😐😗😢😐😮‍💨😐😗😢😗😢😐😗😢😐😗😢😐😗😢😐😗😢😐😗😢😶🙃☹️😶☹️☹️😶😗☹️😶🙃☹️😶😗☹️😶😗☹️😶🙃☹️😶😗☹️😗🫠☹️😝😗☹️😶😗☹️😶😗😯🙃☹️😶😗😢😐😗☹️🙃🫠☹️😝😗😮‍💨😮‍💨😛😗😮‍💨😝😗😤😛😃😮‍💨😃😤😝😃😮‍💨
-
-Implementing phone SMS authentication for SSH using `ForceCommand`, a custom script, and SMS generation via Twilio involves several steps. Below is a detailed guide on how to set this up on a Linux server.
+To implement phone SMS authentication for SSH without Twilio, you can use an alternative service like **Nexmo** (now called **Vonage**), which offers a similar API for sending SMS. Below is a revised implementation using Nexmo (Vonage).
 
 ### Requirements
-1. **Twilio Account**: Sign up for Twilio and obtain your Account SID, Auth Token, and a Twilio phone number.
-2. **ssmtp**: A simple mail transfer agent to send emails.
+1. **Vonage (Nexmo) Account**: Sign up for Vonage and obtain your API key, API secret, and a Vonage phone number.
+2. **ssmtp**: For email functionality (optional, in case you wish to send notifications via email).
 3. **SSH Server**: Ensure your server is running SSH (OpenSSH).
-4. **Bash or Python**: You’ll need a scripting language to create the custom authentication script.
+4. **Bash or Python**: A scripting language to create the custom authentication script.
 
 ### Step-by-Step Implementation
 
 #### Step 1: Install Required Packages
-You will need to install `ssmtp` and `curl` (if not already installed) on your server:
+You will need `curl` (if not already installed) to make HTTP requests:
 
 ```bash
 sudo apt update
-sudo apt install ssmtp curl
+sudo apt install curl
 ```
 
-#### Step 2: Configure `ssmtp`
-Edit the `ssmtp` configuration file:
-
-```bash
-sudo nano /etc/ssmtp/ssmtp.conf
-```
-
-Configure it as follows (replace placeholders with your actual Twilio credentials):
-
-```plaintext
-root=postmaster
-mailhub=smtp.twilio.com:587
-AuthUser=your_twilio_email_or_number
-AuthPass=your_twilio_auth_token
-FromLineOverride=YES
-UseSTARTTLS=YES
-```
-
-#### Step 3: Create the SMS Sending Script
-Create a script that sends an SMS using Twilio’s API.
+#### Step 2: Create the SMS Sending Script
+Create a script that sends an SMS using the Vonage API.
 
 ```bash
 sudo nano /usr/local/bin/send_sms.sh
 ```
 
-Add the following content to the script (ensure to replace placeholders with actual values):
+Add the following content to the script (replace placeholders with your Vonage credentials):
 
 ```bash
 #!/bin/bash
 
-# Twilio Credentials
-ACCOUNT_SID="your_account_sid"
-AUTH_TOKEN="your_auth_token"
-FROM_NUMBER="your_twilio_number"
+# Vonage API Credentials
+API_KEY="your_vonage_api_key"
+API_SECRET="your_vonage_api_secret"
+FROM_NUMBER="your_vonage_number"
 TO_NUMBER="$1"
 MESSAGE="$2"
 
-# Send SMS using Twilio
-curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json" \
---data-urlencode "From=$FROM_NUMBER" \
---data-urlencode "To=$TO_NUMBER" \
---data-urlencode "Body=$MESSAGE" \
--u "$ACCOUNT_SID:$AUTH_TOKEN"
+# Send SMS using Vonage API
+curl -X POST "https://rest.nexmo.com/sms/json" \
+--data-urlencode "api_key=$API_KEY" \
+--data-urlencode "api_secret=$API_SECRET" \
+--data-urlencode "from=$FROM_NUMBER" \
+--data-urlencode "to=$TO_NUMBER" \
+--data-urlencode "text=$MESSAGE"
 ```
 
 Make the script executable:
@@ -309,8 +153,8 @@ Make the script executable:
 sudo chmod +x /usr/local/bin/send_sms.sh
 ```
 
-#### Step 4: Set Up the Custom SSH Command
-Edit the SSH configuration file to use `ForceCommand` and execute your script.
+#### Step 3: Set Up the Custom SSH Command
+Edit the SSH configuration file to use `ForceCommand` and execute your custom authentication script.
 
 ```bash
 sudo nano /etc/ssh/sshd_config
@@ -323,7 +167,7 @@ Match User your_username
     ForceCommand /usr/local/bin/authenticate.sh
 ```
 
-#### Step 5: Create the Authentication Script
+#### Step 4: Create the Authentication Script
 Now, create the `authenticate.sh` script that will handle the SMS authentication.
 
 ```bash
@@ -338,17 +182,17 @@ Here’s an example of what this script might look like:
 # User's phone number
 PHONE_NUMBER="user_phone_number"
 
-# Generate a random code
+# Generate a random 6-digit code
 CODE=$(shuf -i 100000-999999 -n 1)
 
-# Send SMS with the code
+# Send the SMS code to the user
 /usr/local/bin/send_sms.sh "$PHONE_NUMBER" "Your SSH authentication code is: $CODE"
 
-# Prompt for the code
+# Prompt for the code from the user
 echo -n "Enter the SMS code: "
 read INPUT_CODE
 
-# Validate the code
+# Validate the code entered by the user
 if [[ "$INPUT_CODE" == "$CODE" ]]; then
     echo "Authentication successful. Starting shell..."
     exec $SHELL
@@ -358,33 +202,38 @@ else
 fi
 ```
 
-Make this script executable as well:
+Make this script executable:
 
 ```bash
 sudo chmod +x /usr/local/bin/authenticate.sh
 ```
 
-#### Step 6: Restart SSH Service
-After making these changes, restart the SSH service:
+#### Step 5: Restart SSH Service
+After making these changes, restart the SSH service to apply the new configuration:
 
 ```bash
 sudo systemctl restart ssh
 ```
 
-### Step 7: Testing
-1. Attempt to SSH into the server.
-2. You should receive an SMS with a code.
+### Step 6: Testing
+1. Attempt to SSH into the server as the specified user.
+2. You should receive an SMS with the authentication code.
 3. Enter the code when prompted to gain access.
 
 ### Important Considerations
-- **Security**: Be mindful of the security implications of SMS-based authentication. SMS can be intercepted.
-- **Rate Limiting**: Implement rate limiting in your script to avoid abuse.
-- **Logging**: Consider logging access attempts for audit purposes.
+- **Security**: SMS-based authentication is inherently less secure than other methods, such as time-based one-time passwords (TOTP) or hardware tokens. It's vulnerable to SIM swapping attacks, interception, etc.
+- **Rate Limiting**: To avoid abuse, implement rate limiting in your script to restrict the number of SMS messages sent in a short time.
+- **Logging**: It’s recommended to log all access attempts and failures for audit purposes.
 
 ### Additional Enhancements
-- You may want to store user phone numbers in a more secure way, such as in a database or a secure file.
-- Implement additional error handling in your scripts to manage potential issues (like Twilio API failures).
-- Consider using environment variables or a configuration file for sensitive information rather than hardcoding it in scripts.
+- **Database or File Storage**: You can enhance the security by storing phone numbers in a secure database or file, rather than hardcoding them in scripts.
+- **Error Handling**: Add more robust error handling to account for network failures, invalid API responses, or other issues.
+- **Environment Variables**: Instead of hardcoding sensitive information like the API key, secret, and phone number, store them in environment variables or a configuration file.
 
-This approach gives you a basic SMS authentication mechanism for SSH, and you can expand on it based on your requirements.
+### Conclusion
+This solution provides a basic implementation for adding SMS-based two-factor authentication to SSH using the Vonage API. While it is a simple and straightforward method, remember that SMS-based authentication can be vulnerable to various attacks. For higher security, you may want to consider using more robust authentication methods such as TOTP (Time-based One-Time Passwords) or hardware security keys like YubiKey.
+
+
+😢😙😢😙😐😙😛😮‍💨😗😛😢😛😮‍💨😛😗😢😐😗😢😐😗😢😐😮‍💨😐😗😢😗😢😐😗😢😐😗😢😐😗😢😐😗😢😐😗😢😶🙃☹️😶☹️☹️😶😗☹️😶🙃☹️😶😗☹️😶😗☹️😶🙃☹️😶😗☹️😗🫠☹️😝😗☹️😶😗☹️😶😗😯🙃☹️😶😗😢😐😗☹️🙃🫠☹️😝😗😮‍💨😮‍💨😛😗😮‍💨😝😗😤😛😃😮‍💨😃😤😝😃😮‍💨
+.
 
