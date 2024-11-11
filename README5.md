@@ -570,3 +570,209 @@ ssh your_user@your_server_ip
 In this setup, we've configured the server to send an SMS message with a verification code whenever an SSH login is triggered. The user must enter the code to gain access to the shell. By using `ForceCommand`, we’ve ensured that the login process is restricted to running only the SMS authentication script, enhancing security.
 
 
+🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰☺️😊🫥😊🫥😊🫥🥰🫥🫥🥰🫥😊🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥😊🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥
+Sure! Here's a revised version of your SSH authentication setup with **SMS verification** using **Textbelt** and **ForceCommand** to enforce the authentication process before allowing access to the shell. I'll walk you through the full setup, with the necessary steps and command details:
+
+---
+
+### **Setting Up SSH Authentication with SMS Verification (Using ForceCommand)**
+
+In this updated guide, we’ll configure an SSH login system that requires SMS verification via **Textbelt**, a free SMS service. We will use `ForceCommand` in SSH to ensure the system only proceeds with a login after SMS verification.
+
+---
+
+### **Prerequisites**:
+
+1. **Curl**: For sending HTTP requests to the Textbelt API.
+2. **SSH**: A properly configured SSH server that will enforce SMS-based login via `ForceCommand`.
+3. **Textbelt API**: A free SMS API to send the verification code.
+4. **Linux Server**: A server running Ubuntu (or a similar Linux distribution).
+
+---
+
+### **Part 1: Setting Up the SMS Sending Script**
+
+#### Step 1: Install `curl`
+
+First, make sure you have `curl` installed to interact with Textbelt’s API.
+
+```bash
+sudo apt update
+sudo apt install curl
+```
+
+#### Step 2: Create a Script to Send SMS
+
+Now, we will create a script that sends an SMS via the Textbelt API when called.
+
+Create the script:
+
+```bash
+sudo nano /usr/local/bin/send_sms.sh
+```
+
+Add the following content to the script:
+
+```bash
+#!/bin/bash
+
+# First parameter: Phone number to send SMS to
+TO_NUMBER="$1"
+# Second parameter: Message to send
+MESSAGE="$2"
+
+# Textbelt API endpoint
+TEXTBELT_API="https://textbelt.com/text"
+
+# Your Textbelt API key (use 'textbelt' for the free key, or replace it with a paid key)
+API_KEY="textbelt"  # 'textbelt' is the free API key for limited use
+
+# Send SMS via Textbelt API
+curl -X POST "$TEXTBELT_API" \
+    -d phone="$TO_NUMBER" \
+    -d message="$MESSAGE" \
+    -d key="$API_KEY"
+```
+
+Make this script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/send_sms.sh
+```
+
+This script sends an SMS using the Textbelt API to a specified phone number with a custom message.
+
+---
+
+### **Part 2: Create the SMS Authentication Script for SSH Login**
+
+#### Step 1: Create the Authentication Script
+
+Next, we create the script that will handle the SMS verification process when a user attempts to log in via SSH.
+
+```bash
+sudo nano /usr/local/bin/ssh_sms_auth.sh
+```
+
+Add the following content to the script:
+
+```bash
+#!/bin/bash
+
+# Define the phone number for SMS authentication (replace with your own number)
+PHONE_NUMBER="your_phone_number"  # Example: "+1234567890"
+
+# Generate a random 6-digit authentication code
+CODE=$(shuf -i 100000-999999 -n 1)
+
+# Send the authentication code via SMS
+/usr/local/bin/send_sms.sh "$PHONE_NUMBER" "Your SSH authentication code is: $CODE"
+
+# Prompt the user to enter the code
+echo -n "Enter the SMS code sent to your phone: "
+read INPUT_CODE
+
+# Validate the entered code
+if [[ "$INPUT_CODE" == "$CODE" ]]; then
+    echo "Authentication successful. Granting shell access..."
+    exec $SHELL  # Allow the user to continue with shell access
+else
+    echo "Authentication failed. Please try again."
+    exit 1  # Deny access if the code doesn't match
+fi
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/ssh_sms_auth.sh
+```
+
+This script works as follows:
+- **Generates a random 6-digit code**.
+- **Sends the code via SMS** to the specified phone number.
+- **Prompts the user** to enter the code they received.
+- If the entered code matches the sent code, the user gains shell access. Otherwise, access is denied.
+
+---
+
+### **Part 3: Configure SSH to Use the SMS Authentication Script**
+
+#### Step 1: Modify the SSH Configuration
+
+Now, we need to configure SSH to **force the execution** of the SMS authentication script on every login attempt using the `ForceCommand` directive.
+
+Open the SSH configuration file:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add the following line to the configuration file:
+
+```bash
+ForceCommand /usr/local/bin/ssh_sms_auth.sh
+```
+
+This line ensures that every SSH login attempt is forced to run the `/usr/local/bin/ssh_sms_auth.sh` script. Without passing the SMS verification, users will not be granted shell access.
+
+#### Step 2: Restart SSH Service
+
+After making changes to the `sshd_config` file, you need to restart the SSH service to apply the changes:
+
+```bash
+sudo systemctl restart ssh
+```
+
+Now, SSH will invoke the SMS authentication script every time a login is attempted.
+
+---
+
+### **Part 4: Test the SSH Login and SMS Verification**
+
+1. **Login via SSH**: Attempt to log in to the server from a terminal or another machine:
+
+   ```bash
+   ssh your_user@your_server_ip
+   ```
+
+2. **Receive SMS**: You should receive an SMS with a 6-digit code sent to the phone number defined in the `/usr/local/bin/ssh_sms_auth.sh` script.
+
+3. **Enter the Code**: Enter the code when prompted. If the code is correct, you’ll gain access to the shell. If the code is incorrect, access will be denied.
+
+---
+
+### **Troubleshooting**
+
+1. **No SMS Received**:
+   - Ensure that the `curl` command is working correctly. You can manually test the SMS script by running:
+
+     ```bash
+     /usr/local/bin/send_sms.sh "+1234567890" "Test message"
+     ```
+
+2. **SSH Login Issues**:
+   - If you can’t log in, check if the `ForceCommand` directive is properly set in the `/etc/ssh/sshd_config` file. Ensure the path to the script is correct and that the script is executable (`chmod +x /usr/local/bin/ssh_sms_auth.sh`).
+
+3. **Textbelt API Limits**:
+   - Textbelt has limitations on free usage. If you reach these limits, you may need to switch to a paid service like **Twilio** or **Nexmo** for a larger volume of SMS messages.
+
+4. **Ensure Correct Permissions**:
+   - Check if the script has proper permissions to execute. Ensure the script is owned by root and executable:
+
+     ```bash
+     sudo chmod +x /usr/local/bin/send_sms.sh
+     sudo chmod +x /usr/local/bin/ssh_sms_auth.sh
+     ```
+
+---
+
+### **Conclusion**
+
+This setup ensures that **SMS verification** is enforced for every SSH login, enhancing the security of your server. The **`ForceCommand`** directive in SSH ensures that users cannot bypass the SMS authentication process, making the server more secure.
+
+Using **Textbelt** for sending SMS is a cost-effective way to implement this, though keep in mind that the free service has limitations. For more extensive use, consider using paid SMS providers like **Twilio** or **Nexmo** for more reliability and higher SMS limits.
+
+
+
+
