@@ -100,7 +100,157 @@ Now, configure SSH to use this script as a `ForceCommand` to enforce OTP verific
 This configuration should provide you with a basic OTP-enforced SSH login setup.
 
 😯🥲🥱🤭🙂😢🙂😢🤭😢😐🙃😢😐🙃😢😐🙂😢🤭🙂😢🤭🙂😢🤭🙃😢🙃🤭😮🤭😥🤭🙃😦🙃😦🤭🙃🙃🤭😦🙃🤭🤭🙂😮🤭🙃🤭🤧😬🤧😬😢🤧😢🤫🤧😮🤫😢🤫🤧🤫😮🤧😯🤫🤧☹️🤫🤧☹️🤫🤒🤫☹️🤒☹️🫢☹️🤒☹️🤫🤒🙁🫢🤒🤒☹️😑🤒☹️😑🤒😑☹️🤒☹️😑🤒😑🤒☹️�🫢🤒🫢☹️🤒🫢☹️🤒☹️🤫🤒🙁😑🤒☹️😑🤒☹️🫢🤒☹️😑🤒🙁🤒🙁😑🤒🙁😑🙁🤒😑🤒☹️😑🤒☹️🫢🤒☹️🫢☹️🤒☹️🤫🥸☹️🫢🤒☹️🫢
+To implement SMS-based SSH authentication using **Twilio** and **Bash** (without relying on Python), you can use Twilio’s API to send the SMS messages. The process involves creating an account with Twilio, setting up your server to interact with Twilio, and using `curl` to send the SMS.
 
+### Prerequisites:
+1. **Twilio Account**: You need a Twilio account. Create one at [Twilio](https://www.twilio.com/).
+2. **Twilio API Credentials**: After signing up, get your **Account SID** and **Auth Token** from the [Twilio console](https://www.twilio.com/console).
+3. **Twilio Phone Number**: Purchase a phone number from Twilio that can send SMS.
+4. **SSH Access**: Basic SSH access set up on your server.
+
+### Step-by-Step Implementation
+
+#### Step 1: Install `curl` (if not already installed)
+`curl` is used to make API requests to Twilio. Most Linux distributions have `curl` installed by default, but you can install it if it's missing:
+
+```bash
+sudo apt update
+sudo apt install curl
+```
+
+#### Step 2: Configure Twilio for SMS
+1. **Get Twilio API credentials**:
+   - Sign up for a free Twilio account.
+   - Get your **Account SID** and **Auth Token** from the Twilio console.
+   - Buy a Twilio phone number that is capable of sending SMS (this is required for sending SMS).
+
+#### Step 3: Create the SMS Sending Script Using Twilio
+
+Create a script that will send an SMS using Twilio’s API.
+
+```bash
+sudo nano /usr/local/bin/send_sms.sh
+```
+
+Add the following content to the script, replacing the placeholders with your actual Twilio details.
+
+```bash
+#!/bin/bash
+
+# Twilio Account SID, Auth Token, and Twilio phone number
+TWILIO_SID="your_account_sid"
+TWILIO_AUTH_TOKEN="your_auth_token"
+TWILIO_PHONE_NUMBER="your_twilio_phone_number"
+
+# The recipient's phone number
+TO_NUMBER="$1"
+# The SMS message content
+MESSAGE="$2"
+
+# Send the SMS via Twilio using curl
+curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_SID/Messages.json \
+--data-urlencode "To=$TO_NUMBER" \
+--data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+--data-urlencode "Body=$MESSAGE" \
+-u "$TWILIO_SID:$TWILIO_AUTH_TOKEN"
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/send_sms.sh
+```
+
+This script will send an SMS to the number provided (`$1` is the recipient's number) with the message provided (`$2` is the message content).
+
+#### Step 4: Create the SSH Authentication Script
+This script will handle the SMS-based authentication process. It will generate a random code, send it via SMS using the `send_sms.sh` script, and then prompt the user to enter the code.
+
+```bash
+sudo nano /usr/local/bin/authenticate.sh
+```
+
+Add the following content to the authentication script:
+
+```bash
+#!/bin/bash
+
+# Replace this with the actual user's phone number
+PHONE_NUMBER="user_phone_number"
+
+# Generate a random 6-digit code
+CODE=$(shuf -i 100000-999999 -n 1)
+
+# Send the SMS code to the user using the send_sms.sh script
+/usr/local/bin/send_sms.sh "$PHONE_NUMBER" "Your SSH authentication code is: $CODE"
+
+# Prompt the user to enter the code they received
+echo -n "Enter the SMS code: "
+read INPUT_CODE
+
+# Validate the code entered by the user
+if [[ "$INPUT_CODE" == "$CODE" ]]; then
+    echo "Authentication successful. Starting shell..."
+    exec $SHELL
+else
+    echo "Authentication failed."
+    exit 1
+fi
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/authenticate.sh
+```
+
+This script does the following:
+1. It generates a random 6-digit code.
+2. Sends the code to the specified phone number using Twilio.
+3. Prompts the user to enter the code they received.
+4. If the entered code matches the generated code, the user is authenticated and granted access to the shell.
+
+#### Step 5: Modify SSH Configuration
+Next, you’ll modify the SSH server configuration to use the authentication script.
+
+Edit the SSH configuration:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add the following lines to force SSH to use the custom authentication script for a specific user:
+
+```plaintext
+Match User your_username
+    ForceCommand /usr/local/bin/authenticate.sh
+```
+
+Replace `your_username` with the actual username you want to enable SMS authentication for.
+
+#### Step 6: Restart SSH Service
+After making these changes, restart the SSH service to apply the new configuration:
+
+```bash
+sudo systemctl restart ssh
+```
+
+#### Step 7: Testing the Setup
+1. Try to SSH into the server as the specified user.
+2. You will receive an SMS with a code.
+3. Enter the code when prompted to authenticate and gain access.
+
+### Important Considerations:
+- **Security**: As mentioned, SMS-based authentication is not the most secure method because of vulnerabilities like SIM swapping. For higher security, consider using TOTP (Time-Based One-Time Password) or hardware-based authentication methods.
+- **Twilio Costs**: Sending SMS via Twilio incurs costs, even if using a free account. Check Twilio’s pricing to ensure it fits your budget.
+- **Error Handling**: You should add error handling to account for issues like network failures or API errors (e.g., Twilio service disruptions).
+- **Phone Number Management**: It's better to store phone numbers securely, such as in a database or secure configuration file, rather than hardcoding them in the script.
+
+### Conclusion
+This solution uses Twilio to send SMS-based authentication codes for SSH login. It bypasses the need for complex dependencies like Python, relying solely on Bash and `curl` to interact with Twilio's API.
+
+
+🫥🫥🥰🫥😊🫥😊🫥🫥😊🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥😌🫥🫥🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌
 To implement phone SMS authentication for SSH without Twilio, you can use an alternative service like **Nexmo** (now called **Vonage**), which offers a similar API for sending SMS. Below is a revised implementation using Nexmo (Vonage).
 
 ### Requirements
