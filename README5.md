@@ -773,6 +773,217 @@ This setup ensures that **SMS verification** is enforced for every SSH login, en
 
 Using **Textbelt** for sending SMS is a cost-effective way to implement this, though keep in mind that the free service has limitations. For more extensive use, consider using paid SMS providers like **Twilio** or **Nexmo** for more reliability and higher SMS limits.
 
+🫥🫥🙃🫥😚🫥😚🫥🫥😚🫥😚🫥😚🫥😚🫥😚🫥🥳🫥🫥🥳🫥🥳🫥🥳🫥😚🫥😚🫥🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥🫥😚😚🫥😚🫥🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥🫥😚🫥😚🫥😚🫥😚🫥😚😚🫥😚🫥😚🫥😚🫥🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚🫥😚
+To modify the existing SSH authentication setup to work with **Fast2SMS** instead of **Textbelt**, you will need to adjust the SMS sending script and use Fast2SMS's API for sending the SMS.
+
+Here’s the updated version of the setup with Fast2SMS:
+
+---
+
+### **Setting Up SSH Authentication with SMS Verification (Using Fast2SMS)**
+
+This guide configures an SSH login system that requires SMS verification via **Fast2SMS**, a popular SMS service provider in India. We will use `ForceCommand` in SSH to enforce the authentication process before allowing access to the shell.
+
+---
+
+### **Prerequisites**:
+
+1. **Curl**: For sending HTTP requests to the Fast2SMS API.
+2. **SSH**: A properly configured SSH server that will enforce SMS-based login via `ForceCommand`.
+3. **Fast2SMS API**: Fast2SMS account with API access to send SMS.
+4. **Linux Server**: A server running Ubuntu (or a similar Linux distribution).
+
+---
+
+### **Part 1: Setting Up the SMS Sending Script with Fast2SMS**
+
+#### Step 1: Install `curl`
+
+Ensure `curl` is installed to interact with the Fast2SMS API.
+
+```bash
+sudo apt update
+sudo apt install curl
+```
+
+#### Step 2: Create a Script to Send SMS
+
+Create the script that will send an SMS via the Fast2SMS API.
+
+```bash
+sudo nano /usr/local/bin/send_sms.sh
+```
+
+Add the following content to the script:
+
+```bash
+#!/bin/bash
+
+# First parameter: Phone number to send SMS to
+TO_NUMBER="$1"
+# Second parameter: Message to send
+MESSAGE="$2"
+
+# Fast2SMS API endpoint
+FAST2SMS_API="https://www.fast2sms.com/dev/bulk"
+
+# Your Fast2SMS API key (replace with your actual API key)
+API_KEY="your_fast2sms_api_key"  # Replace with your Fast2SMS API key
+
+# Send SMS via Fast2SMS API
+curl -X POST "$FAST2SMS_API" \
+    -d sender_id="FSTSMS" \
+    -d message="$MESSAGE" \
+    -d language="english" \
+    -d route="p" \
+    -d numbers="$TO_NUMBER" \
+    -d api_key="$API_KEY"
+```
+
+Make this script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/send_sms.sh
+```
+
+This script sends an SMS using the Fast2SMS API to a specified phone number with a custom message.
+
+---
+
+### **Part 2: Create the SMS Authentication Script for SSH Login**
+
+#### Step 1: Create the Authentication Script
+
+Next, we will create the script that handles SMS verification when a user attempts to log in via SSH.
+
+```bash
+sudo nano /usr/local/bin/ssh_sms_auth.sh
+```
+
+Add the following content to the script:
+
+```bash
+#!/bin/bash
+
+# Define the phone number for SMS authentication (replace with your own number)
+PHONE_NUMBER="your_phone_number"  # Example: "+1234567890"
+
+# Generate a random 6-digit authentication code
+CODE=$(shuf -i 100000-999999 -n 1)
+
+# Send the authentication code via SMS
+/usr/local/bin/send_sms.sh "$PHONE_NUMBER" "Your SSH authentication code is: $CODE"
+
+# Prompt the user to enter the code
+echo -n "Enter the SMS code sent to your phone: "
+read INPUT_CODE
+
+# Validate the entered code
+if [[ "$INPUT_CODE" == "$CODE" ]]; then
+    echo "Authentication successful. Granting shell access..."
+    exec $SHELL  # Allow the user to continue with shell access
+else
+    echo "Authentication failed. Please try again."
+    exit 1  # Deny access if the code doesn't match
+fi
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/ssh_sms_auth.sh
+```
+
+This script:
+- **Generates a random 6-digit code**.
+- **Sends the code via SMS** to the phone number defined in the script.
+- **Prompts the user** to enter the code.
+- If the entered code matches the sent code, the user gains shell access; otherwise, access is denied.
+
+---
+
+### **Part 3: Configure SSH to Use the SMS Authentication Script**
+
+#### Step 1: Modify the SSH Configuration
+
+Now, we need to configure SSH to **force the execution** of the SMS authentication script on every login attempt using the `ForceCommand` directive.
+
+Open the SSH configuration file:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add the following line to the configuration file:
+
+```bash
+ForceCommand /usr/local/bin/ssh_sms_auth.sh
+```
+
+This line ensures that every SSH login attempt is forced to run the `/usr/local/bin/ssh_sms_auth.sh` script. Without passing the SMS verification, users will not be granted shell access.
+
+#### Step 2: Restart SSH Service
+
+After making changes to the `sshd_config` file, restart the SSH service to apply the changes:
+
+```bash
+sudo systemctl restart ssh
+```
+
+Now, SSH will invoke the SMS authentication script every time a login is attempted.
+
+---
+
+### **Part 4: Test the SSH Login and SMS Verification**
+
+1. **Login via SSH**: Attempt to log in to the server from a terminal or another machine:
+
+   ```bash
+   ssh your_user@your_server_ip
+   ```
+
+2. **Receive SMS**: You should receive an SMS with a 6-digit code sent to the phone number defined in the `/usr/local/bin/ssh_sms_auth.sh` script.
+
+3. **Enter the Code**: Enter the code when prompted. If the code is correct, you’ll gain access to the shell. If the code is incorrect, access will be denied.
+
+---
+
+### **Troubleshooting**
+
+1. **No SMS Received**:
+   - Ensure that the `curl` command is working correctly. You can manually test the SMS script by running:
+
+     ```bash
+     /usr/local/bin/send_sms.sh "+1234567890" "Test message"
+     ```
+
+2. **SSH Login Issues**:
+   - If you can’t log in, check if the `ForceCommand` directive is properly set in the `/etc/ssh/sshd_config` file. Ensure the path to the script is correct and that the script is executable (`chmod +x /usr/local/bin/ssh_sms_auth.sh`).
+
+3. **Fast2SMS API Limits**:
+   - Fast2SMS has usage limits on free accounts. If you exceed those limits, you may need to upgrade to a paid plan for more SMS credits.
+
+4. **Ensure Correct Permissions**:
+   - Ensure the script has proper permissions to execute. Check that the script is owned by root and executable:
+
+     ```bash
+     sudo chmod +x /usr/local/bin/send_sms.sh
+     sudo chmod +x /usr/local/bin/ssh_sms_auth.sh
+     ```
+
+---
+
+### **Conclusion**
+
+This setup ensures that **SMS verification** is enforced for every SSH login, enhancing the security of your server. The **`ForceCommand`** directive in SSH ensures that users cannot bypass the SMS authentication process, making the server more secure.
+
+Using **Fast2SMS** for sending SMS is an effective solution, though keep in mind that free accounts come with some limitations. For higher usage, consider upgrading your Fast2SMS plan or using alternative SMS providers like **Twilio** or **Nexmo**.
+
+---
+
+By following the steps above, you can successfully implement SMS-based SSH authentication with Fast2SMS. Let me know if you need any further assistance with this!
+
+
 
 
 
