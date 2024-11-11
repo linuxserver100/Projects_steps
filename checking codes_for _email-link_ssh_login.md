@@ -6487,14 +6487,13 @@ fi
 This setup ensures secure **email verification** before granting **SSH access**, using a **remote MySQL server** to store and validate verification links. The system uses **ssmtp** for email sending, **PHP** for link verification, and restricts SSH access until the user verifies their email.
 
 🫥🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥😜🫥😜🫥😜🫥😜🫥😜🫥😜🫥🫥🫥🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂😋😂😋🫥😂🫥😂🫥😂🫥😂🫥😂🫥😂🫥🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥😯🫥🫥😯🫥😯🫥😯🫥😯.
-
-Certainly! Below is a revised version of the entire code with improved error handling, particularly in the PHP script. This will ensure that any issues with database interactions, missing parameters, or verification processes are logged and appropriately handled.
+To implement the solution with all necessary permissions for the root user, including granting root access to MySQL for remote connections, and to ensure robust error handling, here is the full code and configuration setup:
 
 ### 1. **MySQL Database Setup (with Root Access)**
 
 #### 1.1. **Create MySQL Database and Table**
 
-Log into MySQL as the root user and set up the database and table:
+Log into MySQL as the root user and create the database and table:
 
 ```bash
 sudo mysql -u root -p
@@ -6518,15 +6517,53 @@ CREATE TABLE users (
 
 #### 1.2. **Grant Permissions to Root User**
 
-Since we're using the root account, no need to create a specific user. However, ensure the root user has proper access permissions.
+To allow the root user to connect remotely, you need to adjust MySQL's configuration and grant access. Follow these steps:
+
+1. **Allow Remote Connections to MySQL**:
+   Edit the MySQL configuration file to allow remote connections:
+
+   ```bash
+   sudo nano /etc/mysql/mysql.conf.d/mysqld.cnf
+   ```
+
+   Find the line:
+
+   ```ini
+   bind-address = 127.0.0.1
+   ```
+
+   And change it to:
+
+   ```ini
+   bind-address = 0.0.0.0
+   ```
+
+   This will allow MySQL to accept connections from any IP address. If you only want specific IPs to access the database, change `0.0.0.0` to a specific IP.
+
+2. **Grant Root User Permissions for Remote Access**:
+   To allow the root user to connect from any IP, run the following SQL command:
+
+   ```sql
+   GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'your_root_password' WITH GRANT OPTION;
+   FLUSH PRIVILEGES;
+   ```
+
+3. **Restart MySQL**:
+   After making the changes, restart MySQL to apply them:
+
+   ```bash
+   sudo systemctl restart mysql
+   ```
+
+This will grant the root user the necessary permissions for remote connections and database operations.
 
 ---
 
 ### 2. **Script to Send Verification Email (send_script.sh)**
 
-This script generates a verification token and sends it via email using `ssmtp`.
-
 #### 2.1. **Install `ssmtp`**
+
+Install `ssmtp` to send emails:
 
 ```bash
 sudo apt-get install ssmtp
@@ -6546,7 +6583,7 @@ UseSTARTTLS=YES
 FromLineOverride=YES
 ```
 
-Make the file readable only by the user:
+Set the file permissions to be readable only by the user:
 
 ```bash
 chmod 600 /etc/ssmtp/ssmtp.conf
@@ -6580,17 +6617,13 @@ else
 fi
 ```
 
-You can run this script with the user's email as an argument:
-
-```bash
-./send_script.sh user@example.com
-```
+This script generates a verification token, inserts it into the database, and sends an email to the user with the verification link.
 
 ---
 
 ### 3. **PHP Script to Handle Email Verification (verify.php)**
 
-This PHP script processes the verification link clicked by the user and includes error handling for database and other issues.
+#### 3.1. **verify.php**
 
 ```php
 <?php
@@ -6659,18 +6692,13 @@ $conn->close();
 ?>
 ```
 
-### Explanation:
-- **Error Logging**: Uses `error_log()` for logging errors to a file for easier debugging.
-- **Token Handling**: Properly handles missing tokens and logs errors when SQL statements fail.
-- **Database Queries**: Includes checks for errors in prepared statements and execution.
+This PHP script checks the verification token passed through the URL and updates the user record to mark it as verified.
 
 ---
 
 ### 4. **SSH Login with Automatic Deletion (verify_and_shell.sh)**
 
-This script ensures the user is deleted from the database after attempting to log in, whether or not they are verified.
-
-#### 4.1. **Create Wrapper Script (verify_and_shell.sh)**
+#### 4.1. **verify_and_shell.sh**
 
 ```bash
 #!/bin/bash
@@ -6707,23 +6735,19 @@ mysql -u root -p"your_root_password" -e "DELETE FROM user_verification.users WHE
 exec /bin/bash
 ```
 
-Make the script executable:
-
-```bash
-chmod +x /usr/local/bin/verify_and_shell.sh
-```
+This script sends the verification email, checks if the user has verified their email, and then grants or denies SSH access. After checking, it deletes the user from the database.
 
 ---
 
 ### 5. **Enforce Script in SSH Configuration**
 
-Edit `/etc/ssh/sshd_config` and add the following line:
+To enforce the use of the script when logging into the server, add this line to the `/etc/ssh/sshd_config`:
 
 ```bash
 ForceCommand /usr/local/bin/verify_and_shell.sh
 ```
 
-Restart SSH to apply the changes:
+Restart the SSH service:
 
 ```bash
 sudo systemctl restart sshd
@@ -6733,9 +6757,9 @@ sudo systemctl restart sshd
 
 ### 6. **Testing the Setup**
 
-1. **Send a verification email** using `send_script.sh`.
+1. **Send a verification email** using the `send_script.sh`.
 2. **Click the link** in the email to verify the user (handled by `verify.php`).
-3. **Attempt to log in via SSH**: 
+3. **Attempt to log in via SSH**:
    - If the email is verified, SSH access will be granted.
    - If the email is not verified, access will be denied.
    - In both cases, the user will be deleted from the database.
@@ -6743,10 +6767,11 @@ sudo systemctl restart sshd
 ---
 
 ### Summary of Key Changes:
-1. **Root Database Access**: Uses root access to MySQL directly, avoiding creating a separate user for verification tasks.
-2. **Automatic User Deletion**: After the SSH login attempt, the user is deleted from the database, regardless of verification status.
-3. **Improved Error Handling**: Enhanced error logging and handling in PHP to provide better debugging information.
-4. **Testing**: The user can be manually tested by attempting to log in via SSH, and the system ensures email verification.
+- **Root Database Access**: The root user has the necessary privileges to handle database interactions.
+- **Automatic User Deletion**: After the SSH login attempt, the user is deleted from the database, regardless of verification status.
+- **Improved Error Handling**: Enhanced error logging and handling in PHP and Bash for debugging.
+- **Remote Access Setup**: Configured MySQL for remote root access and granted permissions.
+
 
 This approach improves the handling of errors, making the system more robust and easier to troubleshoot when issues arise.
 
