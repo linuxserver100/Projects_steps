@@ -8015,6 +8015,480 @@ This solution integrates MongoDB Atlas, PHP, and shell scripts to create a secur
 By using MongoDB Atlas, you get a cloud-hosted, scalable solution for secure token storage and management.
 
 
+🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥🥹🫥🥹🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥰🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥰🫥🥰🫥🥰🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘😘🫥😘🫥😘
+To modify the solution to use a free MySQL database provider, we can consider using a service like **PlanetScale** (which offers a free tier for MySQL databases), **Remotemysql**, or **InfinityFree**. These services provide free MySQL database instances, though there are some limitations like the number of queries or database size. For this example, let's use **PlanetScale** as the free MySQL provider. 
+
+### **Updated Solution Using PlanetScale (or Similar Free MySQL Provider)**
+
+---
+
+### **1. Set Up the Free MySQL Database (e.g., PlanetScale)**
+
+1. **Sign up for PlanetScale**: 
+   - Visit [PlanetScale](https://www.planetscale.com) and sign up for a free account.
+   - After logging in, create a new database.
+
+2. **Create a Database and Tables**:
+   - After creating your database, open the `Connect` tab to get your database connection details (e.g., host, username, password).
+   
+3. **Create a Table for Storing Tokens**:
+   - Once connected to the database via the PlanetScale dashboard or a MySQL client, run the following SQL commands to create the required table:
+
+   ```sql
+   CREATE TABLE tokens (
+       id INT AUTO_INCREMENT PRIMARY KEY,
+       token VARCHAR(255) NOT NULL,
+       verified BOOLEAN DEFAULT FALSE,
+       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+   ```
+
+4. **Get the Database Connection Details**:
+   - You'll need the **host**, **username**, **password**, and **database name** to configure the connection in your script.
+
+---
+
+### **2. Token Generation Script (`send_token.sh`)**
+
+Now that we have the free MySQL provider, we’ll update the shell script to connect to this database. Here’s the updated token generation script:
+
+#### Updated Token Generation Script (`send_token.sh`):
+
+```bash
+#!/bin/bash
+
+# PlanetScale MySQL Connection Variables (update with your PlanetScale details)
+MYSQL_HOST="your-database-host"
+MYSQL_USER="your-username"
+MYSQL_PASS="your-password"
+MYSQL_DB="your-database-name"
+
+# Generate a unique token
+TOKEN=$(uuidgen)
+
+# Store the token in the database with a verification status (false by default)
+mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS $MYSQL_DB -e "
+INSERT INTO tokens (token, verified) VALUES ('$TOKEN', false);
+"
+
+# Define the verification URL (points to the PHP script for verification)
+VERIFICATION_URL="http://your-server-ip/verify_token.php?token=$TOKEN"
+
+# Email subject and body with clickable verification link
+SUBJECT="Your Login Token"
+BODY="Click the following link to verify your login: $VERIFICATION_URL"
+
+# Send the email
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
+```
+
+In this script:
+- **PlanetScale credentials** (`MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASS`, `MYSQL_DB`) should be updated with the actual connection information from your PlanetScale account.
+- The `mysql` command is used to insert the generated token into the `tokens` table.
+
+---
+
+### **3. Token Verification PHP Script (`verify_token.php`)**
+
+The PHP script that verifies the token in the PlanetScale MySQL database is similar to the original version but with updated connection details.
+
+#### Updated PHP Script (`verify_token.php`):
+
+```php
+<?php
+// PlanetScale MySQL Database Connection Details
+$host = 'your-database-host';  // Use PlanetScale host
+$dbname = 'your-database-name';  // Your database name
+$username = 'your-username';  // Your database username
+$password = 'your-password';  // Your database password
+
+// Create a new PDO instance
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Get the token from the query string
+    if (isset($_GET['token'])) {
+        $token = $_GET['token'];
+
+        // Prepare and execute the SQL query to find the token
+        $stmt = $pdo->prepare("SELECT * FROM tokens WHERE token = :token");
+        $stmt->execute(['token' => $token]);
+        $document = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($document) {
+            if (!$document['verified']) {
+                // Update the token to mark it as verified
+                $updateStmt = $pdo->prepare("UPDATE tokens SET verified = 1 WHERE token = :token");
+                $updateStmt->execute(['token' => $token]);
+
+                echo "Token verified successfully. You can now log in via SSH.";
+            } else {
+                echo "This token has already been verified.";
+            }
+        } else {
+            echo "Invalid token. Access denied.";
+        }
+    } else {
+        echo "Token not provided. Access denied.";
+    }
+} catch (PDOException $e) {
+    echo "Error: " . $e->getMessage();
+}
+?>
+```
+
+In this script:
+- The **PlanetScale MySQL** connection credentials are used to connect to the database.
+- The token is validated by querying the `tokens` table in MySQL, and if it's valid, it marks the token as verified.
+
+---
+
+### **4. Modify the SSH Configuration**
+
+The SSH configuration doesn’t change, as it relies on the same `validate_token.sh` script to validate SSH access after token verification.
+
+#### Example SSH Configuration (`/etc/ssh/sshd_config`):
+
+```bash
+# ForceCommand to run token validation after login
+ForceCommand /usr/local/bin/validate_token.sh
+
+# Allow only specific users to log in
+AllowUsers youruser
+
+# Optionally, restrict SSH access to certain IP addresses
+# ListenAddress 0.0.0.0
+```
+
+---
+
+### **5. Token Validation Script (`validate_token.sh`)**
+
+The token validation script checks the validity of the token in the MySQL database hosted on PlanetScale and deletes it after the user successfully logs in.
+
+#### Updated Token Validation Script (`validate_token.sh`):
+
+```bash
+#!/bin/bash
+
+# PlanetScale MySQL Connection Variables
+MYSQL_HOST="your-database-host"
+MYSQL_USER="your-username"
+MYSQL_PASS="your-password"
+MYSQL_DB="your-database-name"
+
+# Extract the username (used as token) from SSH session
+USER=$(whoami)
+
+# Query MySQL to check if the token is verified
+TOKEN_STATUS=$(mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB -se "
+SELECT verified FROM tokens WHERE token = '$USER';
+")
+
+if [[ "$TOKEN_STATUS" == "1" ]]; then
+    # Token is verified, grant access
+    echo "Token verified. Access granted."
+
+    # Delete the token from the database after SSH access is granted
+    mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB -e "
+    DELETE FROM tokens WHERE token = '$USER';
+    "
+
+    # Allow user to continue with SSH session
+    exec $SHELL
+else
+    # Token is not verified, deny access
+    echo "Token not verified. Please click the verification link sent to your email."
+    exit 1
+fi
+```
+
+In this script:
+- The **PlanetScale MySQL** connection credentials are used to connect to the database.
+- The token is checked for verification, and if valid, it is deleted after SSH access is granted.
+
+---
+
+### **6. Testing the Process**
+
+**Step 1: Generate Token and Send Email**
+
+Run the `send_token.sh` script to generate a token and send the verification email.
+
+```bash
+/var/www/html/send_token.sh
+```
+
+The recipient will receive an email with a verification link (e.g., `http://your-server-ip/verify_token.php?token=<unique-token>`).
+
+**Step 2: Click the Verification Link**
+
+The user clicks the link in the email, which triggers the `verify_token.php` script. The token is marked as verified in the MySQL database.
+
+**Step 3: SSH Login**
+
+The user logs in via SSH:
+
+```bash
+ssh youruser@your-server-ip
+```
+
+If the token has been verified, access is granted, and the token is deleted from the database. If not, the user is prompted to verify the token via email.
+
+---
+
+### **Optional Enhancements**
+
+1. **Token Expiry**: You can add an `expires_at` column to the `tokens` table to implement token expiration. Modify the validation scripts to check if the token has expired.
+   
+2. **Improved Security**: Ensure your MySQL connection is secure by using SSL connections and applying proper firewall rules.
+
+3. **Logging**: Implement logging in PHP and shell scripts to track token generation, verification, and user login attempts.
+
+---
+
+### **Summary**
+
+This solution integrates PlanetScale (or similar free MySQL providers), PHP, and shell scripts to create a secure token-based authentication system for SSH login:
+
+- **Token Generation**: A shell script (`send_token.sh`) generates a token, stores it in the PlanetScale database, and sends a verification email.
+- **Token Verification (Web-based)**: A PHP script (`verify_token.php`) verifies the token when clicked, marking it as verified in the MySQL database.
+- **SSH Validation**: A shell script (`validate_token.sh`) ensures that SSH access is only granted if the token has been verified and deletes the token afterward.
+
+By using a free MySQL provider like PlanetScale, you have a cost-effective solution for secure token storage and management.
+
+
+
+🫥🫥🥰🫥😊🫥😊🫥😊🫥🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥😊😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥To ensure that the user's details (token) are deleted from the MongoDB Atlas database **whether the user is granted or denied access** after SSH login, we need to adjust the token validation logic. The token should be deleted from the database **immediately after the validation check**, regardless of the outcome.
+
+Here’s the corrected solution with updated scripts and explanations:
+
+---
+
+### **1. MongoDB Atlas Setup**
+
+Ensure you have a MongoDB Atlas cluster, database, and collection configured as described earlier. The MongoDB connection string will be used in subsequent scripts.
+
+---
+
+### **2. Token Generation Script (`send_token.sh`)**
+
+This script generates a unique token, stores it in MongoDB Atlas with a verification status, and sends a verification email to the user.
+
+#### Example Script: `/var/www/html/send_token.sh`
+
+```bash
+#!/bin/bash
+
+# MongoDB Atlas Connection Variables
+MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority"
+MONGO_DB="token_verification"
+MONGO_COLLECTION="tokens"
+
+# Generate a unique token
+TOKEN=$(uuidgen)
+
+# Store the token in MongoDB Atlas with a verification status (false by default)
+mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.insert({token: '$TOKEN', verified: false, created_at: new Date()});" 
+
+# Define the verification URL (points to the PHP script for verification)
+VERIFICATION_URL="http://your-server-ip/verify_token.php?token=$TOKEN"
+
+# Email subject and body with clickable verification link
+SUBJECT="Your Login Token"
+BODY="Click the following link to verify your login: $VERIFICATION_URL"
+
+# Send the email
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
+```
+
+This script:
+- Generates a token and stores it in MongoDB.
+- Sends an email to the user with a verification link that points to the `verify_token.php` script.
+
+---
+
+### **3. Token Verification PHP Script (`verify_token.php`)**
+
+When the user clicks the verification link, this script checks the token in MongoDB and marks it as verified.
+
+#### Example Script: `/var/www/html/verify_token.php`
+
+```php
+<?php
+require 'vendor/autoload.php';  // If using Composer to autoload MongoDB library
+
+// MongoDB Atlas Connection
+$mongoUri = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority";
+$client = new MongoDB\Client($mongoUri);
+
+// MongoDB Database and Collection
+$mongoDb = "token_verification";
+$mongoCollection = "tokens";
+
+$collection = $client->$mongoDb->$mongoCollection;
+
+// Get the token from the query string
+if (isset($_GET['token'])) {
+    $token = $_GET['token'];
+
+    // Find the token document in MongoDB Atlas
+    $document = $collection->findOne(['token' => $token]);
+
+    if ($document) {
+        if ($document['verified'] == false) {
+            // Update the token to mark it as verified
+            $updateResult = $collection->updateOne(
+                ['token' => $token],
+                ['$set' => ['verified' => true]]
+            );
+
+            echo "Token verified successfully. You can now log in via SSH.";
+        } else {
+            echo "This token has already been verified.";
+        }
+    } else {
+        echo "Invalid token. Access denied.";
+    }
+} else {
+    echo "Token not provided. Access denied.";
+}
+?>
+```
+
+This script:
+- Verifies the token in MongoDB.
+- Marks the token as verified if it was not already verified.
+
+---
+
+### **4. Modify the SSH Configuration**
+
+We need to configure SSH to always execute a custom validation script (`validate_token.sh`) for every login attempt.
+
+#### Example SSH Configuration (`/etc/ssh/sshd_config`)
+
+```bash
+# ForceCommand to run token validation after login
+ForceCommand /usr/local/bin/validate_token.sh
+
+# Allow only specific users to log in
+AllowUsers youruser
+
+# Optionally, restrict SSH access to certain IP addresses
+# ListenAddress 0.0.0.0
+```
+
+This configuration:
+- Forces every SSH login to execute the `validate_token.sh` script, which checks the token's validity.
+- Ensures that only the specified user (`youruser`) can log in.
+
+---
+
+### **5. Token Validation Script (`validate_token.sh`)**
+
+This is the critical part of the solution. The script ensures that the token is validated, and **regardless of whether the user is granted or denied SSH access**, the token is deleted from MongoDB Atlas immediately after the check.
+
+#### Updated `validate_token.sh`
+
+```bash
+#!/bin/bash
+
+# MongoDB Atlas Connection URI
+MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority"
+MONGO_DB="token_verification"
+MONGO_COLLECTION="tokens"
+
+# Extract the username (used as token) from SSH session
+USER=$(whoami)
+
+# Query MongoDB Atlas to check if the token is verified
+TOKEN_STATUS=$(mongo --quiet --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.findOne({ token: '$USER' })")
+
+# Parse the verification status from the MongoDB result
+VERIFIED=$(echo "$TOKEN_STATUS" | grep -o '"verified":true' | wc -l)
+
+# Always delete the token record, regardless of whether it's verified or not
+mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ token: '$USER' });"
+
+# Check token verification status
+if [[ $VERIFIED -eq 1 ]]; then
+    # Token is verified, grant access
+    echo "Token verified. Access granted."
+    exec $SHELL
+else
+    # Token is not verified, deny access
+    echo "Token not verified. Please click the verification link sent to your email."
+    exit 1
+fi
+```
+
+### Key Features of `validate_token.sh`:
+
+1. **Immediate Deletion of Token**:  
+   The token is deleted immediately after the verification check, regardless of whether it's verified or not:
+   ```bash
+   mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ token: '$USER' });"
+   ```
+
+2. **Grant or Deny Access**:  
+   - If the token is verified, access to the shell is granted with `exec $SHELL`.
+   - If the token is not verified, access is denied, and the user is instructed to verify the token.
+
+3. **No Reuse of Token**:  
+   Since the token is deleted from the database immediately after checking, it cannot be reused for any future logins.
+
+---
+
+### **6. Testing the Process**
+
+**Step 1: Generate Token and Send Email**
+
+Run the `send_token.sh` script to generate a token and send the verification email.
+
+```bash
+/var/www/html/send_token.sh
+```
+
+This will generate a unique token, store it in MongoDB Atlas, and send an email with the verification link (e.g., `http://your-server-ip/verify_token.php?token=<unique-token>`).
+
+**Step 2: Click the Verification Link**
+
+The user clicks the verification link, which triggers the `verify_token.php` script. The token is marked as verified in MongoDB Atlas.
+
+**Step 3: SSH Login**
+
+The user logs in via SSH:
+
+```bash
+ssh youruser@your-server-ip
+```
+
+- **If the token is valid**: The user is granted access to the shell, and the token is deleted from MongoDB Atlas.
+- **If the token is invalid or expired**: The user is denied access, and the token is deleted from MongoDB Atlas anyway.
+
+---
+
+### **Optional Enhancements**
+
+1. **Token Expiry**: You could add an `expires_at` field to the MongoDB document to make tokens time-limited. Modify the PHP and validation scripts to check the expiry date before allowing access.
+
+2. **Logging**: You can add logging in `validate_token.sh` to track whether tokens were verified, rejected, or deleted, helping with debugging and auditing.
+
+3. **Improved Security**: Secure your MongoDB connection by using SSL/TLS and ensuring SSH access is properly configured with key-based authentication and firewall rules.
+
+---
+
+### **Summary**
+
+This updated solution ensures that after a user attempts to log in via SSH using a token, the token is deleted from MongoDB Atlas **whether the user is granted or denied access**. This is achieved by:
+
+- **Token Generation**: The `send_token.sh` script generates a token and sends a verification email.
+- **Token Verification**: The `verify_token.php` script verifies the token and marks it as verified in MongoDB.
+- **Token Validation**: The `validate_token.sh` script checks the token's validity and deletes it from the database immediately after the check, regardless of the outcome.
+
+This approach prevents token reuse and ensures a single-use login mechanism.
 
 
 
