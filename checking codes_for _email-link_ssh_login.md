@@ -7537,5 +7537,484 @@ This solution sets up a comprehensive system for verifying user emails before gr
 
 
 
+🫥😄🫥🫥🫥😄🫥🫥🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊
+To configure the token generation and verification process with MongoDB, using both `.sh` scripts for token generation and SSH validation, and a `verify_token.php` script for web-based token verification, we will make the necessary adjustments to the original approach. Here's the revised step-by-step process for your use case:
+
+---
+
+### **Overview:**
+
+1. **Token Generation and Email**: A shell script (`send_token.sh`) generates a token, stores it in MongoDB, and sends an email with the token verification link to the user.
+2. **Token Verification (Web-based)**: A PHP script (`verify_token.php`) verifies the token when clicked via a browser, marking it as verified in the MongoDB database.
+3. **SSH Validation**: A shell script (`validate_token.sh`) checks if the token is verified before allowing SSH access.
+
+---
+
+### **1. Install and Configure MongoDB**
+
+First, ensure MongoDB is installed and running on your system.
+
+```bash
+sudo apt update
+sudo apt install -y mongodb
+sudo systemctl start mongodb
+sudo systemctl enable mongodb
+```
+
+---
+
+### **2. MongoDB Database Setup**
+
+Create a database (`token_verification`) and a collection (`tokens`) to store generated tokens:
+
+```bash
+mongo
+use token_verification
+db.createCollection("tokens")
+db.tokens.createIndex({ token: 1 }, { unique: true })
+```
+
+---
+
+### **3. Install MongoDB PHP Extension**
+
+To interact with MongoDB using PHP, install the necessary MongoDB PHP driver.
+
+```bash
+sudo apt install php-mongodb
+sudo service apache2 restart
+```
+
+---
+
+### **4. Token Generation Script (`send_token.sh`)**
+
+The shell script (`send_token.sh`) will generate a unique token, store it in MongoDB, and send an email with a verification link.
+
+#### Example Script: `/var/www/html/send_token.sh`
+
+```bash
+#!/bin/bash
+
+# MongoDB Connection Variables
+MONGO_HOST="localhost"
+MONGO_DB="token_verification"
+MONGO_COLLECTION="tokens"
+
+# Generate a unique token
+TOKEN=$(uuidgen)
+
+# Store the token in MongoDB with a verification status (false by default)
+mongo --eval "db = connect('mongodb://$MONGO_HOST/$MONGO_DB'); db.$MONGO_COLLECTION.insert({token: '$TOKEN', verified: false, created_at: new Date()});"
+
+# Define the verification URL (points to the PHP script for verification)
+VERIFICATION_URL="http://your-server-ip/verify_token.php?token=$TOKEN"
+
+# Email subject and body with clickable verification link
+SUBJECT="Your Login Token"
+BODY="Click the following link to verify your login: $VERIFICATION_URL"
+
+# Send the email
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
+```
+
+Make the script executable:
+
+```bash
+chmod +x /var/www/html/send_token.sh
+```
+
+This script generates a unique token using `uuidgen`, stores it in MongoDB, and sends an email with a link to the PHP verification page (`verify_token.php`).
+
+---
+
+### **5. Token Verification PHP Script (`verify_token.php`)**
+
+When the user clicks the verification link, it will call the `verify_token.php` script, which verifies the token in MongoDB.
+
+#### Example PHP Script: `/var/www/html/verify_token.php`
+
+```php
+<?php
+require 'vendor/autoload.php';  // If using Composer to autoload MongoDB library
+
+// MongoDB Connection
+$mongoHost = "localhost";
+$mongoDb = "token_verification";
+$mongoCollection = "tokens";
+
+$client = new MongoDB\Client("mongodb://$mongoHost");
+$collection = $client->$mongoDb->$mongoCollection;
+
+// Get the token from the query string
+if (isset($_GET['token'])) {
+    $token = $_GET['token'];
+
+    // Find the token document in MongoDB
+    $document = $collection->findOne(['token' => $token]);
+
+    if ($document) {
+        if ($document['verified'] == false) {
+            // Update the token to mark it as verified
+            $updateResult = $collection->updateOne(
+                ['token' => $token],
+                ['$set' => ['verified' => true]]
+            );
+
+            echo "Token verified successfully. You can now log in via SSH.";
+        } else {
+            echo "This token has already been verified.";
+        }
+    } else {
+        echo "Invalid token. Access denied.";
+    }
+} else {
+    echo "Token not provided. Access denied.";
+}
+?>
+```
+
+This script:
+- Connects to MongoDB using the MongoDB PHP driver.
+- Retrieves the token from the URL query parameter.
+- Checks if the token exists and if it hasn't been verified. If it's unverified, it marks it as verified in MongoDB.
+
+---
+
+### **6. Modify the SSH Configuration**
+
+The SSH configuration should force the `validate_token.sh` script to run, which will check if the token has been validated in MongoDB.
+
+#### Example SSH Configuration (`/etc/ssh/sshd_config`)
+
+```bash
+# ForceCommand to run token validation after login
+ForceCommand /usr/local/bin/validate_token.sh
+
+# Allow only specific users to log in
+AllowUsers youruser
+
+# Optionally, restrict SSH access to certain IP addresses
+# ListenAddress 0.0.0.0
+```
+
+---
+
+### **7. Token Validation Script (`validate_token.sh`)**
+
+This shell script (`validate_token.sh`) is invoked when the user logs in via SSH. It checks MongoDB to verify if the token has been validated.
+
+#### Example Script: `/usr/local/bin/validate_token.sh`
+
+```bash
+#!/bin/bash
+
+# MongoDB Connection Variables
+MONGO_HOST="localhost"
+MONGO_DB="token_verification"
+MONGO_COLLECTION="tokens"
+
+# Extract the username (used as token) from SSH session
+USER=$(whoami)
+
+# Query MongoDB to check if the token is verified
+TOKEN_STATUS=$(mongo --quiet --eval "db = connect('mongodb://$MONGO_HOST/$MONGO_DB'); db.$MONGO_COLLECTION.findOne({ token: '$USER' })")
+
+# Parse the verification status from the MongoDB result
+VERIFIED=$(echo "$TOKEN_STATUS" | grep -o '"verified":true' | wc -l)
+
+if [[ $VERIFIED -eq 1 ]]; then
+    # Token is verified, grant access
+    echo "Token verified. Access granted."
+    exec $SHELL
+else
+    # Token is not verified, deny access
+    echo "Token not verified. Please click the verification link sent to your email."
+    exit 1
+fi
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/validate_token.sh
+```
+
+This script:
+- Extracts the token from the SSH session (it’s assumed the token is passed as the username).
+- Queries MongoDB to check if the token is verified.
+- If verified, grants access to the shell. Otherwise, denies access with a message instructing the user to verify the token via email.
+
+---
+
+### **8. Testing the Process**
+
+**Step 1: Generate Token and Send Email**
+
+Run the `send_token.sh` script to generate a token and send the verification email.
+
+```bash
+/var/www/html/send_token.sh
+```
+
+The recipient receives an email with a verification link (e.g., `http://your-server-ip/verify_token.php?token=<unique-token>`).
+
+**Step 2: Click the Verification Link**
+
+The user clicks the link in the email, which triggers the `verify_token.php` script. The token is marked as verified in MongoDB.
+
+**Step 3: SSH Login**
+
+The user logs in via SSH:
+
+```bash
+ssh youruser@your-server-ip
+```
+
+If the token has been verified, access is granted. If not, the user is prompted to verify the token.
+
+---
+
+### **Optional Enhancements**
+
+1. **Token Expiry**: Add an `expires_at` field to the token in MongoDB. In the PHP and shell validation scripts, check if the token has expired before marking it as verified.
+2. **Improved Security**: Use SSL encryption for MongoDB connections. Also, consider using SSH key-based authentication in addition to token verification for enhanced security.
+3. **Logging**: Implement logging to track token generation, verification attempts, and any failed access attempts.
+
+---
+
+### **Summary**
+
+This solution integrates MongoDB, PHP, and shell scripts to create a secure token-based authentication system for SSH login:
+
+- **Token Generation**: A shell script (`send_token.sh`) generates a token, stores it in MongoDB, and sends a verification email.
+- **Token Verification (Web-based)**: A PHP script (`verify_token.php`) verifies the token when clicked, marking it as verified in MongoDB.
+- **SSH Validation**: A shell script (`validate_token.sh`) ensures that SSH access is only granted if the token has been verified.
+
+This approach ensures that token management is persistent and scalable, leveraging MongoDB for secure storage and PHP for web-based interaction.
+
+
+
+🫥😘🫥🥰🫥🥰🫥🫥🥰🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥😊🫥😊🫥😊🫥🥰🫥😊🫥😊🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰😊🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰😊🫥😍🫥😍🫥🥰🫥🥰🫥🥰🫥🫥😍🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥
+To modify the given solution to work with MongoDB Atlas (a managed cloud database service), we need to update the MongoDB connection strings and configurations in both the shell scripts and PHP script. MongoDB Atlas requires a connection string that includes authentication details (username, password, and cluster information) and a secure connection method using SSL/TLS.
+
+Here's the modified version of your code, updated to use MongoDB Atlas for token generation and verification:
+
+---
+
+### **1. MongoDB Atlas Setup**
+
+1. **Create a MongoDB Atlas Account**: If you don’t have one already, sign up at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
+2. **Create a Cluster**: Set up a free or paid cluster.
+3. **Create a Database User**: Under the "Database Access" tab, create a new database user with appropriate permissions (read and write access).
+4. **Whitelist Your IP**: Ensure that your IP is added to the IP Whitelist (under "Network Access").
+5. **Connection String**: Get the connection string from the Atlas UI (it will look something like this):
+
+   ```bash
+   mongodb+srv://<username>:<password>@cluster0.mongodb.net/test?retryWrites=true&w=majority
+   ```
+
+Replace `<username>`, `<password>`, and `cluster0.mongodb.net` with your actual credentials and cluster information.
+
+---
+
+### **2. Token Generation Script (`send_token.sh`)**
+
+The shell script will generate a token, store it in MongoDB Atlas, and send an email with the verification link.
+
+#### Example Script: `/var/www/html/send_token.sh`
+
+```bash
+#!/bin/bash
+
+# MongoDB Atlas Connection Variables
+MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority"
+MONGO_DB="token_verification"
+MONGO_COLLECTION="tokens"
+
+# Generate a unique token
+TOKEN=$(uuidgen)
+
+# Store the token in MongoDB Atlas with a verification status (false by default)
+mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.insert({token: '$TOKEN', verified: false, created_at: new Date()});" 
+
+# Define the verification URL (points to the PHP script for verification)
+VERIFICATION_URL="http://your-server-ip/verify_token.php?token=$TOKEN"
+
+# Email subject and body with clickable verification link
+SUBJECT="Your Login Token"
+BODY="Click the following link to verify your login: $VERIFICATION_URL"
+
+# Send the email
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
+```
+
+Make sure to replace the `<username>`, `<password>`, and `cluster0.mongodb.net` with your actual MongoDB Atlas credentials and cluster information.
+
+---
+
+### **3. Token Verification PHP Script (`verify_token.php`)**
+
+The PHP script will verify the token in MongoDB Atlas when the user clicks on the verification link.
+
+#### Example PHP Script: `/var/www/html/verify_token.php`
+
+```php
+<?php
+require 'vendor/autoload.php';  // If using Composer to autoload MongoDB library
+
+// MongoDB Atlas Connection
+$mongoUri = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority";
+$client = new MongoDB\Client($mongoUri);
+
+// MongoDB Database and Collection
+$mongoDb = "token_verification";
+$mongoCollection = "tokens";
+
+$collection = $client->$mongoDb->$mongoCollection;
+
+// Get the token from the query string
+if (isset($_GET['token'])) {
+    $token = $_GET['token'];
+
+    // Find the token document in MongoDB Atlas
+    $document = $collection->findOne(['token' => $token]);
+
+    if ($document) {
+        if ($document['verified'] == false) {
+            // Update the token to mark it as verified
+            $updateResult = $collection->updateOne(
+                ['token' => $token],
+                ['$set' => ['verified' => true]]
+            );
+
+            echo "Token verified successfully. You can now log in via SSH.";
+        } else {
+            echo "This token has already been verified.";
+        }
+    } else {
+        echo "Invalid token. Access denied.";
+    }
+} else {
+    echo "Token not provided. Access denied.";
+}
+?>
+```
+
+In this script:
+- The MongoDB connection URI is updated to use the MongoDB Atlas connection string (`$mongoUri`).
+- The MongoDB client is created using the MongoDB Atlas connection string.
+
+---
+
+### **4. Modify the SSH Configuration**
+
+The SSH configuration should force the `validate_token.sh` script to run, which will check if the token has been verified in MongoDB Atlas.
+
+#### Example SSH Configuration (`/etc/ssh/sshd_config`)
+
+```bash
+# ForceCommand to run token validation after login
+ForceCommand /usr/local/bin/validate_token.sh
+
+# Allow only specific users to log in
+AllowUsers youruser
+
+# Optionally, restrict SSH access to certain IP addresses
+# ListenAddress 0.0.0.0
+```
+
+---
+
+### **5. Token Validation Script (`validate_token.sh`)**
+
+The shell script (`validate_token.sh`) is invoked when the user logs in via SSH. It checks MongoDB Atlas to verify if the token has been validated.
+
+#### Example Script: `/usr/local/bin/validate_token.sh`
+
+```bash
+#!/bin/bash
+
+# MongoDB Atlas Connection URI
+MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority"
+MONGO_DB="token_verification"
+MONGO_COLLECTION="tokens"
+
+# Extract the username (used as token) from SSH session
+USER=$(whoami)
+
+# Query MongoDB Atlas to check if the token is verified
+TOKEN_STATUS=$(mongo --quiet --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.findOne({ token: '$USER' })")
+
+# Parse the verification status from the MongoDB result
+VERIFIED=$(echo "$TOKEN_STATUS" | grep -o '"verified":true' | wc -l)
+
+if [[ $VERIFIED -eq 1 ]]; then
+    # Token is verified, grant access
+    echo "Token verified. Access granted."
+    exec $SHELL
+else
+    # Token is not verified, deny access
+    echo "Token not verified. Please click the verification link sent to your email."
+    exit 1
+fi
+```
+
+In this script:
+- The MongoDB connection URI (`MONGO_URI`) is updated to use the MongoDB Atlas connection string.
+- The script checks if the token is verified by querying the MongoDB Atlas database.
+
+---
+
+### **6. Testing the Process**
+
+**Step 1: Generate Token and Send Email**
+
+Run the `send_token.sh` script to generate a token and send the verification email.
+
+```bash
+/var/www/html/send_token.sh
+```
+
+The recipient will receive an email with a verification link (e.g., `http://your-server-ip/verify_token.php?token=<unique-token>`).
+
+**Step 2: Click the Verification Link**
+
+The user clicks the link in the email, which triggers the `verify_token.php` script. The token is marked as verified in MongoDB Atlas.
+
+**Step 3: SSH Login**
+
+The user logs in via SSH:
+
+```bash
+ssh youruser@your-server-ip
+```
+
+If the token has been verified, access is granted. If not, the user is prompted to verify the token via email.
+
+---
+
+### **Optional Enhancements**
+
+1. **Token Expiry**: You can add an `expires_at` field to the token document in MongoDB Atlas. Modify the PHP and shell validation scripts to check if the token has expired before marking it as verified.
+   
+2. **Improved Security**: Use SSL encryption for MongoDB connections, and ensure your SSH server is securely configured with key-based authentication.
+
+3. **Logging**: Implement logging to track token generation, verification attempts, and failed login attempts.
+
+---
+
+### **Summary**
+
+This solution integrates MongoDB Atlas, PHP, and shell scripts to create a secure token-based authentication system for SSH login:
+
+- **Token Generation**: A shell script (`send_token.sh`) generates a token, stores it in MongoDB Atlas, and sends a verification email.
+- **Token Verification (Web-based)**: A PHP script (`verify_token.php`) verifies the token when clicked, marking it as verified in MongoDB Atlas.
+- **SSH Validation**: A shell script (`validate_token.sh`) ensures that SSH access is only granted if the token has been verified.
+
+By using MongoDB Atlas, you get a cloud-hosted, scalable solution for secure token storage and management.
+
+
+
 
 
