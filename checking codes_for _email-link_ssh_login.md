@@ -8016,23 +8016,47 @@ By using MongoDB Atlas, you get a cloud-hosted, scalable solution for secure tok
 
 
 🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥🥹🫥🥹🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥰🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥰🫥🥰🫥🥰🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘😘🫥😘🫥😘
-To modify the solution to use a free MySQL database provider, we can consider using a service like **PlanetScale** (which offers a free tier for MySQL databases), **Remotemysql**, or **InfinityFree**. These services provide free MySQL database instances, though there are some limitations like the number of queries or database size. For this example, let's use **PlanetScale** as the free MySQL provider. 
 
-### **Updated Solution Using PlanetScale (or Similar Free MySQL Provider)**
+Certainly! Below is a complete rewrite of the solution, including SSL configuration with `ca.pem` and forced command execution in the SSH configuration.
+
+### **Solution Overview**
+This solution ensures that users can securely authenticate and verify their login via PlanetScale MySQL, utilizing SSL certificates (`ca.pem`). The key steps involve:
+1. Configuring SSL connection to PlanetScale.
+2. Generating tokens and verifying them using a web interface.
+3. Using `ForceCommand` in SSH to ensure token validation before access is granted.
 
 ---
 
-### **1. Set Up the Free MySQL Database (e.g., PlanetScale)**
+### **Step-by-Step Updated Solution Using SSL (ca.pem) and Forced Command Execution**
 
-1. **Sign up for PlanetScale**: 
+---
+
+### **1. Set Up the Free MySQL Database (PlanetScale) with SSL**
+
+1. **Sign Up for PlanetScale**:
    - Visit [PlanetScale](https://www.planetscale.com) and sign up for a free account.
-   - After logging in, create a new database.
+   - Create a new database.
 
-2. **Create a Database and Tables**:
-   - After creating your database, open the `Connect` tab to get your database connection details (e.g., host, username, password).
-   
-3. **Create a Table for Storing Tokens**:
-   - Once connected to the database via the PlanetScale dashboard or a MySQL client, run the following SQL commands to create the required table:
+2. **Download the SSL Certificates**:
+   - PlanetScale provides a `ca.pem` file (Certificate Authority) for secure connections. Download it from [PlanetScale Docs](https://docs.planetscale.com/tutorials/connecting-using-ssl).
+
+3. **Upload `ca.pem` to Your Server**:
+   - Upload the `ca.pem` file to your server. A common location is `/etc/ssl/certs/`.
+
+   ```bash
+   sudo cp ca.pem /etc/ssl/certs/planetscale-ca.pem
+   ```
+
+4. **Set Permissions**:
+   - Ensure that the certificate file is readable by the necessary users.
+
+   ```bash
+   sudo chmod 644 /etc/ssl/certs/planetscale-ca.pem
+   sudo chown root:root /etc/ssl/certs/planetscale-ca.pem
+   ```
+
+5. **Create the Database and Table**:
+   - Use the PlanetScale dashboard or a MySQL client to create a `tokens` table:
 
    ```sql
    CREATE TABLE tokens (
@@ -8043,31 +8067,32 @@ To modify the solution to use a free MySQL database provider, we can consider us
    );
    ```
 
-4. **Get the Database Connection Details**:
-   - You'll need the **host**, **username**, **password**, and **database name** to configure the connection in your script.
+6. **Retrieve Database Connection Details**:
+   - In the PlanetScale dashboard, retrieve the **host**, **username**, **password**, and **database name**.
 
 ---
 
-### **2. Token Generation Script (`send_token.sh`)**
+### **2. Token Generation Script (`send_token.sh`) with SSL**
 
-Now that we have the free MySQL provider, we’ll update the shell script to connect to this database. Here’s the updated token generation script:
+This script will generate a unique token, store it in the PlanetScale database, and send an email with the verification link. It will use SSL for secure MySQL connection.
 
-#### Updated Token Generation Script (`send_token.sh`):
+#### Token Generation Script (`send_token.sh`):
 
 ```bash
 #!/bin/bash
 
-# PlanetScale MySQL Connection Variables (update with your PlanetScale details)
+# PlanetScale MySQL Connection Variables
 MYSQL_HOST="your-database-host"
 MYSQL_USER="your-username"
 MYSQL_PASS="your-password"
 MYSQL_DB="your-database-name"
+SSL_CA_PATH="/etc/ssl/certs/planetscale-ca.pem"  # Path to the downloaded ca.pem file
 
 # Generate a unique token
 TOKEN=$(uuidgen)
 
 # Store the token in the database with a verification status (false by default)
-mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS $MYSQL_DB -e "
+mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
 INSERT INTO tokens (token, verified) VALUES ('$TOKEN', false);
 "
 
@@ -8078,34 +8103,42 @@ VERIFICATION_URL="http://your-server-ip/verify_token.php?token=$TOKEN"
 SUBJECT="Your Login Token"
 BODY="Click the following link to verify your login: $VERIFICATION_URL"
 
-# Send the email
+# Send the email (replace with your email configuration)
 echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
 ```
 
-In this script:
-- **PlanetScale credentials** (`MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASS`, `MYSQL_DB`) should be updated with the actual connection information from your PlanetScale account.
-- The `mysql` command is used to insert the generated token into the `tokens` table.
+- **Explanation**:
+  - The `mysql` command uses `--ssl-ca=$SSL_CA_PATH` to connect securely to PlanetScale with SSL.
+  - The script generates a token and stores it in the `tokens` table.
 
 ---
 
-### **3. Token Verification PHP Script (`verify_token.php`)**
+### **3. Token Verification PHP Script (`verify_token.php`) with SSL**
 
-The PHP script that verifies the token in the PlanetScale MySQL database is similar to the original version but with updated connection details.
+This PHP script will verify the token provided in the URL, and if it's valid, it will mark it as verified in the PlanetScale database.
 
 #### Updated PHP Script (`verify_token.php`):
 
 ```php
 <?php
 // PlanetScale MySQL Database Connection Details
-$host = 'your-database-host';  // Use PlanetScale host
-$dbname = 'your-database-name';  // Your database name
-$username = 'your-username';  // Your database username
-$password = 'your-password';  // Your database password
+$host = 'your-database-host';
+$dbname = 'your-database-name';
+$username = 'your-username';
+$password = 'your-password';
+$ssl_ca_path = '/etc/ssl/certs/planetscale-ca.pem';  // Path to the downloaded ca.pem file
 
-// Create a new PDO instance
+// Create a new PDO instance with SSL connection
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo = new PDO(
+        "mysql:host=$host;dbname=$dbname;charset=utf8",
+        $username,
+        $password,
+        [
+            PDO::MYSQL_ATTR_SSL_CA => $ssl_ca_path,
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        ]
+    );
 
     // Get the token from the query string
     if (isset($_GET['token'])) {
@@ -8138,17 +8171,17 @@ try {
 ?>
 ```
 
-In this script:
-- The **PlanetScale MySQL** connection credentials are used to connect to the database.
-- The token is validated by querying the `tokens` table in MySQL, and if it's valid, it marks the token as verified.
+- **Explanation**:
+  - The script establishes an SSL-secured connection to the PlanetScale database using the `ca.pem` certificate.
+  - It checks if the token exists and if it is verified. If not, it updates the token's status to verified.
 
 ---
 
-### **4. Modify the SSH Configuration**
+### **4. SSH Configuration with Forced Command**
 
-The SSH configuration doesn’t change, as it relies on the same `validate_token.sh` script to validate SSH access after token verification.
+To ensure users are forced to verify their token before logging into the server, use the `ForceCommand` directive in the SSH configuration. This will ensure the `validate_token.sh` script runs every time a user tries to log in via SSH.
 
-#### Example SSH Configuration (`/etc/ssh/sshd_config`):
+#### SSH Configuration (`/etc/ssh/sshd_config`):
 
 ```bash
 # ForceCommand to run token validation after login
@@ -8161,13 +8194,17 @@ AllowUsers youruser
 # ListenAddress 0.0.0.0
 ```
 
+- **Explanation**:
+  - `ForceCommand` forces the `validate_token.sh` script to execute every time a user tries to log in.
+  - Replace `youruser` with the actual username(s) allowed to SSH into the server.
+
 ---
 
-### **5. Token Validation Script (`validate_token.sh`)**
+### **5. Token Validation Script (`validate_token.sh`) with SSL**
 
-The token validation script checks the validity of the token in the MySQL database hosted on PlanetScale and deletes it after the user successfully logs in.
+This script is triggered during SSH login to verify that the token has been verified in the database. It uses SSL to securely connect to the PlanetScale database.
 
-#### Updated Token Validation Script (`validate_token.sh`):
+#### Token Validation Script (`validate_token.sh`):
 
 ```bash
 #!/bin/bash
@@ -8177,12 +8214,13 @@ MYSQL_HOST="your-database-host"
 MYSQL_USER="your-username"
 MYSQL_PASS="your-password"
 MYSQL_DB="your-database-name"
+SSL_CA_PATH="/etc/ssl/certs/planetscale-ca.pem"  # Path to the downloaded ca.pem file
 
 # Extract the username (used as token) from SSH session
 USER=$(whoami)
 
 # Query MySQL to check if the token is verified
-TOKEN_STATUS=$(mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB -se "
+TOKEN_STATUS=$(mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -se "
 SELECT verified FROM tokens WHERE token = '$USER';
 ")
 
@@ -8191,7 +8229,7 @@ if [[ "$TOKEN_STATUS" == "1" ]]; then
     echo "Token verified. Access granted."
 
     # Delete the token from the database after SSH access is granted
-    mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB -e "
+    mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
     DELETE FROM tokens WHERE token = '$USER';
     "
 
@@ -8204,60 +8242,50 @@ else
 fi
 ```
 
-In this script:
-- The **PlanetScale MySQL** connection credentials are used to connect to the database.
-- The token is checked for verification, and if valid, it is deleted after SSH access is granted.
+- **Explanation**:
+  - The script checks the database to see if the token is verified.
+  - If verified, it allows the user to continue with their SSH session and removes the token from the database. If not, it denies access and advises the user to verify the token.
 
 ---
 
 ### **6. Testing the Process**
 
-**Step 1: Generate Token and Send Email**
+1. **Step 1: Generate Token and Send Email**
+   - Run the token generation script to create a token and send the verification email.
 
-Run the `send_token.sh` script to generate a token and send the verification email.
+   ```bash
+   /var/www/html/send_token.sh
+   ```
 
-```bash
-/var/www/html/send_token.sh
-```
+2. **Step 2: Click the Verification Link**
+   - The user clicks the link in the email, which triggers the `verify_token.php` script to mark the token as verified.
 
-The recipient will receive an email with a verification link (e.g., `http://your-server-ip/verify_token.php?token=<unique-token>`).
+3. **Step 3: SSH Login**
+   - The user logs in via SSH:
 
-**Step 2: Click the Verification Link**
+   ```bash
+   ssh youruser@your-server-ip
+   ```
 
-The user clicks the link in the email, which triggers the `verify_token.php` script. The token is marked as verified in the MySQL database.
+   - If the token is verified, access is granted.
 
-**Step 3: SSH Login**
-
-The user logs in via SSH:
-
-```bash
-ssh youruser@your-server-ip
-```
-
-If the token has been verified, access is granted, and the token is deleted from the database. If not, the user is prompted to verify the token via email.
+ Otherwise, the user will be prompted to verify their token.
 
 ---
 
 ### **Optional Enhancements**
 
-1. **Token Expiry**: You can add an `expires_at` column to the `tokens` table to implement token expiration. Modify the validation scripts to check if the token has expired.
+1. **Token Expiry**: Add an `expires_at` column to the `tokens` table for token expiration.
    
-2. **Improved Security**: Ensure your MySQL connection is secure by using SSL connections and applying proper firewall rules.
+2. **Improved Security**: Enforce strong authentication policies, including secure email transmission and firewall restrictions.
 
-3. **Logging**: Implement logging in PHP and shell scripts to track token generation, verification, and user login attempts.
+3. **Logging**: Add logging to track token generation, verification, and SSH access attempts.
 
 ---
 
 ### **Summary**
 
-This solution integrates PlanetScale (or similar free MySQL providers), PHP, and shell scripts to create a secure token-based authentication system for SSH login:
-
-- **Token Generation**: A shell script (`send_token.sh`) generates a token, stores it in the PlanetScale database, and sends a verification email.
-- **Token Verification (Web-based)**: A PHP script (`verify_token.php`) verifies the token when clicked, marking it as verified in the MySQL database.
-- **SSH Validation**: A shell script (`validate_token.sh`) ensures that SSH access is only granted if the token has been verified and deletes the token afterward.
-
-By using a free MySQL provider like PlanetScale, you have a cost-effective solution for secure token storage and management.
-
+This solution integrates **PlanetScale** with SSL for secure database connections. The **PHP** and **shell** scripts handle token generation, verification, and SSH login, with the added security of using SSL certificates (`ca.pem`). The **SSH configuration** with `ForceCommand` ensures the user is forced to verify their token before gaining access to the server.
 
 
 🫥🫥🥰🫥😊🫥😊🫥😊🫥🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥😊😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥To ensure that the user's details (token) are deleted from the MongoDB Atlas database **whether the user is granted or denied access** after SSH login, we need to adjust the token validation logic. The token should be deleted from the database **immediately after the validation check**, regardless of the outcome.
