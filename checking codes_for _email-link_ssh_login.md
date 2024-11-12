@@ -8288,28 +8288,122 @@ fi
 This solution integrates **PlanetScale** with SSL for secure database connections. The **PHP** and **shell** scripts handle token generation, verification, and SSH login, with the added security of using SSL certificates (`ca.pem`). The **SSH configuration** with `ForceCommand` ensures the user is forced to verify their token before gaining access to the server.
 
 
-🫥🫥🥰🫥😊🫥😊🫥😊🫥🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥😊😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥To ensure that the user's details (token) are deleted from the MongoDB Atlas database **whether the user is granted or denied access** after SSH login, we need to adjust the token validation logic. The token should be deleted from the database **immediately after the validation check**, regardless of the outcome.
-
-Here’s the corrected solution with updated scripts and explanations:
-
----
-
-### **1. MongoDB Atlas Setup**
-
-Ensure you have a MongoDB Atlas cluster, database, and collection configured as described earlier. The MongoDB connection string will be used in subsequent scripts.
+🫥🫥🥰🫥😊🫥😊🫥😊🫥🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥😊😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥
+To set up MongoDB on **Ubuntu 22.04 LTS** using MongoDB's official repository and then integrate MongoDB Atlas, token-based SSH login, and associated scripts, you will need to ensure that you are using the correct MongoDB packages from MongoDB’s official APT repository. Here's an updated guide that follows the correct installation and configuration steps.
 
 ---
 
-### **2. Token Generation Script (`send_token.sh`)**
+### **1. MongoDB Installation and Setup (Using MongoDB Official Source)**
 
-This script generates a unique token, stores it in MongoDB Atlas with a verification status, and sends a verification email to the user.
+#### **Install MongoDB from Official APT Repository**
 
-#### Example Script: `/var/www/html/send_token.sh`
+1. **Import MongoDB public key**
+
+   First, you need to import MongoDB's public GPG key to your server to ensure package authenticity:
+
+   ```bash
+   wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo tee /etc/apt/trusted.gpg.d/mongodb.asc
+   ```
+
+2. **Add the MongoDB repository**
+
+   Add the official MongoDB repository to your APT sources:
+
+   ```bash
+   echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+   ```
+
+   Replace `focal` with `jammy` if you are using Ubuntu 22.04 (the repository is still compatible).
+
+3. **Update APT Package Database**
+
+   Update your package list to include the MongoDB packages from the newly added repository:
+
+   ```bash
+   sudo apt update
+   ```
+
+4. **Install MongoDB**
+
+   Install MongoDB with the following command:
+
+   ```bash
+   sudo apt install -y mongodb-org
+   ```
+
+   The `mongodb-org` package installs the MongoDB server, shell, and other necessary utilities.
+
+5. **Start and Enable MongoDB Service**
+
+   Enable MongoDB to start on boot and start the service:
+
+   ```bash
+   sudo systemctl start mongod
+   sudo systemctl enable mongod
+   ```
+
+6. **Verify MongoDB Status**
+
+   Check the status of MongoDB to ensure it's running correctly:
+
+   ```bash
+   sudo systemctl status mongod
+   ```
+
+   You should see that MongoDB is active and running.
+
+---
+
+### **2. MongoDB Atlas Setup (Cloud)**
+
+#### **Create MongoDB Atlas Account**
+
+If you want to use MongoDB Atlas for token storage, follow these steps:
+
+1. **Sign up or Log in to MongoDB Atlas**  
+   Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) and create an account or log in if you already have one.
+
+2. **Create a Cluster**
+
+   Once logged in, click on "Create a Cluster" and select the free tier (M0) cluster.
+
+3. **Create Database and Collection**
+
+   - Go to the "Clusters" tab.
+   - Click on "Collections" and create a new database called `token_verification`.
+   - Inside that database, create a collection named `tokens`.
+
+4. **Configure IP Whitelist**
+
+   To allow your Ubuntu server to connect to MongoDB Atlas, add the public IP of your server to the IP whitelist:
+
+   - Navigate to the "Network Access" section in the Atlas dashboard.
+   - Click "Add IP Address" and add your server's IP.
+
+5. **Get MongoDB Atlas Connection URI**
+
+   - In the Atlas dashboard, go to the "Connect" tab.
+   - Choose "Connect your application".
+   - Copy the connection URI provided, which will look like:
+
+     ```bash
+     mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority
+     ```
+
+     Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
+
+---
+
+### **3. Token Generation Script (`send_token.sh`)**
+
+This script generates a unique token and stores it in MongoDB Atlas (or your local MongoDB instance) and sends an email with the verification link.
+
+#### **Script: `/var/www/html/send_token.sh`**
 
 ```bash
 #!/bin/bash
 
-# MongoDB Atlas Connection Variables
+# MongoDB Atlas Connection URI
 MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority"
 MONGO_DB="token_verification"
 MONGO_COLLECTION="tokens"
@@ -8327,21 +8421,21 @@ VERIFICATION_URL="http://your-server-ip/verify_token.php?token=$TOKEN"
 SUBJECT="Your Login Token"
 BODY="Click the following link to verify your login: $VERIFICATION_URL"
 
-# Send the email
+# Send the email using ssmtp or mail
 echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
 ```
 
-This script:
-- Generates a token and stores it in MongoDB.
-- Sends an email to the user with a verification link that points to the `verify_token.php` script.
+- Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
+- Replace `your-server-ip` with your actual server IP or domain name.
+- Ensure that `ssmtp` or another mail service is configured to send emails from your server.
 
 ---
 
-### **3. Token Verification PHP Script (`verify_token.php`)**
+### **4. Token Verification PHP Script (`verify_token.php`)**
 
-When the user clicks the verification link, this script checks the token in MongoDB and marks it as verified.
+This PHP script handles the verification of the token by checking its status in MongoDB Atlas and updating it when it's verified.
 
-#### Example Script: `/var/www/html/verify_token.php`
+#### **Script: `/var/www/html/verify_token.php`**
 
 ```php
 <?php
@@ -8385,40 +8479,46 @@ if (isset($_GET['token'])) {
 ?>
 ```
 
-This script:
-- Verifies the token in MongoDB.
-- Marks the token as verified if it was not already verified.
+- Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
 
 ---
 
-### **4. Modify the SSH Configuration**
+### **5. SSH Configuration (`/etc/ssh/sshd_config`)**
 
-We need to configure SSH to always execute a custom validation script (`validate_token.sh`) for every login attempt.
+Modify the SSH configuration to enforce the use of a script that checks the token validation upon user login.
 
-#### Example SSH Configuration (`/etc/ssh/sshd_config`)
+1. **Open SSH Configuration File:**
 
-```bash
-# ForceCommand to run token validation after login
-ForceCommand /usr/local/bin/validate_token.sh
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
 
-# Allow only specific users to log in
-AllowUsers youruser
+2. **Add the following lines to enforce token validation:**
 
-# Optionally, restrict SSH access to certain IP addresses
-# ListenAddress 0.0.0.0
-```
+   ```bash
+   # ForceCommand to run token validation after login
+   ForceCommand /usr/local/bin/validate_token.sh
 
-This configuration:
-- Forces every SSH login to execute the `validate_token.sh` script, which checks the token's validity.
-- Ensures that only the specified user (`youruser`) can log in.
+   # Allow only specific users to log in
+   AllowUsers youruser
+
+   # Optional: Restrict SSH access to certain IP addresses
+   # ListenAddress 0.0.0.0
+   ```
+
+3. **Reload SSH configuration:**
+
+   ```bash
+   sudo systemctl reload sshd
+   ```
 
 ---
 
-### **5. Token Validation Script (`validate_token.sh`)**
+### **6. Token Validation Script (`validate_token.sh`)**
 
-This is the critical part of the solution. The script ensures that the token is validated, and **regardless of whether the user is granted or denied SSH access**, the token is deleted from MongoDB Atlas immediately after the check.
+This script will be executed when a user attempts to log in via SSH, checking whether the token is verified.
 
-#### Updated `validate_token.sh`
+#### **Script: `/usr/local/bin/validate_token.sh`**
 
 ```bash
 #!/bin/bash
@@ -8452,71 +8552,48 @@ else
 fi
 ```
 
-### Key Features of `validate_token.sh`:
-
-1. **Immediate Deletion of Token**:  
-   The token is deleted immediately after the verification check, regardless of whether it's verified or not:
-   ```bash
-   mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ token: '$USER' });"
-   ```
-
-2. **Grant or Deny Access**:  
-   - If the token is verified, access to the shell is granted with `exec $SHELL`.
-   - If the token is not verified, access is denied, and the user is instructed to verify the token.
-
-3. **No Reuse of Token**:  
-   Since the token is deleted from the database immediately after checking, it cannot be reused for any future logins.
+- Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
 
 ---
 
-### **6. Testing the Process**
+### **7. Testing the Process**
 
-**Step 1: Generate Token and Send Email**
+1. **Generate Token and Send Email**
 
-Run the `send_token.sh` script to generate a token and send the verification email.
+   Run the `send_token.sh` script to generate a token and send a verification email:
 
-```bash
-/var/www/html/send_token.sh
-```
+   ```bash
+   /var/www/html/send_token.sh
+   ```
 
-This will generate a unique token, store it in MongoDB Atlas, and send an email with the verification link (e.g., `http://your-server-ip/verify_token.php?token=<unique-token>`).
+2. **Click the Verification Link
 
-**Step 2: Click the Verification Link**
+**
 
-The user clicks the verification link, which triggers the `verify_token.php` script. The token is marked as verified in MongoDB Atlas.
+   The user clicks the verification link in the email, triggering the `verify_token.php` script and marking the token as verified in MongoDB.
 
-**Step 3: SSH Login**
+3. **SSH Login**
 
-The user logs in via SSH:
+   The user attempts to log in via SSH:
 
-```bash
-ssh youruser@your-server-ip
-```
+   ```bash
+   ssh youruser@your-server-ip
+   ```
 
-- **If the token is valid**: The user is granted access to the shell, and the token is deleted from MongoDB Atlas.
-- **If the token is invalid or expired**: The user is denied access, and the token is deleted from MongoDB Atlas anyway.
+   - **If the token is valid**: The user is granted access, and the token is deleted from MongoDB.
+   - **If the token is invalid or expired**: The user is denied access, and the token is deleted.
 
 ---
 
 ### **Optional Enhancements**
 
-1. **Token Expiry**: You could add an `expires_at` field to the MongoDB document to make tokens time-limited. Modify the PHP and validation scripts to check the expiry date before allowing access.
+1. **Token Expiry**: Add an `expires_at` field to the MongoDB document and modify the verification logic to check for expiry.
 
-2. **Logging**: You can add logging in `validate_token.sh` to track whether tokens were verified, rejected, or deleted, helping with debugging and auditing.
+2. **Logging**: Add logs in `validate_token.sh` to track login attempts and token status.
 
-3. **Improved Security**: Secure your MongoDB connection by using SSL/TLS and ensuring SSH access is properly configured with key-based authentication and firewall rules.
+3. **Security**: Use SSL/TLS for MongoDB connections to ensure encrypted communication between your server and MongoDB Atlas. Additionally, configure SSH key-based authentication for enhanced security.
 
 ---
 
-### **Summary**
-
-This updated solution ensures that after a user attempts to log in via SSH using a token, the token is deleted from MongoDB Atlas **whether the user is granted or denied access**. This is achieved by:
-
-- **Token Generation**: The `send_token.sh` script generates a token and sends a verification email.
-- **Token Verification**: The `verify_token.php` script verifies the token and marks it as verified in MongoDB.
-- **Token Validation**: The `validate_token.sh` script checks the token's validity and deletes it from the database immediately after the check, regardless of the outcome.
-
-This approach prevents token reuse and ensures a single-use login mechanism.
-
-
+This updated guide should now work with MongoDB's official repository and cover MongoDB Atlas integration for token-based SSH login on **Ubuntu 22.04 LTS**.
 
