@@ -8251,6 +8251,8 @@ SELECT verified FROM emails WHERE email = '$USER_EMAIL';
 
 # Check if the email is verified
 if [[ "$EMAIL_STATUS" == "1" ]]; then
+    mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB -e "
+    DELETE FROM emails WHERE email = '$USER_EMAIL';
     # Email is verified, grant access
     echo "Email verified. Access granted."
 
