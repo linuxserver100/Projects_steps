@@ -8016,52 +8016,53 @@ By using MongoDB Atlas, you get a cloud-hosted, scalable solution for secure tok
 
 
 🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥🥹🫥🥹🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥰🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥰🫥🥰🫥🥰🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘😘🫥😘🫥😘
+Certainly! Below is the complete updated solution that uses a pre-defined email address (instead of asking for it as input) for the verification process. This solution eliminates the need to pass the email address as an argument and instead assumes a fixed email ID for the entire process.
 
-Certainly! Below is a complete rewrite of the solution, including SSL configuration with `ca.pem` and forced command execution in the SSH configuration.
+---
 
 ### **Solution Overview**
-This solution ensures that users can securely authenticate and verify their login via PlanetScale MySQL, utilizing SSL certificates (`ca.pem`). The key steps involve:
-1. Configuring SSL connection to PlanetScale.
-2. Generating tokens and verifying them using a web interface.
-3. Using `ForceCommand` in SSH to ensure token validation before access is granted.
+This solution secures SSH access using email verification. The process involves:
+1. Setting up PlanetScale MySQL with SSL for secure database connections.
+2. Using a fixed email address for verification.
+3. Sending an email with a verification link, where the email is validated before SSH access is granted.
 
 ---
 
-### **Step-by-Step Updated Solution Using SSL (ca.pem) and Forced Command Execution**
+### **Step-by-Step Solution Using Email Verification**
 
 ---
 
-### **1. Set Up the Free MySQL Database (PlanetScale) with SSL**
+### **1. Set Up PlanetScale MySQL Database with SSL**
 
 1. **Sign Up for PlanetScale**:
-   - Visit [PlanetScale](https://www.planetscale.com) and sign up for a free account.
+   - Create a free account on [PlanetScale](https://www.planetscale.com).
    - Create a new database.
 
 2. **Download the SSL Certificates**:
-   - PlanetScale provides a `ca.pem` file (Certificate Authority) for secure connections. Download it from [PlanetScale Docs](https://docs.planetscale.com/tutorials/connecting-using-ssl).
+   - Download the `ca.pem` file from [PlanetScale Documentation](https://docs.planetscale.com/tutorials/connecting-using-ssl).
 
 3. **Upload `ca.pem` to Your Server**:
-   - Upload the `ca.pem` file to your server. A common location is `/etc/ssl/certs/`.
+   - Upload the `ca.pem` to your server in `/etc/ssl/certs/`:
 
    ```bash
    sudo cp ca.pem /etc/ssl/certs/planetscale-ca.pem
    ```
 
 4. **Set Permissions**:
-   - Ensure that the certificate file is readable by the necessary users.
+   - Ensure the certificate file is readable by the necessary users:
 
    ```bash
    sudo chmod 644 /etc/ssl/certs/planetscale-ca.pem
    sudo chown root:root /etc/ssl/certs/planetscale-ca.pem
    ```
 
-5. **Create the Database and Table**:
-   - Use the PlanetScale dashboard or a MySQL client to create a `tokens` table:
+5. **Create the Database and Table for Email Verification**:
+   - Use the PlanetScale dashboard or a MySQL client to create a `emails` table for email verification records:
 
    ```sql
-   CREATE TABLE tokens (
+   CREATE TABLE emails (
        id INT AUTO_INCREMENT PRIMARY KEY,
-       token VARCHAR(255) NOT NULL,
+       email VARCHAR(255) NOT NULL,
        verified BOOLEAN DEFAULT FALSE,
        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
    );
@@ -8072,11 +8073,11 @@ This solution ensures that users can securely authenticate and verify their logi
 
 ---
 
-### **2. Token Generation Script (`send_token.sh`) with SSL**
+### **2. Email Generation Script (`send_email.sh`) with Pre-defined Email**
 
-This script will generate a unique token, store it in the PlanetScale database, and send an email with the verification link. It will use SSL for secure MySQL connection.
+This script will automatically use a pre-defined email address for verification. It generates a unique verification link, stores the email in the database, and sends the email.
 
-#### Token Generation Script (`send_token.sh`):
+#### Email Generation Script (`send_email.sh`):
 
 ```bash
 #!/bin/bash
@@ -8088,36 +8089,40 @@ MYSQL_PASS="your-password"
 MYSQL_DB="your-database-name"
 SSL_CA_PATH="/etc/ssl/certs/planetscale-ca.pem"  # Path to the downloaded ca.pem file
 
-# Generate a unique token
+# Pre-defined email address
+EMAIL="predefined-email@example.com"
+
+# Generate a unique verification token
 TOKEN=$(uuidgen)
 
-# Store the token in the database with a verification status (false by default)
+# Store the email in the database with a verification status (false by default)
 mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
-INSERT INTO tokens (token, verified) VALUES ('$TOKEN', false);
+INSERT INTO emails (email, verified) VALUES ('$EMAIL', false);
 "
 
 # Define the verification URL (points to the PHP script for verification)
-VERIFICATION_URL="http://your-server-ip/verify_token.php?token=$TOKEN"
+VERIFICATION_URL="http://your-server-ip/verify_email.php?token=$TOKEN&email=$EMAIL"
 
 # Email subject and body with clickable verification link
-SUBJECT="Your Login Token"
-BODY="Click the following link to verify your login: $VERIFICATION_URL"
+SUBJECT="Email Verification for SSH Login"
+BODY="Click the following link to verify your email: $VERIFICATION_URL"
 
 # Send the email (replace with your email configuration)
-echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp $EMAIL
 ```
 
 - **Explanation**:
-  - The `mysql` command uses `--ssl-ca=$SSL_CA_PATH` to connect securely to PlanetScale with SSL.
-  - The script generates a token and stores it in the `tokens` table.
+  - This script uses a pre-defined email address and generates a unique verification token for the email.
+  - The email is stored in the database with the verification status set to `false`.
+  - A verification link is sent to the specified email address.
 
 ---
 
-### **3. Token Verification PHP Script (`verify_token.php`) with SSL**
+### **3. Email Verification PHP Script (`verify_email.php`) with SSL**
 
-This PHP script will verify the token provided in the URL, and if it's valid, it will mark it as verified in the PlanetScale database.
+This PHP script verifies the email address when the user clicks the link, updating the email record to marked as verified.
 
-#### Updated PHP Script (`verify_token.php`):
+#### Email Verification Script (`verify_email.php`):
 
 ```php
 <?php
@@ -8140,30 +8145,31 @@ try {
         ]
     );
 
-    // Get the token from the query string
-    if (isset($_GET['token'])) {
+    // Get the token and email from the query string
+    if (isset($_GET['token']) && isset($_GET['email'])) {
         $token = $_GET['token'];
+        $email = $_GET['email'];
 
-        // Prepare and execute the SQL query to find the token
-        $stmt = $pdo->prepare("SELECT * FROM tokens WHERE token = :token");
-        $stmt->execute(['token' => $token]);
+        // Prepare and execute the SQL query to find the email
+        $stmt = $pdo->prepare("SELECT * FROM emails WHERE email = :email");
+        $stmt->execute(['email' => $email]);
         $document = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($document) {
             if (!$document['verified']) {
-                // Update the token to mark it as verified
-                $updateStmt = $pdo->prepare("UPDATE tokens SET verified = 1 WHERE token = :token");
-                $updateStmt->execute(['token' => $token]);
+                // Update the email status to verified
+                $updateStmt = $pdo->prepare("UPDATE emails SET verified = 1 WHERE email = :email");
+                $updateStmt->execute(['email' => $email]);
 
-                echo "Token verified successfully. You can now log in via SSH.";
+                echo "Email verified successfully. You can now log in via SSH.";
             } else {
-                echo "This token has already been verified.";
+                echo "This email has already been verified.";
             }
         } else {
-            echo "Invalid token. Access denied.";
+            echo "Invalid email. Access denied.";
         }
     } else {
-        echo "Token not provided. Access denied.";
+        echo "Email or token not provided. Access denied.";
     }
 } catch (PDOException $e) {
     echo "Error: " . $e->getMessage();
@@ -8172,20 +8178,19 @@ try {
 ```
 
 - **Explanation**:
-  - The script establishes an SSL-secured connection to the PlanetScale database using the `ca.pem` certificate.
-  - It checks if the token exists and if it is verified. If not, it updates the token's status to verified.
+  - This script checks if the email exists in the database and whether it has been verified. If the email is not verified, it updates the record to mark it as verified.
 
 ---
 
-### **4. SSH Configuration with Forced Command**
+### **4. SSH Configuration with Forced Command for Email Verification**
 
-To ensure users are forced to verify their token before logging into the server, use the `ForceCommand` directive in the SSH configuration. This will ensure the `validate_token.sh` script runs every time a user tries to log in via SSH.
+To ensure users are forced to verify their email before accessing the server, the SSH configuration will use `ForceCommand` to run the `validate_email.sh` script upon login.
 
 #### SSH Configuration (`/etc/ssh/sshd_config`):
 
 ```bash
-# ForceCommand to run token validation after login
-ForceCommand /usr/local/bin/validate_token.sh
+# ForceCommand to run email validation after login
+ForceCommand /usr/local/bin/validate_email.sh
 
 # Allow only specific users to log in
 AllowUsers youruser
@@ -8195,16 +8200,15 @@ AllowUsers youruser
 ```
 
 - **Explanation**:
-  - `ForceCommand` forces the `validate_token.sh` script to execute every time a user tries to log in.
-  - Replace `youruser` with the actual username(s) allowed to SSH into the server.
+  - The `ForceCommand` directive forces the `validate_email.sh` script to execute every time a user attempts to log in via SSH.
 
 ---
 
-### **5. Token Validation Script (`validate_token.sh`) with SSL**
+### **5. Email Validation Script (`validate_email.sh`) with Pre-defined Email**
 
-This script is triggered during SSH login to verify that the token has been verified in the database. It uses SSL to securely connect to the PlanetScale database.
+This script checks the database to ensure that the email associated with the SSH session is verified before granting SSH access. The email is pre-defined.
 
-#### Token Validation Script (`validate_token.sh`):
+#### Email Validation Script (`validate_email.sh`):
 
 ```bash
 #!/bin/bash
@@ -8216,80 +8220,80 @@ MYSQL_PASS="your-password"
 MYSQL_DB="your-database-name"
 SSL_CA_PATH="/etc/ssl/certs/planetscale-ca.pem"  # Path to the downloaded ca.pem file
 
-# Extract the username (used as token) from SSH session
-USER=$(whoami)
+# Pre-defined email address for the user
+USER_EMAIL="predefined-email@example.com"
 
-# Query MySQL to check if the token is verified
-TOKEN_STATUS=$(mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -se "
-SELECT verified FROM tokens WHERE token = '$USER';
+# Query the MySQL database to check if the email is verified
+EMAIL_STATUS=$(mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -se "
+SELECT verified FROM emails WHERE email = '$USER_EMAIL';
 ")
 
-if [[ "$TOKEN_STATUS" == "1" ]]; then
-    # Token is verified, grant access
-    echo "Token verified. Access granted."
+if [[ "$EMAIL_STATUS" == "1" ]]; then
+    # Email is verified, grant access
+    echo "Email verified. Access granted."
 
-    # Delete the token from the database after SSH access is granted
+    # Delete the email record from the database after SSH access is granted
     mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
-    DELETE FROM tokens WHERE token = '$USER';
+    DELETE FROM emails WHERE email = '$USER_EMAIL';
     "
 
     # Allow user to continue with SSH session
     exec $SHELL
 else
-    # Token is not verified, deny access
-    echo "Token not verified. Please click the verification link sent to your email."
+    # Email is not verified, deny access
+    echo "Email not verified. Please click the verification link sent to your email."
     exit 1
 fi
 ```
 
 - **Explanation**:
-  - The script checks the database to see if the token is verified.
-  - If verified, it allows the user to continue with their SSH session and removes the token from the database. If not, it denies access and advises the user to verify the token.
+  - The script uses a pre-defined email address (`USER_EMAIL`) and checks if it has been verified by querying the database.
+  - If verified, the email record is deleted, and the user is granted access. Otherwise, access is denied, and the user is instructed to verify their email.
 
 ---
 
 ### **6. Testing the Process**
 
-1. **Step 1: Generate Token and Send Email**
-   - Run the token generation script to create a token and send the verification email.
+1. **Step 1: Generate Email and Send Verification**
+   - Run the email generation script to create a new email verification record and send the verification email:
 
    ```bash
-   /var/www/html/send_token.sh
+   /var/www/html/send_email.sh
    ```
 
 2. **Step 2: Click the Verification Link**
-   - The user clicks the link in the email, which triggers the `verify_token.php` script to mark the token as verified.
+   - The user clicks the link in the email, which triggers the `verify_email.php` script to mark the email as verified in the database.
 
 3. **Step 3: SSH Login**
-   - The user logs in via SSH:
+   - The user attempts to log in via SSH:
 
    ```bash
    ssh youruser@your-server-ip
    ```
 
-   - If the token is verified, access is granted.
+   - If the
 
- Otherwise, the user will be prompted to verify their token.
+ email is verified, access is granted. If not, the user will be prompted to verify their email.
 
 ---
 
 ### **Optional Enhancements**
 
-1. **Token Expiry**: Add an `expires_at` column to the `tokens` table for token expiration.
-   
-2. **Improved Security**: Enforce strong authentication policies, including secure email transmission and firewall restrictions.
+1. **Token Expiry**: Add an `expires_at` column to the `emails` table to set a limit on how long the verification link is valid.
 
-3. **Logging**: Add logging to track token generation, verification, and SSH access attempts.
+2. **Improved Security**: Secure email transmission via SSL/TLS and limit access by IP address for added security.
+
+3. **Logging**: Add logging mechanisms to track email generation, verification, and SSH access attempts for auditing and troubleshooting.
 
 ---
 
 ### **Summary**
 
-This solution integrates **PlanetScale** with SSL for secure database connections. The **PHP** and **shell** scripts handle token generation, verification, and SSH login, with the added security of using SSL certificates (`ca.pem`). The **SSH configuration** with `ForceCommand` ensures the user is forced to verify their token before gaining access to the server.
+This solution uses **PlanetScale** with SSL for secure database connections and employs email verification as the authentication mechanism for SSH login. The email is pre-defined and automatically used for the verification process. The **SSH configuration** with `ForceCommand` ensures the user must verify their email before gaining access to the server.
+.
 
 
-🫥🫥🥰🫥😊🫥😊🫥😊🫥🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥😊😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥
-Certainly! Below is the refined version of the entire process with the **updated PHP file** and **error handling script** integrated. The code is rewritten while maintaining the same structure but with the updated PHP script that includes proper error handling.
+🫥🫥🥰🫥😊🫥😊🫥😊🫥🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥😊😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥Certainly! Below is the entire guide, rewritten with **email verification** instead of token verification, and with automatic handling of user emails for SSH access. The verification process now works with email addresses, and the `verify_token.sh` script fetches the email from the URL and deletes the user from the database when access is granted.
 
 ---
 
@@ -8362,7 +8366,7 @@ Certainly! Below is the refined version of the entire process with the **updated
 3. **Create Database and Collection**
 
    - Go to the "Clusters" tab in Atlas.
-   - Click "Collections" and create a new database named `token_verification` with a collection `tokens`.
+   - Click "Collections" and create a new database named `user_verification` with a collection `users`.
 
 4. **Configure IP Whitelist**
 
@@ -8378,62 +8382,66 @@ Certainly! Below is the refined version of the entire process with the **updated
    - Copy the connection URI, which will look like this:
 
      ```bash
-     mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority
+     mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority
      ```
 
      Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
 
 ---
 
-### **3. Token Generation Script (`send_token.sh`)**
+### **3. Email Verification Script (`send_email_verification.sh`)**
 
-This script generates a unique token, stores it in MongoDB Atlas, and sends an email with the verification link.
+This script generates a unique verification code, stores it in MongoDB Atlas, and sends an email with the verification link.
 
-#### **Script: `/var/www/html/send_token.sh`**
+#### **Script: `/var/www/html/send_email_verification.sh`**
 
 ```bash
 #!/bin/bash
 
 # MongoDB Atlas Connection URI
-MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority"
-MONGO_DB="token_verification"
-MONGO_COLLECTION="tokens"
+MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority"
+MONGO_DB="user_verification"
+MONGO_COLLECTION="users"
 
-# Generate a unique token
-TOKEN=$(uuidgen)
+# User email address (passed as argument)
+USER_EMAIL=$1
 
-# Store the token in MongoDB Atlas with a verification status (false by default)
-mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.insert({token: '$TOKEN', verified: false, created_at: new Date()});" 
+# Generate a unique verification code
+VERIFICATION_CODE=$(uuidgen)
+
+# Store the email and verification code in MongoDB Atlas (unverified by default)
+mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.insert({email: '$USER_EMAIL', verification_code: '$VERIFICATION_CODE', verified: false, created_at: new Date()});" 
 
 # Define the verification URL (points to the PHP script for verification)
-VERIFICATION_URL="http://your-server-ip/verify_token.php?token=$TOKEN"
+VERIFICATION_URL="http://your-server-ip/verify_email.php?email=$USER_EMAIL&code=$VERIFICATION_CODE"
 
 # Email subject and body with clickable verification link
-SUBJECT="Your Login Token"
-BODY="Click the following link to verify your login: $VERIFICATION_URL"
+SUBJECT="Email Verification"
+BODY="Please click the following link to verify your email: $VERIFICATION_URL"
 
 # Send the email using ssmtp or mail
-echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
+echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp $USER_EMAIL
 ```
 
 - Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
 - Replace `your-server-ip` with your server’s IP or domain.
 - Ensure you have `ssmtp` or another mail utility installed and configured to send emails.
+- The script takes the email as a parameter (e.g., `./send_email_verification.sh user@example.com`).
 
 ---
 
-### **4. Token Verification PHP Script (`verify_token.php`)**
+### **4. Email Verification PHP Script (`verify_email.php`)**
 
-This PHP script verifies the token by checking MongoDB Atlas and updates the status once it’s verified, with added error handling.
+This PHP script verifies the email address by checking MongoDB Atlas and updates the status once it’s verified.
 
-#### **Script: `/var/www/html/verify_token.php`**
+#### **Script: `/var/www/html/verify_email.php`**
 
 ```php
 <?php
 require 'vendor/autoload.php';  // If using Composer to autoload MongoDB library
 
 // MongoDB Atlas Connection
-$mongoUri = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority";
+$mongoUri = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority";
 try {
     $client = new MongoDB\Client($mongoUri);
 } catch (Exception $e) {
@@ -8441,50 +8449,51 @@ try {
 }
 
 // MongoDB Database and Collection
-$mongoDb = "token_verification";
-$mongoCollection = "tokens";
+$mongoDb = "user_verification";
+$mongoCollection = "users";
 $collection = $client->$mongoDb->$mongoCollection;
 
-// Get the token from the query string
-if (isset($_GET['token'])) {
-    $token = $_GET['token'];
+// Get the email and verification code from the query string
+if (isset($_GET['email']) && isset($_GET['code'])) {
+    $email = $_GET['email'];
+    $code = $_GET['code'];
 
-    // Try to find the token document in MongoDB Atlas
+    // Try to find the email and code document in MongoDB Atlas
     try {
-        $document = $collection->findOne(['token' => $token]);
+        $document = $collection->findOne(['email' => $email, 'verification_code' => $code]);
 
         if ($document) {
             if ($document['verified'] == false) {
-                // Update the token to mark it as verified
+                // Update the email to mark it as verified
                 $collection->updateOne(
-                    ['token' => $token],
+                    ['email' => $email],
                     ['$set' => ['verified' => true]]
                 );
 
-                echo "Token verified successfully. You can now log in via SSH.";
+                echo "Email verified successfully. You can now log in via SSH.";
             } else {
-                echo "This token has already been verified.";
+                echo "This email has already been verified.";
             }
         } else {
-            echo "Invalid token. Access denied.";
+            echo "Invalid verification link or code. Access denied.";
         }
     } catch (Exception $e) {
-        echo "Error: Failed to verify token. " . $e->getMessage();
+        echo "Error: Failed to verify email. " . $e->getMessage();
     }
 } else {
-    echo "Error: Token not provided. Access denied.";
+    echo "Error: Email or verification code not provided. Access denied.";
 }
 ?>
 ```
 
 - Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
-- The script now includes proper error handling to catch connection errors and token verification issues.
+- The script now verifies the email and code and updates the status in MongoDB.
 
 ---
 
 ### **5. SSH Configuration (`/etc/ssh/sshd_config`)**
 
-Modify the SSH configuration to run a script that checks the token verification when a user logs in.
+Modify the SSH configuration to run a script that checks the email verification when a user logs in.
 
 1. **Open SSH Configuration File:**
 
@@ -8492,11 +8501,11 @@ Modify the SSH configuration to run a script that checks the token verification 
    sudo nano /etc/ssh/sshd_config
    ```
 
-2. **Add the following lines to enforce token validation:**
+2. **Add the following lines to enforce email validation:**
 
    ```bash
-   # ForceCommand to run token validation after login
-   ForceCommand /usr/local/bin/validate_token.sh
+   # ForceCommand to run email validation after login
+   ForceCommand /usr/local/bin/validate_email.sh
 
    # Allow only specific users to log in
    AllowUsers youruser
@@ -8513,61 +8522,64 @@ Modify the SSH configuration to run a script that checks the token verification 
 
 ---
 
-### **6. Token Validation Script (`validate_token.sh`)**
+### **6. Email Validation Script (`validate_email.sh`)**
 
-This script checks whether the token is verified in MongoDB and denies access if not verified.
+This script checks whether the user's email is verified in MongoDB and denies access if not verified.
 
-#### **Script: `/usr/local/bin/validate_token.sh`**
+#### **Script: `/usr/local/bin/validate_email.sh`**
 
 ```bash
 #!/bin/bash
 
 # MongoDB Atlas Connection URI
-MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority"
-MONGO_DB="token_verification"
-MONGO_COLLECTION="tokens"
+MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority"
+MONGO_DB="user_verification"
+MONGO_COLLECTION="users"
 
-# Extract the username (used as token) from SSH session
-USER=$(whoami)
+# Extract the username (email) from SSH session
+USER_EMAIL=$(whoami)
 
-# Fetch the token associated with the user from MongoDB Atlas
-TOKEN_STATUS=$(mongo --quiet --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.findOne({ token: '$USER' })")
+# Fetch the verification status for the user email from MongoDB Atlas
+USER_STATUS=$(mongo --quiet --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.findOne({ email: '$USER_EMAIL' })")
 
 # Parse the verification status from the MongoDB result
-VERIFIED=$(echo "$TOKEN_STATUS" | grep -o '"verified":true' | wc -l)
+VERIFIED=$(echo "$USER_STATUS" | grep -o '"verified":true' | wc -l)
 
-# Always delete the token record, regardless of whether it's verified or not
-mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ token: '$USER' });"
+# Always delete the user record, regardless of whether it's verified or not
+mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ email: '$USER_EMAIL' });"
 
-# Check token verification status
+# Check email verification status
 if [[ $VERIFIED -eq 1 ]]; then
-    # Token is verified, grant access
-    echo "Token verified. Access granted."
+    # Email is verified, grant access
+    echo "Email verified. Access granted."
     exec $SHELL
 else
-    # Token is not verified, deny access
-    echo "Token not verified. Please click the verification link sent to your email."
+    # Email is not verified, deny access
+    echo "Email not verified. Please click the verification link sent to your email."
     exit 1
 fi
 ```
 
 - Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
+- The script checks whether the user’s email is verified in MongoDB and grants or denies SSH access accordingly.
 
 ---
 
-### **7. Testing the Process**
+### **7. Testing the Process
 
-1. **Generate Token and Send Email**
+**
 
-   Run the `send_token.sh` script to generate a token and send a verification email:
+1. **Generate Email Verification and Send Email**
+
+   Run the `send_email_verification.sh` script to generate a verification code and send an email:
 
    ```bash
-   /var/www/html/send_token.sh
+   /var/www/html/send_email_verification.sh user@example.com
    ```
 
 2. **Click the Verification Link**
 
-   The user clicks the verification link sent by email, triggering the `verify_token.php` script and marking the token as verified in MongoDB.
+   The user clicks the verification link sent by email, triggering the `verify_email.php` script and marking the email as verified in MongoDB.
 
 3. **SSH Login**
 
@@ -8577,22 +8589,20 @@ fi
    ssh youruser@your-server-ip
    ```
 
-   - **If the token is valid**: The user is granted access, and the token is deleted from MongoDB
-
-.
-   - **If the token is invalid or expired**: The user is denied access, and the token is deleted.
+   - **If the email is verified**: The user is granted access, and the email is deleted from MongoDB.
+   - **If the email is not verified**: The user is denied access, and the email is deleted from MongoDB.
 
 ---
 
 ### **Optional Enhancements**
 
-1. **Token Expiry**: Add an `expires_at` field in MongoDB and modify the verification logic to check if the token has expired.
+1. **Email Expiry**: Add an `expires_at` field in MongoDB and modify the verification logic to check if the email verification link has expired.
 
-2. **Logging**: Add logs in `validate_token.sh` for better tracking of login attempts and token statuses.
+2. **Logging**: Add logs in `validate_email.sh` for better tracking of login attempts and email verification statuses.
 
 3. **Security**:
 
    - Use SSL/TLS for MongoDB connections for encrypted communication.
    - Ensure SSH key-based authentication for added security.
 
-This updated guide should now match your MongoDB Atlas setup and integrate token-based authentication for SSH login with token verification through a URL, including the enhanced PHP error handling logic.
+This updated guide should now match your email-based verification setup and integrate it into your SSH login process, with email verification being handled through a URL and automatic deletion of verified users from the database.
