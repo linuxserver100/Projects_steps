@@ -8944,3 +8944,263 @@ Now, every time you log in to your server via SSH, you’ll need to enter your p
 ---
 
 This guide is written to be as beginner-friendly as possible, with clear steps for each part of the setup. If you follow this process, you should be able to set up Duo Two-Factor Authentication on your Ubuntu server without any issues!
+🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥
+To configure SSH login notifications with **Pushbullet** and **ForceCommand** (which is used to enforce a specific command when someone logs in via SSH), we can modify the process slightly to ensure that the notification script runs as the first thing on every SSH login. This approach uses the `ForceCommand` directive in the SSH configuration to execute the notification script automatically for every SSH login.
+
+Let's walk through the steps with **ForceCommand** integrated into the SSH setup.
+
+---
+
+## **Step 1: Install SSH Server (if not installed)**
+
+If SSH is not installed on your Ubuntu server, follow these steps:
+
+1. **Update your server’s package list:**
+
+   ```bash
+   sudo apt update
+   ```
+
+2. **Install the OpenSSH server:**
+
+   ```bash
+   sudo apt install openssh-server
+   ```
+
+3. **Enable and start the SSH service:**
+
+   ```bash
+   sudo systemctl enable ssh
+   sudo systemctl start ssh
+   ```
+
+4. **Check if SSH is running correctly:**
+
+   ```bash
+   sudo systemctl status ssh
+   ```
+
+   The output should show that SSH is active and running.
+
+5. **Test SSH access:**
+
+   Try logging in from another terminal or machine:
+
+   ```bash
+   ssh your_username@your_server_ip
+   ```
+
+---
+
+## **Step 2: Set Up Pushbullet Account**
+
+Before proceeding, you need a Pushbullet account.
+
+1. **Sign up for Pushbullet:**
+   - Go to [Pushbullet’s website](https://www.pushbullet.com/).
+   - Sign up using your Google or Facebook account.
+
+2. **Get your Pushbullet API Access Token:**
+   - Go to the [Pushbullet settings page](https://www.pushbullet.com/#settings).
+   - Copy the **Access Token** from the settings page.
+
+3. **Install Pushbullet on your mobile device:**
+   - Download the Pushbullet app on your Android or iPhone.
+   - Log in with the same account you just created.
+
+---
+
+## **Step 3: Install Pushbullet CLI on Your Ubuntu Server**
+
+We’ll use the `pushbullet-cli` to send notifications from the server to your mobile device.
+
+1. **Install dependencies (`curl` and `jq`):**
+
+   ```bash
+   sudo apt update
+   sudo apt install curl jq
+   ```
+
+2. **Install Pushbullet CLI:**
+
+   Download the latest release of the `pushbullet-cli`:
+
+   ```bash
+   curl -s https://api.github.com/repos/Red5d/pushbullet-cli/releases/latest | jq -r '.assets[0].browser_download_url' | xargs wget -q -O pushbullet-cli-linux-x64.tar.gz
+   ```
+
+   Extract the tarball:
+
+   ```bash
+   tar -xzvf pushbullet-cli-linux-x64.tar.gz
+   ```
+
+   Move the binary to `/usr/local/bin/`:
+
+   ```bash
+   sudo mv pushbullet-cli /usr/local/bin/
+   ```
+
+---
+
+## **Step 4: Create a Notification Script**
+
+Now let’s create a script to send the SSH login notification using Pushbullet.
+
+1. **Create the script file:**
+
+   Open the script file in a text editor:
+
+   ```bash
+   nano /home/your_username/ssh-login-notify.sh
+   ```
+
+   Replace `your_username` with your actual username.
+
+2. **Write the script:**
+
+   Add the following code to the file:
+
+   ```bash
+   #!/bin/bash
+
+   # Your Pushbullet Access Token
+   ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
+
+   # The message to send
+   MESSAGE="SSH Login detected on server $(hostname) from $(who am i | awk '{print $5}')"
+
+   # Send the notification using Pushbullet API
+   curl -u $ACCESS_TOKEN: \
+     -d type="note" \
+     -d title="SSH Login Alert" \
+     -d body="$MESSAGE" \
+     https://api.pushbullet.com/v2/pushes
+   ```
+
+   Replace `YOUR_ACCESS_TOKEN` with the Pushbullet API access token you copied earlier.
+
+3. **Save and exit:**
+
+   - Press `CTRL + X` to exit.
+   - Press `Y` to confirm saving the changes.
+   - Hit `Enter`.
+
+4. **Make the script executable:**
+
+   ```bash
+   chmod +x /home/your_username/ssh-login-notify.sh
+   ```
+
+5. **Test the script:**
+
+   Run the script to test it manually:
+
+   ```bash
+   /home/your_username/ssh-login-notify.sh
+   ```
+
+   You should receive a Pushbullet notification on your mobile device.
+
+---
+
+## **Step 5: Configure SSH to Use ForceCommand**
+
+To ensure that the notification script is run every time someone logs in via SSH, we can configure **ForceCommand** in the SSH configuration.
+
+1. **Edit the SSH configuration file:**
+
+   Open the SSH server configuration file (`/etc/ssh/sshd_config`):
+
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+2. **Add the ForceCommand directive:**
+
+   At the end of the file, add the following line:
+
+   ```bash
+   ForceCommand /home/your_username/ssh-login-notify.sh
+   ```
+
+   This will ensure that every time a user logs in via SSH, the `ssh-login-notify.sh` script will be executed.
+
+3. **Ensure SSH logins still allow proper login behavior:**
+
+   By using `ForceCommand`, SSH will enforce the command and override the default shell. You can preserve normal login behavior by having the script run the login shell after the notification is sent. Modify the script like this:
+
+   ```bash
+   #!/bin/bash
+
+   # Your Pushbullet Access Token
+   ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
+
+   # The message to send
+   MESSAGE="SSH Login detected on server $(hostname) from $(who am i | awk '{print $5}')"
+
+   # Send the notification using Pushbullet API
+   curl -u $ACCESS_TOKEN: \
+     -d type="note" \
+     -d title="SSH Login Alert" \
+     -d body="$MESSAGE" \
+     https://api.pushbullet.com/v2/pushes
+
+   # Start the user’s shell (adjust for your shell, e.g., bash)
+   exec /bin/bash
+   ```
+
+   This ensures that after sending the notification, it will continue with the normal login process and run the user's shell (e.g., `/bin/bash`).
+
+4. **Save and exit the configuration file:**
+
+   - Press `CTRL + X` to exit.
+   - Press `Y` to confirm saving the changes.
+   - Hit `Enter`.
+
+5. **Restart the SSH service to apply the changes:**
+
+   ```bash
+   sudo systemctl restart ssh
+   ```
+
+---
+
+## **Step 6: Test the Setup**
+
+1. **Log out of your server (if you're logged in):**
+
+   ```bash
+   exit
+   ```
+
+2. **Log back in via SSH:**
+
+   From another terminal or machine, log back into your server:
+
+   ```bash
+   ssh your_username@your_server_ip
+   ```
+
+3. **Check for the notification:**
+
+   You should receive a notification on your phone or device that an SSH login was detected.
+
+---
+
+## **Troubleshooting Tips**
+
+- **No notification?** Double-check the access token and ensure the script has the correct permissions.
+- **SSH login not working?** If the user shell doesn’t start after the notification, check that the script is calling `exec /bin/bash` or the correct shell for your environment.
+- **Test manually** by running the notification script directly:
+
+   ```bash
+   /home/your_username/ssh-login-notify.sh
+   ```
+
+---
+
+## **Conclusion**
+
+With **ForceCommand** in place, your Ubuntu server will automatically send Pushbullet notifications every time someone logs in via SSH. This configuration ensures that SSH logins are tracked and you receive an immediate notification on your mobile device.
+
