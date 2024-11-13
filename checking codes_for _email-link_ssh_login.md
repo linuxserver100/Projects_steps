@@ -6789,427 +6789,463 @@ This setup ensures a secure, streamlined process for verifying users and cleanin
 
 
 🫥😶🫥😢🫥😢🫥😢🫥🫥🫥😶🫥😶🫥😶🫥🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥🙂😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶🫥😶😶🫥😶🫥😶🫥😶🫥🫥😶
-To establish a two-factor SSH login mechanism with an approval step on a separate device, you'll need to:
-
-- Set up SSH key authentication for the first factor.
-- Configure a forced command (`ForceCommand`) in SSH to trigger a custom script for the second factor (the approval step).
-- Use a notification service (e.g., Pushbullet) to send the login request to the second device.
-- Use the second device to approve or deny the login by creating a file on the server.
-
-Let's break down the detailed steps for each part:
+Certainly! Below is a revised version of the code and steps tailored for setting up Two-Factor SSH Login with Pushbullet approval on an **AWS Ubuntu server**. The steps remain mostly the same but are specific to AWS instances, and minor adjustments for Ubuntu are incorporated.
 
 ---
 
-### 1. **SSH Key Authentication**
+## Two-Factor SSH Login with Pushbullet on AWS Ubuntu Server
 
-First, set up SSH key-based authentication so that SSH login is allowed with a key rather than a password. This provides the first factor of authentication.
+This guide walks you through configuring a two-factor SSH login system, where you will approve or deny login attempts via Pushbullet notifications on your second device.
 
-#### 1.1 Generate SSH Key Pair (If not already done)
-On your local machine, run:
+---
 
-```bash
-ssh-keygen -t rsa -b 4096
-```
+### 1. **Set Up SSH Key Authentication**
 
-This will create a public/private key pair, typically stored in `~/.ssh/id_rsa` (private key) and `~/.ssh/id_rsa.pub` (public key).
+#### 1.1 Generate SSH Key Pair (if not already done)
 
-#### 1.2 Copy Public Key to Server
-To allow key-based authentication, copy your public key to the server using `ssh-copy-id` or manually:
+Generate an SSH key pair on your local machine (if not already done):
 
 ```bash
-ssh-copy-id user@server_ip
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa
 ```
 
-This copies your public key (`id_rsa.pub`) to the server’s `~/.ssh/authorized_keys` file. You may also manually append the public key to `~/.ssh/authorized_keys` on the server.
+#### 1.2 Copy the Public Key to Your AWS Ubuntu Server
 
-### 2. **Forced Command with SSH Configuration**
+Copy your public SSH key to the AWS Ubuntu server (make sure you replace `user` and `your_aws_server_ip` with the actual username and public IP of your AWS instance):
 
-We will now configure SSH to run a forced command that executes a custom script whenever a user logs in.
+```bash
+ssh-copy-id ubuntu@your_aws_server_ip
+```
+
+---
+
+### 2. **Configure SSH for Forced Command**
+
+You need to modify the SSH configuration to enforce the execution of the custom script (`approve_login.sh`) for each login attempt.
 
 #### 2.1 Edit the SSH Configuration
-On the server, open the SSH configuration file for editing:
+
+On your AWS Ubuntu server, open the SSH configuration file:
 
 ```bash
 sudo nano /etc/ssh/sshd_config
 ```
 
-Add or modify the following settings:
+Modify or add the following lines:
 
 ```bash
-# Force the execution of a custom script on every SSH login
 ForceCommand /usr/local/bin/approve_login.sh
-AllowUsers your_ssh_user
+AllowUsers ubuntu  # or your specific user name
 ```
 
-The `ForceCommand` directive ensures that every SSH login triggers the execution of `/usr/local/bin/approve_login.sh`. This custom script will handle the approval process.
+- **ForceCommand**: This forces the execution of the `approve_login.sh` script for every SSH login attempt.
+- **AllowUsers**: Specifies which users can log in via SSH (use the actual SSH username for your server).
 
 #### 2.2 Restart SSH Service
-After modifying the configuration, restart the SSH service for the changes to take effect:
+
+Once you've made the changes, restart the SSH service:
 
 ```bash
 sudo systemctl restart sshd
 ```
 
-### 3. **Creating the Approval Script (`approve_login.sh`)**
+---
 
-This script will run every time someone attempts to log in via SSH. The script will:
+### 3. **Create the Approval Script (`approve_login.sh`)**
 
-- Log the attempt.
-- Send a notification to the second device using Pushbullet.
-- Wait for approval from the second device.
+This script handles the second factor of authentication by sending a Pushbullet notification to your second device for approval.
 
-#### 3.1 Create the Script on the Server
-Create the approval script at `/usr/local/bin/approve_login.sh`:
+#### 3.1 Create the Approval Script
+
+Create the script at `/usr/local/bin/approve_login.sh`:
 
 ```bash
 sudo nano /usr/local/bin/approve_login.sh
 ```
 
-Paste the following code into the script:
+Paste the following content into the script:
 
 ```bash
 #!/bin/bash
 
+# Get the IP address and username from SSH_CLIENT
+SSH_IP=$(echo $SSH_CLIENT | cut -d ' ' -f 1)
+SSH_PORT=$(echo $SSH_CLIENT | cut -d ' ' -f 3)
+SSH_USER=$(whoami)
+
 # Log the SSH login attempt
-echo "$(date): Login attempt from $SSH_CLIENT" >> /var/log/ssh_login_attempts.log
+echo "$(date): Login attempt from $SSH_USER@$SSH_IP:$SSH_PORT" >> /var/log/ssh_login_attempts.log
 
 # Push notification to the second device using Pushbullet API
 # Replace 'YOUR_PUSHBULLET_API_KEY' with your actual Pushbullet API key
 curl -u "YOUR_PUSHBULLET_API_KEY" \
      -d type="note" \
      -d title="SSH Login Request" \
-     -d body="Approve login attempt from $SSH_CLIENT?" \
+     -d body="Approve or Deny login attempt from $SSH_USER@$SSH_IP:$SSH_PORT? (Yes/No)" \
      https://api.pushbullet.com/v2/pushes
 
-# Wait for approval by checking for a specific file on the server
-while [ ! -f /tmp/ssh_login_approved ]; do
+# Wait for approval by checking for a Yes/No response from the second device
+while true; do
+  # Check if the approval file exists and capture the response
+  if [ -f /tmp/ssh_login_approved ]; then
+    APPROVAL=$(cat /tmp/ssh_login_approved)
+    if [ "$APPROVAL" == "Yes" ]; then
+      echo "$(date): Login approved from $SSH_USER@$SSH_IP:$SSH_PORT" >> /var/log/ssh_login_attempts.log
+      rm /tmp/ssh_login_approved
+      exit 0  # Allow login
+    elif [ "$APPROVAL" == "No" ]; then
+      echo "$(date): Login denied from $SSH_USER@$SSH_IP:$SSH_PORT" >> /var/log/ssh_login_attempts.log
+      rm /tmp/ssh_login_approved
+      exit 1  # Deny login
+    fi
+  fi
   sleep 1  # Check every second
 done
-
-# Once the file is created, remove it and allow login
-rm /tmp/ssh_login_approved
-
-# Exit the script, granting access to the user
-exit 0
 ```
 
+This script works as follows:
+
+1. **Logs the login attempt**: It writes details of the login attempt (username and IP) to a log file.
+2. **Sends a Pushbullet notification**: It triggers a Pushbullet notification asking for approval or denial of the login.
+3. **Waits for approval**: It checks for a `Yes` or `No` response by monitoring the file `/tmp/ssh_login_approved`. If the file contains `Yes`, it grants the login; if it contains `No`, it denies the login.
+
 #### 3.2 Make the Script Executable
+
 Make the script executable:
 
 ```bash
 sudo chmod +x /usr/local/bin/approve_login.sh
 ```
 
-### 4. **Pushbullet Notification Setup**
+---
 
-You need to install and set up Pushbullet to send notifications to the second device.
+### 4. **Set Up Pushbullet**
+
+You will use Pushbullet to send notifications to your second device for approval.
 
 #### 4.1 Create a Pushbullet Account
-- Go to [Pushbullet](https://www.pushbullet.com) and sign up for an account.
-- Get your **API key** from the Pushbullet settings page.
+
+1. Sign up at [Pushbullet](https://www.pushbullet.com).
+2. Retrieve your **API key** from the Pushbullet settings page.
 
 #### 4.2 Install Pushbullet on Your Second Device
-- Install the Pushbullet app on your smartphone or tablet, or use a browser extension.
-- Log in to the app with your Pushbullet account.
 
-#### 4.3 Modify the Script with Your API Key
-In the script `/usr/local/bin/approve_login.sh`, replace `"YOUR_PUSHBULLET_API_KEY"` with your actual Pushbullet API key that you retrieved earlier.
+Install the Pushbullet app on your smartphone or tablet, or use the Pushbullet browser extension.
+Log in with the same Pushbullet account on your second device.
+
+#### 4.3 Modify the Script with Your Pushbullet API Key
+
+In the `/usr/local/bin/approve_login.sh` script, replace `"YOUR_PUSHBULLET_API_KEY"` with the actual Pushbullet API key you retrieved earlier.
+
+```bash
+curl -u "YOUR_PUSHBULLET_API_KEY" \
+     -d type="note" \
+     -d title="SSH Login Request" \
+     -d body="Approve or Deny login attempt from $SSH_USER@$SSH_IP:$SSH_PORT? (Yes/No)" \
+     https://api.pushbullet.com/v2/pushes
+```
+
+---
 
 ### 5. **Approval Process on the Second Device**
 
-The second device is responsible for approving or denying the login attempt.
+#### 5.1 Respond to the Pushbullet Notification
 
-- **Upon login attempt**: The server will run the `approve_login.sh` script, which sends a notification to your second device using Pushbullet.
-- **Approve the login**: To approve the login, manually create a file on the server:
-  
-  ```bash
-  touch /tmp/ssh_login_approved
-  ```
+When the SSH login attempt is made, the script will send a notification to your second device asking whether to approve or deny the login.
 
-This will signal the script to proceed, and the SSH login will be granted.
+#### 5.2 Create the Approval File
 
-- **Deny the login**: If you do not create the `/tmp/ssh_login_approved` file, the login attempt will remain blocked, as the script is waiting for the file to be created.
+On the server, you'll approve or deny the login by creating a file at `/tmp/ssh_login_approved` with the appropriate response.
+
+- To **approve** the login:
+
+```bash
+echo "Yes" > /tmp/ssh_login_approved
+```
+
+- To **deny** the login:
+
+```bash
+echo "No" > /tmp/ssh_login_approved
+```
+
+#### 5.3 Script Behavior Based on Response
+
+- If `/tmp/ssh_login_approved` contains `Yes`, the login is approved.
+- If `/tmp/ssh_login_approved` contains `No`, the login is denied.
+- After a response, the script deletes `/tmp/ssh_login_approved` and exits.
+
+---
 
 ### 6. **Testing the Setup**
 
-#### 6.1 Test the SSH Login
-On the client machine, try to SSH into the server:
+#### 6.1 Test SSH Login
+
+From your local machine, try SSHing into your AWS Ubuntu server:
 
 ```bash
-ssh user@server_ip
+ssh ubuntu@your_aws_server_ip
 ```
 
-The login attempt will trigger the `approve_login.sh` script. A notification will be sent to the second device (your phone) asking you to approve the login.
+This triggers the `approve_login.sh` script and sends a Pushbullet notification to your second device.
 
-#### 6.2 Approve the Login on the Second Device
-- When you receive the notification on your second device, manually create the file `/tmp/ssh_login_approved` on the server. You can do this by SSHing into the server or using a remote tool.
-  
+#### 6.2 Approve or Deny the Login on Your Second Device
+
+- To **approve** the login, create the file `/tmp/ssh_login_approved` with the content `Yes`:
+
 ```bash
-touch /tmp/ssh_login_approved
+echo "Yes" > /tmp/ssh_login_approved
 ```
 
-This will allow the login to proceed.
+- To **deny** the login, create the file `/tmp/ssh_login_approved` with the content `No`:
 
-#### 6.3 Deny the Login (Optional)
-- If you do not create the `/tmp/ssh_login_approved` file, the login will remain blocked.
+```bash
+echo "No" > /tmp/ssh_login_approved
+```
 
-### 7. **Optional: Automating Approval (for convenience)**
+#### 6.3 Verify the Outcome
 
-If you want to automate the approval process on the second device, you can use a script or Pushbullet API on the device to automatically create the `/tmp/ssh_login_approved` file after receiving the notification. This is optional and depends on your preferred level of automation.
+- If you approve the login, the SSH session is granted.
+- If you deny the login, the SSH session is denied.
 
 ---
 
-### Summary of the Workflow:
-1. **SSH Login Attempt**: The user tries to log in using SSH with their key.
-2. **Forced Command**: The `ForceCommand` in `sshd_config` ensures that the `approve_login.sh` script runs.
-3. **Notification to Second Device**: The script sends a Pushbullet notification to your second device asking for approval.
-4. **Approval on Second Device**: You approve by creating `/tmp/ssh_login_approved` on the server.
-5. **Access Granted**: The script exits, allowing SSH login.
+### Summary Workflow:
 
-By using this setup, you have established a two-factor SSH login system, where the second factor is the approval from your second device.
+1. **SSH Login Attempt**: A user tries to SSH into the server using their SSH key.
+2. **Forced Command**: The server runs the `approve_login.sh` script.
+3. **Notification to Second Device**: A Pushbullet notification is sent to your second device asking for approval/denial.
+4. **Approval on Second Device**: You approve or deny the login by creating the `/tmp/ssh_login_approved` file with `Yes` or `No`.
+5. **Login Decision**: The server grants or denies the login based on the content of `/tmp/ssh_login_approved`.
+
+This setup adds an additional layer of security to SSH logins on your AWS Ubuntu server, requiring explicit approval from your second device via Pushbullet.
 
 😃😍☺️🫥🫥☺️🫥☺️☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌😯😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌😌🫥🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥😌🫥🫥😌🫥😌😯😌😯😌😯😌😯🤩😯🤩😯😯🤩😯🤩😯🤩🫥🤩🫥🤩🫥🤩🫥🫥🤩🫥🤩🤩🫥🤩🫥🤩🫥
 
-
-To ensure Duo Security's SSH login with Multi-Factor Authentication (MFA) persists after reboot, while using `ForceCommand` to restrict remote access only to SSH, you need to adjust a few things in your configuration. Below is a **complete script-based setup** with detailed explanations to integrate **Duo MFA** and enforce security with `ForceCommand`.
-
-### **Step-by-Step Setup for Duo Security with ForcedCommand and Reboot Persistence**
+.To configure **SSH with Duo Unix** for **two-factor authentication (2FA)** using **push notifications** and a **forced command**, we will follow the updated steps and commands, including ensuring that all necessary packages are installed and the configuration is correct. The guide below provides the latest package installations, configuration steps, and troubleshooting tips.
 
 ---
 
-### **Step 1: Sign Up for Duo Security**
-
-1. Go to [Duo Security](https://www.duo.com/) and sign up for an account.
-2. Once logged in, navigate to **Applications** > **Protect an Application**.
-3. Select **Unix Application** (or **SSH Application**) and click **Protect this Application**.
-4. Note down the **Integration Key**, **Secret Key**, and **API Hostname**—you will need them for configuration.
+### **Prerequisites**
+Before proceeding, ensure the following:
+1. **Root or sudo access** to the target machine.
+2. A **Linux server** with a supported distribution (e.g., Debian, Ubuntu, CentOS, RHEL, Fedora).
+3. A **Duo account** (free for up to 10 users) from [Duo's website](https://duo.com/).
+4. Basic familiarity with Linux system administration and SSH configuration.
 
 ---
 
-### **Step 2: Install Duo Unix on Your Server**
+### **Step 1: Install Duo Unix**
 
-1. **Install dependencies**:
+#### **1.1 Add Duo’s Package Repository**
 
-   For **Debian/Ubuntu**:
+To install **Duo Unix**, add the Duo repository to your system.
+
+For **Debian/Ubuntu-based** systems:
+```bash
+echo "deb https://pkg.duo.com/Unix/linux/debian/ stable main" | sudo tee /etc/apt/sources.list.d/duo.list
+curl -fsSL https://d18ky98rnyallz.cloudfront.net/duo-pubkey.gpg | sudo tee /etc/apt/trusted.gpg.d/duo.gpg
+```
+
+For **RedHat/CentOS/Fedora-based** systems:
+```bash
+echo "[duo]" | sudo tee /etc/yum.repos.d/duo.repo
+echo "name=duo" | sudo tee -a /etc/yum.repos.d/duo.repo
+echo "baseurl=https://pkg.duo.com/Unix/linux/rhel/7/x86_64/" | sudo tee -a /etc/yum.repos.d/duo.repo
+curl -fsSL https://d18ky98rnyallz.cloudfront.net/duo-pubkey.gpg | sudo tee /etc/yum.repos.d/duo-pubkey.gpg
+```
+
+#### **1.2 Install Duo Unix**
+
+For **Debian/Ubuntu-based** systems:
+```bash
+sudo apt update
+sudo apt install duo-unix
+```
+
+For **RedHat/CentOS/Fedora-based** systems:
+```bash
+sudo yum install duo_unix
+```
+
+#### **1.3 Install Required PAM Libraries**
+
+Ensure that the required **PAM** libraries are installed.
+
+For **Debian/Ubuntu-based** systems:
+```bash
+sudo apt install libpam0g-dev
+```
+
+For **RedHat/CentOS/Fedora-based** systems:
+```bash
+sudo yum install pam-devel
+```
+
+---
+
+### **Step 2: Configure Duo Unix**
+
+#### **2.1 Obtain Duo Integration Keys**
+
+1. Log in to your **Duo Admin Panel**: [https://console.duo.com/](https://console.duo.com/).
+2. Navigate to **Applications** > **Protect an Application**.
+3. Search for **Linux/Unix** and select it.
+4. Note down the **Integration Key (ikey)**, **Secret Key (skey)**, and **API Hostname**.
+
+#### **2.2 Configure Duo Unix**
+
+Now configure Duo Unix to use these integration details.
+
+1. Open the Duo configuration file:
    ```bash
-   sudo apt-get update
-   sudo apt-get install -y libpam0g-dev libssl-dev
+   sudo nano /etc/duo/login_duo.conf
    ```
 
-   For **CentOS/RHEL**:
-   ```bash
-   sudo yum install -y libpam-devel openssl-devel
+2. Add the following configuration, replacing `YOUR_INTEGRATION_KEY`, `YOUR_SECRET_KEY`, and `YOUR_API_HOSTNAME` with your actual Duo integration keys:
+   ```text
+   [duo]
+   host = YOUR_API_HOSTNAME
+   ikey = YOUR_INTEGRATION_KEY
+   skey = YOUR_SECRET_KEY
+   method = push
    ```
 
-2. **Install Duo Unix**:
-   - **Debian/Ubuntu**:
-     ```bash
-     sudo apt-get install -y duo-unix
-     ```
+   - The `method = push` line ensures that **push notifications** will be used for authentication.
 
-   - **CentOS/RHEL**:
-     ```bash
-     sudo yum install -y duo-unix
-     ```
-
-   Alternatively, manually download the Duo Unix package:
-
-   - **Debian-based systems**:
-     ```bash
-     sudo dpkg -i duo-unix-X.X.X.deb
-     ```
-   
-   - **RHEL/CentOS systems**:
-     ```bash
-     sudo rpm -i duo-unix-X.X.X.rpm
-     ```
+3. Save and close the file (press `Ctrl+O`, then Enter, and `Ctrl+X` to exit).
 
 ---
 
-### **Step 3: Configure Duo PAM (Pluggable Authentication Module)**
+### **Step 3: Configure PAM for Duo Authentication**
 
-1. **Edit the PAM SSH configuration**:
+Duo Unix uses **PAM** for authentication. You'll need to ensure the PAM configuration is set up correctly.
 
-   Open the `/etc/pam.d/sshd` file for editing:
+#### **3.1 Modify PAM SSH Configuration**
+
+1. Open the PAM SSH configuration file:
    ```bash
    sudo nano /etc/pam.d/sshd
    ```
 
-   Add the following line **at the top** of the file to enable Duo PAM:
-   ```bash
+2. Add the following line at the end of the file to enable Duo authentication:
+   ```text
    auth required pam_duo.so
    ```
 
-2. **Configure Duo PAM settings**:
-
-   Create the Duo PAM configuration file `/etc/duo/pam_duo.conf` if it doesn't exist:
-   ```bash
-   sudo nano /etc/duo/pam_duo.conf
-   ```
-
-   Add your **Integration Key**, **Secret Key**, and **API Hostname** as follows:
-   ```bash
-   # Duo Security PAM configuration
-   ikey=YOUR_INTEGRATION_KEY        # Your Integration Key
-   skey=YOUR_SECRET_KEY             # Your Secret Key
-   host=YOUR_API_HOSTNAME          # Your API Hostname (e.g., api-xxxxxxxx.duosecurity.com)
-   ```
+3. Save and close the file.
 
 ---
 
-### **Step 4: Configure SSH to Use Duo MFA**
+### **Step 4: Configure SSH to Use Duo Authentication**
 
-1. **Edit SSH configuration**:
+Now configure SSH to use **PAM** and enable Duo authentication.
 
-   Open the SSH configuration file `/etc/ssh/sshd_config`:
+#### **4.1 Edit SSH Configuration**
+
+1. Open the SSH configuration file (`/etc/ssh/sshd_config`):
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-   Ensure the following lines are set:
-   ```bash
-   ChallengeResponseAuthentication yes
+2. Ensure the following line is present to enable PAM authentication:
+   ```text
    UsePAM yes
    ```
 
-2. **Restrict SSH to Duo Authentication Using `ForceCommand`**:
+#### **4.2 Enforce a Forced Command (Optional)**
 
-   Add the following line to the end of `/etc/ssh/sshd_config` to enforce Duo MFA on all SSH logins and restrict command execution to SSH logins:
-   ```bash
-   ForceCommand /usr/sbin/nologin
+To restrict users to a specific command after logging in, use the `ForceCommand` directive. This ensures that users will only be able to run a predefined script or command upon login.
+
+1. Add the following line to the `sshd_config` file to force a command, such as `/usr/local/bin/allowed_command.sh`:
+   ```text
+   ForceCommand /usr/local/bin/allowed_command.sh
    ```
 
-   This command ensures that only Duo-authenticated users can SSH into the server, and it prevents the execution of any remote commands.
-
-3. **Restart SSH service**:
-
-   After updating the configuration, restart SSH:
-   ```bash
-   sudo systemctl restart sshd
+2. Alternatively, to enforce this restriction for a specific user:
+   ```text
+   Match User username
+       ForceCommand /usr/local/bin/allowed_command.sh
    ```
+
+   Replace `username` with the target user and adjust the script path accordingly.
+
+3. Save and close the file.
 
 ---
 
-### **Step 5: Enable Duo Service to Start Automatically After Reboot**
+### **Step 5: Restart SSH Service**
 
-Ensure that the Duo service is enabled to start at boot time:
+To apply the configuration changes, restart the SSH service.
+
+For **Debian/Ubuntu-based** systems:
 ```bash
-sudo systemctl enable duo
+sudo systemctl restart ssh
 ```
 
-This command ensures that Duo’s PAM module continues functioning after a system reboot.
+For **RedHat/CentOS/Fedora-based** systems:
+```bash
+sudo systemctl restart sshd
+```
 
 ---
 
-### **Step 6: Install Duo Mobile App on Your Phone**
+### **Step 6: Test Duo Authentication with Push Notifications**
 
-1. **Install the Duo Mobile app** from either the **App Store** (iOS) or **Google Play Store** (Android).
+Now, test the SSH login process with Duo authentication and push notifications.
 
-2. **Enroll your phone in Duo**:
-   - Log into the Duo Admin Panel.
-   - Add your user account and follow the prompts to enroll your device with **Push** authentication.
+1. Log in via SSH:
+   ```bash
+   ssh username@your_server_ip
+   ```
+
+2. After entering your **username** and **password**, you should receive a **push notification** on your Duo-registered mobile device.
+
+3. Approve the push request to complete the login process.
 
 ---
 
-### **Step 7: Test SSH Login with Duo Push Authentication**
+### **Step 7: Keep Duo Unix and Packages Updated**
 
-1. **SSH into the server**:
-   ```bash
-   ssh your_username@your_server_ip
-   ```
+To ensure the security and functionality of your system, keep **Duo Unix** and your system packages up to date.
 
-2. **Approve Duo Push Authentication**:
-   - You should receive a Duo push notification on your mobile phone.
-   - Open the Duo Mobile app on your phone and approve the login attempt.
+For **Debian/Ubuntu-based** systems:
+```bash
+sudo apt update
+sudo apt upgrade
+```
 
----
-
-### **Optional Step 8: Configure TOTP as a Fallback MFA (Optional)**
-
-If you prefer to set up **TOTP** (Time-Based One-Time Password) as a secondary or fallback MFA method, such as with **Google Authenticator** or **Authy**, follow these steps:
-
-1. **Install the TOTP PAM module**:
-
-   For **Debian/Ubuntu**:
-   ```bash
-   sudo apt-get install libpam-google-authenticator
-   ```
-
-   For **CentOS/RHEL**:
-   ```bash
-   sudo yum install google-authenticator
-   ```
-
-2. **Modify PAM to Include TOTP**:
-
-   Open the `/etc/pam.d/sshd` file:
-   ```bash
-   sudo nano /etc/pam.d/sshd
-   ```
-
-   Add the following line **below** the Duo PAM line:
-   ```bash
-   auth required pam_google_authenticator.so
-   ```
-
-3. **Enable TOTP for each user**:
-
-   Run the following command for each user you want to enable TOTP for:
-   ```bash
-   google-authenticator
-   ```
-
-   This will generate a QR code for Google Authenticator or Authy. Follow the prompts to complete the setup.
-
-4. **Ensure SSH allows both MFA methods**:
-
-   Make sure your SSH configuration file (`/etc/ssh/sshd_config`) allows multiple authentication methods:
-   ```bash
-   ChallengeResponseAuthentication yes
-   UsePAM yes
-   ```
-
-5. **Restart SSH service again**:
-   ```bash
-   sudo systemctl restart sshd
-   ```
+For **RedHat/CentOS/Fedora-based** systems:
+```bash
+sudo yum update
+```
 
 ---
 
-### **Important Notes for Reboot Persistence**
+### **Troubleshooting**
 
-1. **Ensure Duo's PAM module remains enabled**:
-   - Duo’s PAM module should automatically persist after a reboot if correctly configured. To verify this, run:
-     ```bash
-     sudo systemctl status duo
-     ```
-   
-2. **Ensure SSH and PAM settings persist**:
-   - The changes you made to `/etc/ssh/sshd_config` and `/etc/pam.d/sshd` should remain persistent after a reboot, as these are standard configuration files.
-   
-3. **Check after reboot**:
-   After rebooting the server, verify that SSH uses PAM and Duo by running:
-   ```bash
-   sudo systemctl status sshd
-   ```
+If you encounter issues, here are some common troubleshooting tips:
 
-4. **ForceCommand Enforces Security**:
-   The `ForceCommand /usr/sbin/nologin` ensures that SSH users cannot execute commands unless they authenticate via Duo MFA, making it more secure.
+1. **Duo Authentication Not Working**:
+   - Check the authentication logs: 
+     - For **Debian/Ubuntu**: `/var/log/auth.log`
+     - For **RedHat/CentOS/Fedora**: `/var/log/secure`
+   - Ensure your Duo credentials (integration key, secret key, and hostname) are correct.
+   - Verify that the `pam_duo.so` module is correctly loaded in `/etc/pam.d/sshd`.
+
+2. **Push Notifications Not Appearing**:
+   - Make sure the **Duo Mobile** app is installed on your phone and correctly configured.
+   - Ensure your phone has an active internet connection to receive the push notification.
+
+3. **ForceCommand Not Working**:
+   - Ensure the script path in `ForceCommand` is correct and executable.
+   - Double-check your configuration to avoid conflicting directives in `/etc/ssh/sshd_config`.
 
 ---
 
-### **Summary of Key Steps**
+### **Conclusion**
 
-1. **Sign up for Duo Security**, and obtain the **Integration Key**, **Secret Key**, and **API Hostname**.
-2. **Install Duo Unix** on your server and configure the PAM module.
-3. **Edit SSH configuration** to enable PAM, Duo MFA, and set `ForceCommand` to restrict command execution to Duo-authenticated users.
-4. **Enable Duo service** to start at boot.
-5. **Install and configure the Duo Mobile app** on your phone.
-6. **Test the login** process to ensure MFA works as expected.
-7. Optionally, **set up TOTP** as a fallback authentication method.
-8. **Ensure all configurations persist** across reboots by verifying PAM, Duo, and SSH configurations.
-
-By following these steps, you can configure Duo Security with SSH login, restrict SSH access using `ForceCommand`, and ensure that the setup persists even after server reboots.
+By following this guide, you have successfully configured SSH with **Duo Unix** for **two-factor authentication (2FA)** using **push notifications**. Additionally, you've enforced a **forced command** to restrict user access to specific commands upon login. This setup greatly enhances the security of your SSH access, providing an additional layer of authentication and control over user actions.
 .
 
 🫥🫥😏🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😘🫥🫥😘🫥🫥😘🤩🫥😘🤩🤩😘🤩🤩🫥😘😘🫥🫥🫥😘😘🫥🫥🫥🫥🫥😘🫥🫥😘😘🫥😘🫥🫥🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥🫥🫥😘🫥😘🫥😘🫥🫥🫥😘🫥🫥😘🫥😘🫥🫥🫥🫥🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥🫥🫥😘🫥😘🫥To implement a fully functional email verification system with MySQL, PHP, and SSH login control, follow the detailed step-by-step guide. This setup includes database creation, SSH configuration, email verification with PHP, and enforcing email verification for SSH access. Each step is explained thoroughly for clarity.
