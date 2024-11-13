@@ -8597,7 +8597,7 @@ fi
 
 
 # ForceCommand to run send_token.sh followed by a delay and verify_token.sh
-ForceCommand /bin/bash -c '/usr/local/bin/send_token.sh; sleep 30; /usr/local/bin/verify_token.sh'
+ForceCommand /bin/bash -c '/usr/local/bin/send_token.sh; sleep 30; /usr/local/bin/validate_token.sh'
 
 # Allow only specific users to log in
 AllowUsers youruser
