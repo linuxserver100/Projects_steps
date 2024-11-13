@@ -8593,6 +8593,26 @@ fi
 
 **
 
+```bash
+
+
+# ForceCommand to run send_token.sh followed by a delay and verify_token.sh
+ForceCommand /bin/bash -c '/usr/local/bin/send_token.sh; sleep 30; /usr/local/bin/verify_token.sh'
+
+# Allow only specific users to log in
+AllowUsers youruser
+
+# Optional: Restrict SSH access to certain IP addresses
+# ListenAddress 0.0.0.0
+
+
+
+
+```
+
+
+
+
 1. **Generate Email Verification and Send Email**
 
    Run the `send_email_verification.sh` script to generate a verification code and send an email:
@@ -8630,3 +8650,6 @@ fi
    - Ensure SSH key-based authentication for added security.
 
 This updated guide should now match your email-based verification setup and integrate it into your SSH login process, with email verification being handled through a URL and automatic deletion of verified users from the database.
+🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥😊🫥😊🫥🫥😊😊🫥🫥😊🫥😊🫥😊🫥😊🫥☺️🫥😊🫥☺️🫥😊🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥
+
+
