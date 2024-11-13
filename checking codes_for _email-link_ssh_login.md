@@ -8290,7 +8290,29 @@ fi
 
 2. **Step 2: Click the Verification Link**
    - The user clicks the verification link in the email, which triggers the `verify_email.php` script to mark the email as verified in the database.
+  
+    ```bash
 
+      #!/bin/bash
+    # This script will run send_email.sh and verify_email.sh with a 15-second delay between them.
+
+    /path/to/send_email.sh  # Run the first script
+    sleep 15                # Wait for 15 seconds
+    /path/to/verify_email.sh  # Run the second script
+
+    ```
+
+    ```bash
+     chmod +x /path/to/run_with_delay.sh
+
+    ```
+
+    the go to /etc/ssh/sshd_config and add below command at the end of file 
+    ```bash
+     ForceCommand /path/to/run_with_delay.sh
+
+    ```
+   
 3. **Step 3: SSH Login**
    - The user attempts to log in via SSH:
 
