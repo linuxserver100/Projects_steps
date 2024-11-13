@@ -8529,27 +8529,48 @@ This script checks whether the user's email is verified in MongoDB and denies ac
 #### **Script: `/usr/local/bin/validate_email.sh`**
 
 ```bash
-#!/bin/bash
+
+     #!/bin/bash
 
 # MongoDB Atlas Connection URI
-MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority"
+MONGO_URI="mongodb+srv://Ansnesmaasd:sbfnsm784%26%23%26*ajsnaA@clusterlnk0.9hx2w.mongodb.net/user_verification?retryWrites=true&w=majority"
 MONGO_DB="user_verification"
 MONGO_COLLECTION="users"
 
 # Extract the username (email) from SSH session
-USER_EMAIL=$(whoami)
+USER_EMAIL="admin@surfwebtech.site"
 
 # Fetch the verification status for the user email from MongoDB Atlas
-USER_STATUS=$(mongo --quiet --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.findOne({ email: '$USER_EMAIL' })")
+USER_STATUS=$(mongosh --quiet --eval "db = connect('$MONGO_URI'); var result = db.$MONGO_COLLECTION.findOne({ email: '$USER_EMAIL' }); JSON.stringify(result);")
 
-# Parse the verification status from the MongoDB result
-VERIFIED=$(echo "$USER_STATUS" | grep -o '"verified":true' | wc -l)
+# Output the raw result to debug the MongoDB response
+echo "MongoDB response: $USER_STATUS"
+
+# Check if the result is empty or null
+if [[ "$USER_STATUS" == "null" || -z "$USER_STATUS" ]]; then
+    echo "User not found in the database."
+    exit 1
+fi
+
+# Check if the result is valid JSON (this will help catch malformed JSON)
+echo "$USER_STATUS" | jq . > /dev/null
+if [ $? -ne 0 ]; then
+    echo "Failed to parse JSON"
+    exit 1
+fi
+
+# Now, let's parse the 'verified' field, ensuring we handle missing values gracefully
+VERIFIED=$(echo "$USER_STATUS" | jq -r '.verified // "false"')
+
+# Debug output of VERIFIED variable
+echo "Parsed verification status: $VERIFIED"
 
 # Always delete the user record, regardless of whether it's verified or not
-mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ email: '$USER_EMAIL' });"
+# Note: Deleting the user after checking their verification status.
+mongosh --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ email: '$USER_EMAIL' });"
 
 # Check email verification status
-if [[ $VERIFIED -eq 1 ]]; then
+if [[ "$VERIFIED" == "true" ]]; then
     # Email is verified, grant access
     echo "Email verified. Access granted."
     exec $SHELL
@@ -8558,6 +8579,9 @@ else
     echo "Email not verified. Please click the verification link sent to your email."
     exit 1
 fi
+
+
+
 ```
 
 - Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
