@@ -8229,40 +8229,45 @@ AllowUsers youruser
 This script checks if the email associated with the SSH login is verified. If the email is verified, access is granted; otherwise, access is denied.
 
 ```bash
-#!/bin/bash
+
+
+    #!/bin/bash
 
 # PlanetScale MySQL Connection Variables
-MYSQL_HOST="your-database-host"
+MYSQL_HOST="mysql-12.com"
 MYSQL_PORT="3306"
-MYSQL_USER="your-username"
-MYSQL_PASS="your-password"
+MYSQL_USER="vifr"
+MYSQL_PASS="Qty"
 MYSQL_DB="ssh_verification"
 SSL_CA_PATH="/etc/ssl/certs/planetscale-ca.pem"  # Path to the downloaded ca.pem file
 
 # Pre-defined email address for the user
-USER_EMAIL="predefined-email@example.com"
+USER_EMAIL="email_address whwe email will br sent"
 
 # Query the MySQL database to check if the email is verified
 EMAIL_STATUS=$(mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -se "
 SELECT verified FROM emails WHERE email = '$USER_EMAIL';
 ")
 
+# Check if the email is verified
 if [[ "$EMAIL_STATUS" == "1" ]]; then
     # Email is verified, grant access
     echo "Email verified. Access granted."
 
-    # Delete the email record from the database after SSH access is granted
-    mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
-    DELETE FROM emails WHERE email = '$USER_EMAIL';
-    "
-
     # Allow user to continue with SSH session
     exec $SHELL
+
+    # After SSH session ends, delete the email record from the database
+    mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB -e "
+    DELETE FROM emails WHERE email = '$USER_EMAIL';
+    "
 else
     # Email is not verified, deny access
-    echo "Email not verified. Please click the verification link sent to your email."
+    echo "Email not verified. Access denied."
     exit 1
 fi
+
+
 ```
 
 - **Explanation**:
