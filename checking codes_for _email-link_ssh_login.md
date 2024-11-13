@@ -8016,7 +8016,7 @@ By using MongoDB Atlas, you get a cloud-hosted, scalable solution for secure tok
 
 
 🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥🥹🫥🥹🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥰🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥰🫥🥰🫥🥰🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🫥😘🫥😘😘🫥😘🫥😘
-Certainly! Below is the complete rewritten process including all steps and the commands for setting up the PlanetScale MySQL database with SSL, configuring permissions, email verification, and SSH access.
+.Certainly! Below is the revised solution with the necessary modifications, including the inclusion of the port in the connection URL for PlanetScale database connections.
 
 ---
 
@@ -8051,10 +8051,10 @@ This solution demonstrates how to secure SSH access using email verification and
    ```
 
 5. **Log in to PlanetScale with SSL**:
-   - Use the following command to log into your PlanetScale MySQL instance with SSL:
+   - Use the following command to log into your PlanetScale MySQL instance with SSL, including the port (default for MySQL is `3306`):
 
    ```bash
-   mysql -h <your-database-host> -u <admin-username> -p --ssl-ca=/etc/ssl/certs/planetscale-ca.pem
+   mysql -h <your-database-host> -P 3306 -u <admin-username> -p --ssl-ca=/etc/ssl/certs/planetscale-ca.pem
    ```
 
    - You will be prompted for the MySQL root or admin password.
@@ -8105,6 +8105,7 @@ This script automatically uses a predefined email address for verification. It g
 
 # PlanetScale MySQL Connection Variables
 MYSQL_HOST="your-database-host"
+MYSQL_PORT="3306"
 MYSQL_USER="your-username"
 MYSQL_PASS="your-password"
 MYSQL_DB="ssh_verification"
@@ -8117,7 +8118,7 @@ EMAIL="predefined-email@example.com"
 TOKEN=$(uuidgen)
 
 # Store the email in the database with verification status (false by default)
-mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
 INSERT INTO emails (email, verified) VALUES ('$EMAIL', false);
 "
 
@@ -8146,6 +8147,7 @@ This PHP script verifies the email address when the user clicks the link, updati
 <?php
 // PlanetScale MySQL Database Connection Details
 $host = 'your-database-host';
+$port = '3306';
 $dbname = 'ssh_verification';
 $username = 'your-username';
 $password = 'your-password';
@@ -8154,7 +8156,7 @@ $ssl_ca_path = '/etc/ssl/certs/planetscale-ca.pem';  // Path to the downloaded c
 // Create a new PDO instance with SSL connection
 try {
     $pdo = new PDO(
-        "mysql:host=$host;dbname=$dbname;charset=utf8",
+        "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8",
         $username,
         $password,
         [
@@ -8231,6 +8233,7 @@ This script checks if the email associated with the SSH login is verified. If th
 
 # PlanetScale MySQL Connection Variables
 MYSQL_HOST="your-database-host"
+MYSQL_PORT="3306"
 MYSQL_USER="your-username"
 MYSQL_PASS="your-password"
 MYSQL_DB="ssh_verification"
@@ -8240,7 +8243,7 @@ SSL_CA_PATH="/etc/ssl/certs/planetscale-ca.pem"  # Path to the downloaded ca.pem
 USER_EMAIL="predefined-email@example.com"
 
 # Query the MySQL database to check if the email is verified
-EMAIL_STATUS=$(mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -se "
+EMAIL_STATUS=$(mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -se "
 SELECT verified FROM emails WHERE email = '$USER_EMAIL';
 ")
 
@@ -8249,7 +8252,7 @@ if [[ "$EMAIL_STATUS" == "1" ]]; then
     echo "Email verified. Access granted."
 
     # Delete the email record from the database after SSH access is granted
-    mysql -h $MYSQL_HOST -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
+    mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
     DELETE FROM emails WHERE email = '$USER_EMAIL';
     "
 
@@ -8263,15 +8266,15 @@ fi
 ```
 
 - **Explanation**:
-  - This script uses the pre-defined email address (`USER_EMAIL`) to check if the email is verified. If it is, access is granted, and the email record is deleted from the database. If the email is not verified, access is denied, and the user is prompted to verify their email.
+  - This script uses the pre-defined email address (`USER_EMAIL`) to check if the email is verified. If it is, access is
+
+ granted, and the email record is deleted from the database. If the email is not verified, access is denied, and the user is prompted to verify their email.
 
 ---
 
 ### **6. Testing the Process**
 
-1. **Step 1:
-
- Generate Email and Send Verification**
+1. **Step 1: Generate Email and Send Verification**
    - Run the email generation script to insert a new email verification record and send the verification email:
 
    ```bash
