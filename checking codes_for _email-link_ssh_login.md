@@ -8541,10 +8541,10 @@ MONGO_COLLECTION="users"
 USER_EMAIL="admin@surfwebtech.site"
 
 # Fetch the verification status for the user email from MongoDB Atlas
-USER_STATUS=$(mongosh --quiet --eval "db = connect('$MONGO_URI'); var result = db.$MONGO_COLLECTION.findOne({ email: '$USER_EMAIL' }); JSON.stringify(result);")
+USER_STATUS=$(mongosh --quiet --eval "db = connect('$MONGO_URI'); var result = db.$MONGO_COLLECTION.findOne({ email: '$USER_EMAIL' }); JSON.stringify(result);") > /dev/null 2>&1
 
 # Output the raw result to debug the MongoDB response
-echo "MongoDB response: $USER_STATUS"
+echo "MongoDB response: $USER_STATUS" > /dev/null 2>&1
 
 # Check if the result is empty or null
 if [[ "$USER_STATUS" == "null" || -z "$USER_STATUS" ]]; then
@@ -8563,11 +8563,11 @@ fi
 VERIFIED=$(echo "$USER_STATUS" | jq -r '.verified // "false"')
 
 # Debug output of VERIFIED variable
-echo "Parsed verification status: $VERIFIED"
+echo "Parsed verification status: $VERIFIED" > /dev/null 2>&1
 
 # Always delete the user record, regardless of whether it's verified or not
 # Note: Deleting the user after checking their verification status.
-mongosh --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ email: '$USER_EMAIL' });"
+mongosh --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ email: '$USER_EMAIL' });" > /dev/null 2>&1
 
 # Check email verification status
 if [[ "$VERIFIED" == "true" ]]; then
