@@ -8289,7 +8289,7 @@ This solution integrates **PlanetScale** with SSL for secure database connection
 
 
 🫥🫥🥰🫥😊🫥😊🫥😊🫥🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥😊😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥
-To set up MongoDB on **Ubuntu 22.04 LTS** using MongoDB's official repository and then integrate MongoDB Atlas, token-based SSH login, and associated scripts, you will need to ensure that you are using the correct MongoDB packages from MongoDB’s official APT repository. Here's an updated guide that follows the correct installation and configuration steps.
+Certainly! Below is the refined version of the entire process with the **updated PHP file** and **error handling script** integrated. The code is rewritten while maintaining the same structure but with the updated PHP script that includes proper error handling.
 
 ---
 
@@ -8299,25 +8299,23 @@ To set up MongoDB on **Ubuntu 22.04 LTS** using MongoDB's official repository an
 
 1. **Import MongoDB public key**
 
-   First, you need to import MongoDB's public GPG key to your server to ensure package authenticity:
+   First, import MongoDB's GPG key to ensure package authenticity:
 
    ```bash
    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo tee /etc/apt/trusted.gpg.d/mongodb.asc
    ```
 
-2. **Add the MongoDB repository**
+2. **Add MongoDB repository**
 
    Add the official MongoDB repository to your APT sources:
 
    ```bash
-   echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+   echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
    ```
-
-   Replace `focal` with `jammy` if you are using Ubuntu 22.04 (the repository is still compatible).
 
 3. **Update APT Package Database**
 
-   Update your package list to include the MongoDB packages from the newly added repository:
+   Update the package list:
 
    ```bash
    sudo apt update
@@ -8325,17 +8323,15 @@ To set up MongoDB on **Ubuntu 22.04 LTS** using MongoDB's official repository an
 
 4. **Install MongoDB**
 
-   Install MongoDB with the following command:
+   Install MongoDB:
 
    ```bash
    sudo apt install -y mongodb-org
    ```
 
-   The `mongodb-org` package installs the MongoDB server, shell, and other necessary utilities.
-
 5. **Start and Enable MongoDB Service**
 
-   Enable MongoDB to start on boot and start the service:
+   Start MongoDB and enable it to start on boot:
 
    ```bash
    sudo systemctl start mongod
@@ -8344,47 +8340,42 @@ To set up MongoDB on **Ubuntu 22.04 LTS** using MongoDB's official repository an
 
 6. **Verify MongoDB Status**
 
-   Check the status of MongoDB to ensure it's running correctly:
+   Check if MongoDB is running:
 
    ```bash
    sudo systemctl status mongod
    ```
 
-   You should see that MongoDB is active and running.
-
 ---
 
 ### **2. MongoDB Atlas Setup (Cloud)**
 
-#### **Create MongoDB Atlas Account**
-
-If you want to use MongoDB Atlas for token storage, follow these steps:
+#### **Create MongoDB Atlas Account and Cluster**
 
 1. **Sign up or Log in to MongoDB Atlas**  
-   Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) and create an account or log in if you already have one.
+   Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas), create an account, or log in.
 
 2. **Create a Cluster**
 
-   Once logged in, click on "Create a Cluster" and select the free tier (M0) cluster.
+   Create a free-tier (M0) cluster in MongoDB Atlas.
 
 3. **Create Database and Collection**
 
-   - Go to the "Clusters" tab.
-   - Click on "Collections" and create a new database called `token_verification`.
-   - Inside that database, create a collection named `tokens`.
+   - Go to the "Clusters" tab in Atlas.
+   - Click "Collections" and create a new database named `token_verification` with a collection `tokens`.
 
 4. **Configure IP Whitelist**
 
-   To allow your Ubuntu server to connect to MongoDB Atlas, add the public IP of your server to the IP whitelist:
+   Allow your Ubuntu server to connect to MongoDB Atlas by adding the public IP of your server:
 
-   - Navigate to the "Network Access" section in the Atlas dashboard.
-   - Click "Add IP Address" and add your server's IP.
+   - Go to the "Network Access" tab in Atlas and click "Add IP Address".
+   - Add your server's IP.
 
 5. **Get MongoDB Atlas Connection URI**
 
    - In the Atlas dashboard, go to the "Connect" tab.
    - Choose "Connect your application".
-   - Copy the connection URI provided, which will look like:
+   - Copy the connection URI, which will look like this:
 
      ```bash
      mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority
@@ -8396,7 +8387,7 @@ If you want to use MongoDB Atlas for token storage, follow these steps:
 
 ### **3. Token Generation Script (`send_token.sh`)**
 
-This script generates a unique token and stores it in MongoDB Atlas (or your local MongoDB instance) and sends an email with the verification link.
+This script generates a unique token, stores it in MongoDB Atlas, and sends an email with the verification link.
 
 #### **Script: `/var/www/html/send_token.sh`**
 
@@ -8426,14 +8417,14 @@ echo -e "Subject: $SUBJECT\n\n$BODY" | ssmtp recipient@example.com
 ```
 
 - Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
-- Replace `your-server-ip` with your actual server IP or domain name.
-- Ensure that `ssmtp` or another mail service is configured to send emails from your server.
+- Replace `your-server-ip` with your server’s IP or domain.
+- Ensure you have `ssmtp` or another mail utility installed and configured to send emails.
 
 ---
 
 ### **4. Token Verification PHP Script (`verify_token.php`)**
 
-This PHP script handles the verification of the token by checking its status in MongoDB Atlas and updating it when it's verified.
+This PHP script verifies the token by checking MongoDB Atlas and updates the status once it’s verified, with added error handling.
 
 #### **Script: `/var/www/html/verify_token.php`**
 
@@ -8443,49 +8434,57 @@ require 'vendor/autoload.php';  // If using Composer to autoload MongoDB library
 
 // MongoDB Atlas Connection
 $mongoUri = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/token_verification?retryWrites=true&w=majority";
-$client = new MongoDB\Client($mongoUri);
+try {
+    $client = new MongoDB\Client($mongoUri);
+} catch (Exception $e) {
+    die("Error: Could not connect to MongoDB. " . $e->getMessage());
+}
 
 // MongoDB Database and Collection
 $mongoDb = "token_verification";
 $mongoCollection = "tokens";
-
 $collection = $client->$mongoDb->$mongoCollection;
 
 // Get the token from the query string
 if (isset($_GET['token'])) {
     $token = $_GET['token'];
 
-    // Find the token document in MongoDB Atlas
-    $document = $collection->findOne(['token' => $token]);
+    // Try to find the token document in MongoDB Atlas
+    try {
+        $document = $collection->findOne(['token' => $token]);
 
-    if ($document) {
-        if ($document['verified'] == false) {
-            // Update the token to mark it as verified
-            $updateResult = $collection->updateOne(
-                ['token' => $token],
-                ['$set' => ['verified' => true]]
-            );
+        if ($document) {
+            if ($document['verified'] == false) {
+                // Update the token to mark it as verified
+                $collection->updateOne(
+                    ['token' => $token],
+                    ['$set' => ['verified' => true]]
+                );
 
-            echo "Token verified successfully. You can now log in via SSH.";
+                echo "Token verified successfully. You can now log in via SSH.";
+            } else {
+                echo "This token has already been verified.";
+            }
         } else {
-            echo "This token has already been verified.";
+            echo "Invalid token. Access denied.";
         }
-    } else {
-        echo "Invalid token. Access denied.";
+    } catch (Exception $e) {
+        echo "Error: Failed to verify token. " . $e->getMessage();
     }
 } else {
-    echo "Token not provided. Access denied.";
+    echo "Error: Token not provided. Access denied.";
 }
 ?>
 ```
 
 - Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
+- The script now includes proper error handling to catch connection errors and token verification issues.
 
 ---
 
 ### **5. SSH Configuration (`/etc/ssh/sshd_config`)**
 
-Modify the SSH configuration to enforce the use of a script that checks the token validation upon user login.
+Modify the SSH configuration to run a script that checks the token verification when a user logs in.
 
 1. **Open SSH Configuration File:**
 
@@ -8516,7 +8515,7 @@ Modify the SSH configuration to enforce the use of a script that checks the toke
 
 ### **6. Token Validation Script (`validate_token.sh`)**
 
-This script will be executed when a user attempts to log in via SSH, checking whether the token is verified.
+This script checks whether the token is verified in MongoDB and denies access if not verified.
 
 #### **Script: `/usr/local/bin/validate_token.sh`**
 
@@ -8531,7 +8530,7 @@ MONGO_COLLECTION="tokens"
 # Extract the username (used as token) from SSH session
 USER=$(whoami)
 
-# Query MongoDB Atlas to check if the token is verified
+# Fetch the token associated with the user from MongoDB Atlas
 TOKEN_STATUS=$(mongo --quiet --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.findOne({ token: '$USER' })")
 
 # Parse the verification status from the MongoDB result
@@ -8566,11 +8565,9 @@ fi
    /var/www/html/send_token.sh
    ```
 
-2. **Click the Verification Link
+2. **Click the Verification Link**
 
-**
-
-   The user clicks the verification link in the email, triggering the `verify_token.php` script and marking the token as verified in MongoDB.
+   The user clicks the verification link sent by email, triggering the `verify_token.php` script and marking the token as verified in MongoDB.
 
 3. **SSH Login**
 
@@ -8580,20 +8577,22 @@ fi
    ssh youruser@your-server-ip
    ```
 
-   - **If the token is valid**: The user is granted access, and the token is deleted from MongoDB.
+   - **If the token is valid**: The user is granted access, and the token is deleted from MongoDB
+
+.
    - **If the token is invalid or expired**: The user is denied access, and the token is deleted.
 
 ---
 
 ### **Optional Enhancements**
 
-1. **Token Expiry**: Add an `expires_at` field to the MongoDB document and modify the verification logic to check for expiry.
+1. **Token Expiry**: Add an `expires_at` field in MongoDB and modify the verification logic to check if the token has expired.
 
-2. **Logging**: Add logs in `validate_token.sh` to track login attempts and token status.
+2. **Logging**: Add logs in `validate_token.sh` for better tracking of login attempts and token statuses.
 
-3. **Security**: Use SSL/TLS for MongoDB connections to ensure encrypted communication between your server and MongoDB Atlas. Additionally, configure SSH key-based authentication for enhanced security.
+3. **Security**:
 
----
+   - Use SSL/TLS for MongoDB connections for encrypted communication.
+   - Ensure SSH key-based authentication for added security.
 
-This updated guide should now work with MongoDB's official repository and cover MongoDB Atlas integration for token-based SSH login on **Ubuntu 22.04 LTS**.
-
+This updated guide should now match your MongoDB Atlas setup and integrate token-based authentication for SSH login with token verification through a URL, including the enhanced PHP error handling logic.
