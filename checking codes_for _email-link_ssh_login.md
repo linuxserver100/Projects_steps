@@ -8735,61 +8735,49 @@ AllowUsers youruser
    - Ensure SSH key-based authentication for added security.
 
 This updated guide should now match your email-based verification setup and integrate it into your SSH login process, with email verification being handled through a URL and automatic deletion of verified users from the database.
-🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥😊🫥😊🫥🫥😊😊🫥🫥😊🫥😊🫥😊🫥😊🫥☺️🫥😊🫥☺️🫥😊🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥
-
-Certainly! Here’s an even more beginner-friendly version of the guide, designed for someone who may not be familiar with any of these steps and includes instructions for linking the Duo Mobile app.
+🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰�🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥😊🫥😊🫥🫥😊😊🫥🫥😊🫥😊🫥😊🫥😊🫥☺️🫥😊🫥☺️🫥😊🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥
+Certainly! Here's an updated and comprehensive guide that incorporates two configuration options for Duo 2FA integration (`login_duo.conf` and `pam_duo.conf`) along with all necessary steps and packages for a secure and robust setup on your Ubuntu server.
 
 ---
 
-## **Beginner-Friendly Guide: Setting Up Duo Two-Factor Authentication (2FA) for SSH on Ubuntu**
+## **Beginner-Friendly Guide: Setting Up Duo Two-Factor Authentication (2FA) for SSH on Ubuntu Using `login_duo.conf` and `pam_duo.conf`**
 
 ### **What You'll Need Before Starting**
-- **Ubuntu Server**: This is the machine where you want to set up Duo 2FA.
-- **Duo Account**: If you don’t have one, you’ll need to create a free Duo account.
-- **Duo Mobile App**: You need to install the Duo Mobile app on your smartphone (available for both Android and iPhone).
+- **Ubuntu Server**: The server where you want to enable Duo 2FA.
+- **Duo Account**: Sign up for a Duo account to generate the necessary keys.
+- **Duo Mobile App**: Install the Duo Mobile app on your smartphone (available for Android and iPhone).
 
 ---
 
-### **Step 1: Install Duo on Your Ubuntu Server**
+### **Step 1: Install Required Packages for Duo Integration**
 
 #### 1. **Access Your Server**
-If you're working directly on your Ubuntu server, you can use the terminal. If you're accessing it remotely, you'll need to use SSH.
-
-**To SSH into your server**, run this command from your computer's terminal (replace `username` with your server's username and `your-server-ip` with your server's IP address):
+Log into your server via SSH (or locally if you're directly at the terminal):
 
 ```bash
 ssh username@your-server-ip
 ```
 
-#### 2. **Install Required Software**
-Before you install Duo, you'll need some software on your Ubuntu server. Run the following commands one by one to install everything Duo needs to work properly:
+#### 2. **Update System and Install Required Dependencies**
+Before installing Duo, update your package list and install the necessary libraries for compiling and integrating Duo:
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential libpam0g-dev libssl-dev libcurl4-openssl-dev
+sudo apt install -y build-essential libssl-dev libcurl4-openssl-dev libpam0g-dev wget
 ```
 
-This will download the necessary software packages for Duo to work on your server.
-
-#### 3. **Download Duo Unix**
-Next, you’ll download the Duo Unix package. This package connects your server to Duo’s two-factor authentication system.
-
-Run the following commands:
+#### 3. **Download and Install Duo Unix Package**
+Now, download the latest Duo Unix package, which contains the necessary binaries for integrating Duo into your system:
 
 ```bash
 cd /tmp
 wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
-```
-
-After downloading the file, you'll need to unzip it:
-
-```bash
 tar -xvzf duo_unix-latest.tar.gz
 cd duo_unix-*
 ```
 
-#### 4. **Install Duo**
-Now you’ll install Duo by running these commands:
+#### 4. **Compile and Install Duo**
+Now, compile and install the Duo Unix integration:
 
 ```bash
 ./configure
@@ -8797,35 +8785,44 @@ make
 sudo make install
 ```
 
-This installs Duo on your server so that it can start protecting your login process.
+Duo is now installed on your server.
 
 ---
 
-### **Step 2: Set Up Duo Authentication**
+### **Step 2: Configure Duo Authentication**
 
-#### 1. **Create a Duo Account and Get Your Keys**
-To use Duo, you need to sign up for an account and get special keys that will link your server to Duo's service.
+#### 1. **Get Your Duo Keys**
+To link your server to Duo, you will need three keys:
 
-1. Go to [Duo Security’s Admin Panel](https://console.duo.com/) and either log in or create a free account.
-2. Once logged in, click on **Applications** in the menu, then **Protect an Application**.
-3. Find and select **Unix Application**—this is the option that lets you link Duo with your server.
-4. You’ll see three pieces of important information:
+1. Go to the [Duo Admin Panel](https://console.duo.com/) and log in.
+2. Navigate to **Applications** > **Protect an Application**.
+3. Select the **Unix Application** option to generate the keys.
+4. Copy the following keys:
    - **Integration Key (ikey)**
    - **Secret Key (skey)**
    - **API Hostname (host)**
 
-   **Write down** these keys. You'll need them in the next step.
+Keep these keys handy for the next step.
 
-#### 2. **Configure Duo on Your Server**
-Now, you’ll tell your server how to use Duo for login.
+---
 
-1. Open the Duo configuration file by running:
+### **Step 3: Configure Duo Integration Files**
+
+Duo can be configured in two primary ways for SSH login: `login_duo.conf` (for direct login handling) and `pam_duo.conf` (using PAM for authentication).
+
+#### **Option 1: Using `login_duo.conf` for Direct Duo Authentication**
+
+1. **Create the Duo Configuration File (`login_duo.conf`)**
+
+   Open the Duo configuration file (`login_duo.conf`):
 
    ```bash
-   sudo nano /etc/duo/pam_duo.conf
+   sudo nano /etc/duo/login_duo.conf
    ```
 
-2. In the file, add the keys you just copied from the Duo website. The file should look like this:
+2. **Add Your Duo Keys**
+
+   Add your Duo keys to this configuration file:
 
    ```bash
    [duo]
@@ -8834,52 +8831,86 @@ Now, you’ll tell your server how to use Duo for login.
    host = YOUR_API_HOSTNAME
    ```
 
-   Replace `YOUR_INTEGRATION_KEY`, `YOUR_SECRET_KEY`, and `YOUR_API_HOSTNAME` with the information you copied earlier.
+   Replace the placeholders with the actual values you got from the Duo Admin Panel.
 
-3. Save the file by pressing **Ctrl + X**, then **Y** to confirm, and **Enter** to finish.
+3. **Save and Exit the File**
+
+   Press **Ctrl + X**, then **Y**, and **Enter** to save and exit.
 
 ---
 
-### **Step 3: Enable Duo for SSH Login**
+#### **Option 2: Using `pam_duo.conf` for PAM Integration (Alternative)**
 
-Now, you’ll set up SSH to use Duo for two-factor authentication.
+1. **Create the PAM Duo Configuration File (`pam_duo.conf`)**
 
-#### 1. **Edit the SSH PAM Configuration**
-1. Open the SSH PAM (Pluggable Authentication Module) configuration file by running:
-
-   ```bash
-   sudo nano /etc/pam.d/sshd
-   ```
-
-2. At the very top of this file, add the following line to enable Duo for SSH login:
+   Open the `pam_duo.conf` file:
 
    ```bash
-   auth required pam_duo.so
+   sudo nano /etc/duo/pam_duo.conf
    ```
 
-3. Save and close the file by pressing **Ctrl + X**, then **Y**, and **Enter**.
+2. **Add Your Duo Keys**
 
-#### 2. **Configure SSH to Allow Duo**
-1. Open the SSH configuration file with this command:
+   Add your Duo keys to this configuration file:
 
    ```bash
-   sudo nano /etc/ssh/sshd_config
+   [duo]
+   ikey = YOUR_INTEGRATION_KEY
+   skey = YOUR_SECRET_KEY
+   host = YOUR_API_HOSTNAME
    ```
 
-2. Make sure these settings are in place (if they’re not already):
+   Replace the placeholders with your Duo keys.
 
-   ```bash
-   ChallengeResponseAuthentication yes
-   PasswordAuthentication yes
-   UsePAM yes
-   ```
+3. **Save and Exit the File**
 
-   These settings allow SSH to ask for your password and then challenge you for the second factor (via Duo).
+   Press **Ctrl + X**, then **Y**, and **Enter** to save and exit.
 
-3. Save and close the file by pressing **Ctrl + X**, then **Y**, and **Enter**.
+---
 
-#### 3. **Restart the SSH Service**
-To make all the changes take effect, restart the SSH service with this command:
+### **Step 4: Configure SSH to Use Duo**
+
+#### 1. **Edit the SSH Configuration File**
+
+Modify your SSH configuration to enable Duo authentication. Open the SSH configuration file:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+2. **Modify or Add the Following Settings**
+
+Ensure the following settings are included to enable Duo for SSH:
+
+```bash
+ChallengeResponseAuthentication yes
+PasswordAuthentication yes
+UsePAM no  # This disables PAM, as we are using the Duo PAM module for authentication
+```
+
+3. **Add the `ForceCommand` Directive for `login_duo` (Optional)**
+
+If you're using direct Duo authentication via `login_duo.conf` (Option 1), add this line at the end of the `sshd_config` file to force the use of Duo's login handler:
+
+```bash
+ForceCommand /usr/sbin/login_duo
+```
+
+4. **Ensure Correct File Permissions**
+
+To secure the SSH configuration file, make sure it has the correct permissions:
+
+```bash
+sudo chmod 600 /etc/ssh/sshd_config
+```
+
+5. **Save and Exit the File**
+
+Press **Ctrl + X**, then **Y**, and **Enter** to save and exit.
+
+#### 2. **Restart the SSH Service**
+
+Restart the SSH service for the changes to take effect:
 
 ```bash
 sudo systemctl restart sshd
@@ -8887,35 +8918,34 @@ sudo systemctl restart sshd
 
 ---
 
-### **Step 4: Link Duo with Your Duo Mobile App**
+### **Step 5: Set Up Duo Mobile on Your Phone**
 
-Now, we’ll set up Duo Mobile on your phone to handle the second factor (the 2FA prompt).
+#### 1. **Install the Duo Mobile App**
 
-#### 1. **Install Duo Mobile**
-- If you’re using an **Android phone**, download and install [Duo Mobile from Google Play](https://play.google.com/store/apps/details?id=com.duosecurity.duomobile).
-- If you’re using an **iPhone**, download and install [Duo Mobile from the App Store](https://apps.apple.com/us/app/duo-mobile/id422663827).
+Download and install the Duo Mobile app on your phone:
+
+- **Android**: [Google Play Store](https://play.google.com/store/apps/details?id=com.duosecurity.duomobile)
+- **iPhone**: [App Store](https://apps.apple.com/us/app/duo-mobile/id422663827)
 
 #### 2. **Link Your Phone to Duo**
-1. Open the Duo Mobile app on your phone.
-2. On your Duo Admin Panel (where you got the integration keys), you'll need to add a user (you) and link your phone. Once you add your user, you should see an option to **Add a device**.
-3. Follow the instructions to **scan a QR code** (this code will be shown in your Duo Admin Panel when you add a new device).
 
-Once you scan the QR code with Duo Mobile, your phone will be linked to your server for two-factor authentication.
+1. Log into the Duo Admin Panel and create a user account if you haven’t already.
+2. Under **Devices**, add a new device and select **Mobile Device**.
+3. Duo will display a QR code—open the Duo Mobile app and scan it to link your phone.
 
 ---
 
-### **Step 5: Test the Duo 2FA Setup**
+### **Step 6: Test Duo 2FA for SSH Login**
 
-You’ve now set up Duo 2FA on your Ubuntu server. Let’s test it!
+Verify that Duo is working correctly by testing an SSH login:
 
-1. Open a terminal on your computer (or use SSH to connect to your server).
-2. Try to log in to your server using SSH:
+1. Attempt to SSH into your server:
 
    ```bash
    ssh username@your-server-ip
    ```
 
-3. After entering your regular password, Duo will prompt you for a second factor. You’ll see something like this:
+2. After entering your SSH password, you will be prompted for the Duo second-factor authentication:
 
    ```
    Duo two-factor login for username
@@ -8925,25 +8955,42 @@ You’ve now set up Duo 2FA on your Ubuntu server. Let’s test it!
    2. Phone call
    ```
 
-4. If you have the Duo Mobile app, you can approve a **Push** notification from your phone, or use a passcode from the app.
+3. Choose to approve a **Push** notification or enter a passcode from the Duo Mobile app.
 
-After completing this step, you should be logged into your server!
+If successful, you will be logged into your server!
 
 ---
 
 ### **Summary**
-Here’s a quick recap of what you did:
-1. Installed Duo on your Ubuntu server.
-2. Created a Duo account and obtained the necessary keys.
-3. Configured your server to use Duo for SSH logins.
-4. Set up Duo Mobile on your phone.
-5. Tested the Duo authentication process.
 
-Now, every time you log in to your server via SSH, you’ll need to enter your password and approve a second factor through Duo, making your server more secure.
+In this guide, you:
+1. Installed Duo on your Ubuntu server.
+2. Configured Duo with either the `login_duo.conf` or `pam_duo.conf` file.
+3. Set up SSH to require Duo 2FA using either direct Duo authentication (via `ForceCommand` with `login_duo.conf`) or through PAM (`pam_duo.conf`).
+4. Installed and linked Duo Mobile on your phone.
+5. Tested Duo 2FA with a successful SSH login.
+
+Your server is now secured with Duo Two-Factor Authentication, adding an extra layer of protection to your SSH access.
 
 ---
 
-This guide is written to be as beginner-friendly as possible, with clear steps for each part of the setup. If you follow this process, you should be able to set up Duo Two-Factor Authentication on your Ubuntu server without any issues!
+### **Security Considerations**
+
+- **File Permissions**: Always ensure proper file permissions to protect sensitive configuration files. For example, both the `sshd_config` file and `login_duo.conf` or `pam_duo.conf` should have **600** permissions to limit access.
+  
+  Example:
+  ```bash
+  sudo chmod 600 /etc/ssh/sshd_config
+  sudo chmod 600 /etc/duo/login_duo.conf
+  sudo chmod 600 /etc/duo/pam_duo.conf
+  ```
+
+- **Backup**: Always back up your server configuration before making changes, especially when disabling PAM or modifying SSH settings.
+
+This setup ensures that Duo is the **primary authentication method** for SSH access, providing an additional layer of security for your Ubuntu server.
+
+
+
 🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥
 To configure SSH login notifications with **Pushbullet** and **ForceCommand** (which is used to enforce a specific command when someone logs in via SSH), we can modify the process slightly to ensure that the notification script runs as the first thing on every SSH login. This approach uses the `ForceCommand` directive in the SSH configuration to execute the notification script automatically for every SSH login.
 
