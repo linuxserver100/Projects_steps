@@ -8783,9 +8783,7 @@ sudo make install
 ### Step 3: Configure Duo with Your API Credentials
 1. Create a configuration directory for Duo:
 
-```bash
-sudo mkdir -p /etc/duo
-```
+
 
 2. Create the Duo PAM configuration file:
 
@@ -8793,14 +8791,7 @@ sudo mkdir -p /etc/duo
 sudo nano /etc/duo/pam_duo.conf
 ```
 
-3. Add your **Integration Key**, **Secret Key**, and **API Hostname** to the file. Replace the placeholder values with your actual Duo credentials:
-
-```ini
-[duo]
-ikey = <Your Integration Key>
-skey = <Your Secret Key>
-host = <Your API Hostname>
-```
+3. replaceyour respective keys with the respective values 
 
 4. Save and close the file.
 
