@@ -8913,18 +8913,17 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 
 🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥
-
-Certainly! Here's an updated guide that uses the official **Pushbullet app** and package installation (without relying on Python) for sending SSH login notifications with OTP approval via Pushbullet on Linux.
+.Certainly! Here’s the updated guide with **manual installation steps for Pushbullet** without using the `pushbullet-cli` package. Instead, we’ll use a direct approach for interacting with the Pushbullet API via `curl` and `jq` to send and receive notifications.
 
 ---
 
-### **Updated Guide for SSH Login with OTP and Approval via Pushbullet on Linux**
+### **Updated Guide for SSH Login with OTP and Approval via Pushbullet on Linux (Manual Installation)**
 
 ---
 
 ### **Step 1: Install SSH Server (if not installed)**
 
-To begin, ensure that OpenSSH is installed and configured on your Ubuntu server. If SSH is not already installed, follow the steps below:
+Ensure that OpenSSH is installed and configured on your Ubuntu server. If SSH is not already installed, follow the steps below:
 
 ```bash
 sudo apt update
@@ -8954,29 +8953,16 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
 
 ---
 
-### **Step 3: Install the Pushbullet CLI on Your Ubuntu Server**
+### **Step 3: Install Dependencies on Your Ubuntu Server**
 
-You can install the official **Pushbullet CLI** tool, `pushbullet-cli`, directly from your package manager:
+You will use `curl` and `jq` to interact with the Pushbullet API. Follow the steps below to install the required tools:
 
-1. **Install required dependencies**:
-   - To install `pushbullet-cli`, you’ll need `curl` (to send HTTP requests to the Pushbullet API):
+1. **Install `curl` and `jq`**:
+   These tools are required to send HTTP requests to the Pushbullet API and process the JSON responses.
 
    ```bash
    sudo apt update
    sudo apt install curl jq
-   ```
-
-2. **Install the official `pushbullet-cli` tool**:
-   - You can install the official **Pushbullet CLI** using `npm` (Node.js package manager). First, ensure Node.js is installed:
-
-   ```bash
-   sudo apt install nodejs npm
-   ```
-
-   - Install `pushbullet-cli` globally:
-
-   ```bash
-   sudo npm install -g pushbullet-cli
    ```
 
 ---
@@ -9012,8 +8998,13 @@ You can install the official **Pushbullet CLI** tool, `pushbullet-cli`, directly
    # Pushbullet notification content
    MESSAGE="SSH login attempt detected on $(hostname) from IP $LOGIN_IP.\nDo you approve this login attempt?"
 
-   # Send Pushbullet notification with actionable options (Yes/No)
-   pushbullet --token $ACCESS_TOKEN --device $DEVICE_ID --message "$MESSAGE"
+   # Send Pushbullet notification with a link for approval
+   curl -u $ACCESS_TOKEN: \
+        -X POST https://api.pushbullet.com/v2/pushes \
+        -d type="note" \
+        -d title="SSH Login Attempt" \
+        -d body="$MESSAGE" \
+        -d device_iden="$DEVICE_ID"
 
    # Notify the user on the terminal that the request has been sent to their device
    echo "Approval request has been sent to your second device (via Pushbullet). Please respond on your device."
@@ -9050,9 +9041,9 @@ You can install the official **Pushbullet CLI** tool, `pushbullet-cli`, directly
 
    **Explanation**:
    - **OTP Generation**: The script generates a 6-digit OTP using `shuf`.
-   - **Pushbullet Notification**: Sends a notification via Pushbullet asking the user to approve or deny the login attempt.
-   - **Approval Handling**: The script continuously checks for approval/denial responses.
-   - **OTP Verification**: Once approved, the user enters the OTP. If the OTP is correct, access is granted; if incorrect, access is denied.
+   - **Pushbullet Notification**: The script sends a notification using `curl` to the Pushbullet API, asking the user to approve or deny the login attempt.
+   - **Approval Handling**: The script continuously checks for approval/denial responses from Pushbullet.
+   - **OTP Verification**: If the login is approved, the user is prompted to enter the OTP. If the OTP is correct, access is granted; if incorrect, access is denied.
 
 3. **Save and exit the editor**:
    - Press `CTRL + X` to exit.
@@ -9157,7 +9148,7 @@ To ensure that the script runs automatically during SSH login, configure SSH to 
 
 ### **Conclusion**
 
-This updated guide provides a streamlined SSH login process with OTP and approval via Pushbullet notifications on Linux, using the official **Pushbullet CLI** tool without requiring Python. This enhances security by adding a second layer of authentication and offers a user-friendly approval process directly from your second device.
+This updated guide provides a streamlined SSH login process with OTP and approval via Pushbullet notifications on Linux, using manual **Pushbullet API integration** via `curl` and `jq`. This enhances security by adding a second layer of authentication and offers a user-friendly approval process directly from your second device.
 
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
