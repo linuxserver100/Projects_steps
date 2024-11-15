@@ -8913,274 +8913,317 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 
 🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥
-..Certainly! Below is the revised version of the guide, with added instructions for obtaining the Pushbullet **Access Token** and **Device ID (Android ID)**, and the setup is entirely manual without requiring the installation of any additional packages.
+Sure! Below is a detailed, step-by-step guide on how to implement a PHP-based SSH login approval system with Pushbullet notifications. The implementation involves a PHP web service for the approval/denial process, a Bash script to handle SSH login requests, and proper configuration for the web server. Let’s go through each part, ensuring there are no steps skipped.
 
 ---
 
-### **Updated Guide for SSH Login with OTP and Approval via Pushbullet on Linux (Manual Installation)**
+## Step 1: PHP Web Service Setup
 
----
+### **1. Install PHP and Apache Web Server**
 
-### **Step 1: Install SSH Server (if not installed)**
+Ensure that your server has PHP and Apache installed.
 
-Ensure that OpenSSH is installed and configured on your Ubuntu server. If SSH is not already installed, follow the steps below:
-
+#### Install Apache
 ```bash
 sudo apt update
-sudo apt install openssh-server
+sudo apt install apache2
 ```
 
-This will install the OpenSSH server, allowing remote SSH access to your server.
+#### Install PHP
+```bash
+sudo apt install php libapache2-mod-php
+```
 
----
+#### Restart Apache to load the PHP module
+```bash
+sudo systemctl restart apache2
+```
 
-### **Step 2: Set Up Pushbullet Account**
+#### Verify PHP Installation
+Create a test file to verify the installation of PHP:
+```bash
+sudo nano /var/www/html/info.php
+```
+Add the following content:
+```php
+<?php phpinfo(); ?>
+```
+Navigate to `http://your-server-ip/info.php` in your browser to verify the PHP setup.
 
-1. **Go to Pushbullet**:
-   - Open [Pushbullet](https://www.pushbullet.com) in your web browser.
+### **2. Create PHP Web Application for SSH Login Approval**
 
-2. **Sign up for a Pushbullet account**:
-   - If you don’t have a Pushbullet account, sign up using either your Google or Facebook account.
+We will create two PHP files: `approve_login.php` for handling the login approval form, and `status.php` to return the approval status.
 
-3. **Obtain the Pushbullet API Access Token**:
-   - Once logged in, go to the [Pushbullet settings page](https://www.pushbullet.com/#settings).
-   - Scroll down to the **Access Tokens** section and click on **Create Access Token**.
-   - Copy the generated access token. You’ll need it in the script for authentication.
+#### `approve_login.php`
+This file will display the login attempt details and provide buttons for the user to approve or deny the login.
 
----
-
-### **Step 3: Get Your Device ID (Android ID)**
-
-1. **Install Pushbullet on your Android device**:
-   - Download and install the **Pushbullet app** from the [Google Play Store](https://play.google.com/store/apps/details?id=com.pushbullet.android).
-
-2. **Sign in to Pushbullet**:
-   - Open the app and sign in using the same account that you used to generate your **Access Token**.
-
-3. **Obtain your device ID**:
-   - To get your Android device’s **device ID**, you can use the Pushbullet API:
-     - **Option 1**: Use the following command to fetch your device ID:
-       ```bash
-       curl -u YOUR_ACCESS_TOKEN: https://api.pushbullet.com/v2/devices
-       ```
-     - This command will return a JSON response containing details about your devices. Look for the `"iden"` field for the device ID of your Android phone.
-
-     **Example Output**:
-     ```json
-     {
-       "active": true,
-       "iden": "ujz8lg23g8x8s9m5n7q9",
-       "nickname": "My Android Phone",
-       "model": "Samsung Galaxy",
-       "type": "device"
-     }
-     ```
-     In this case, `"ujz8lg23g8x8s9m5n7q9"` is your **device ID**.
-
----
-
-### **Step 4: Install Dependencies on Your Ubuntu Server**
-
-Ensure that you have **`curl`** and **`jq`** installed on your server to interact with the Pushbullet API. If you don’t have them already, you can install them manually by downloading the binaries (no package manager required).
-
-1. **Download `curl` and `jq` binaries**:
-
-   - **Download `curl`**:
-     - Visit [curl download page](https://curl.haxx.se/download.html) and download the appropriate version for Linux.
-     - Extract and install manually according to the instructions provided on the website.
-
-   - **Download `jq`**:
-     - Visit the [jq download page](https://stedolan.github.io/jq/download/) and download the appropriate binary for your system.
-     - Follow the installation instructions provided on the page.
-
-   **Note**: Both `curl` and `jq` can also be compiled from source if you're unable to use package management.
-
----
-
-### **Step 5: Create the SSH Login Script with OTP and Pushbullet Approval**
-
-1. **Create the script file**:
-
-   Open a new script file for editing using your favorite text editor:
-
+1. Create the file:
    ```bash
-   nano /home/your_username/ssh-login-notify.sh
+   sudo nano /var/www/html/approve_login.php
    ```
 
-2. **Write the script**:
+2. Paste the following PHP code:
 
-   Here's the updated script that generates an OTP, sends a Pushbullet notification for approval, and processes the user's response:
+```php
+<?php
+session_start();
 
+// Initialize session variables if not set
+if (!isset($_SESSION['approval_status'])) {
+    $_SESSION['approval_status'] = null;
+    $_SESSION['user'] = '';
+    $_SESSION['ip'] = '';
+}
+
+// Handle approval or denial via POST request
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $approval = $_POST['approval'];
+    $user = $_POST['user'];
+    $ip = $_POST['ip'];
+
+    // Save approval status to session
+    $_SESSION['approval_status'] = $approval;
+    $_SESSION['user'] = $user;
+    $_SESSION['ip'] = $ip;
+
+    echo "Your choice to $approval the login attempt has been recorded.";
+    exit;
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH Login Attempt</title>
+</head>
+<body>
+    <h1>SSH Login Attempt Detected</h1>
+    <p>User: <?php echo $_SESSION['user']; ?> is attempting to log in from IP: <?php echo $_SESSION['ip']; ?>.</p>
+    <p>Do you approve this login attempt?</p>
+
+    <form method="POST">
+        <input type="hidden" name="user" value="<?php echo $_SESSION['user']; ?>">
+        <input type="hidden" name="ip" value="<?php echo $_SESSION['ip']; ?>">
+        <input type="submit" name="approval" value="Yes">
+        <input type="submit" name="approval" value="No">
+    </form>
+</body>
+</html>
+```
+
+### **Explanation**:
+- This page displays the SSH login attempt details and provides buttons to approve or deny the login.
+- It stores the approval status, username, and IP address in the session.
+
+#### `status.php`
+This file will return the current approval status as a JSON object when requested by the Bash script.
+
+1. Create the file:
    ```bash
-   #!/bin/bash
-
-   # Pushbullet API Access Token
-   ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
-   DEVICE_ID="YOUR_DEVICE_ID"  # Obtain this from Pushbullet API or settings page
-
-   # Generate a 6-digit OTP (One-Time Password)
-   OTP=$(shuf -i 100000-999999 -n 1)
-
-   # Get the username and IP address of the SSH login attempt
-   LOGIN_USER=$(whoami)
-   LOGIN_IP=$(echo $SSH_CONNECTION | awk '{print $1}')
-
-   # Pushbullet notification content
-   MESSAGE="SSH login attempt detected on $(hostname) from IP $LOGIN_IP.\nDo you approve this login attempt?"
-
-   # Send Pushbullet notification with a link for approval
-   curl -u $ACCESS_TOKEN: \
-        -X POST https://api.pushbullet.com/v2/pushes \
-        -d type="note" \
-        -d title="SSH Login Attempt" \
-        -d body="$MESSAGE" \
-        -d device_iden="$DEVICE_ID"
-
-   # Notify the user on the terminal that the request has been sent to their device
-   echo "Approval request has been sent to your second device (via Pushbullet). Please respond on your device."
-
-   # Wait for approval response from the Pushbullet notification
-   while :; do
-     # Check Pushbullet for user response (approve or deny)
-     RESPONSE=$(curl -s -u $ACCESS_TOKEN: "https://api.pushbullet.com/v2/pushes?active=true&target_device_iden=$DEVICE_ID" | jq -r '.pushes[0].action')
-
-     # If the user taps "approve", verify the OTP
-     if [ "$RESPONSE" == "approve" ]; then
-       echo "Login approved. Please enter the OTP sent to your device:"
-       read USER_OTP
-
-       # Verify if the OTP entered by the user matches the generated OTP
-       if [ "$USER_OTP" == "$OTP" ]; then
-         echo "OTP verified. Access granted."
-         # Proceed to the user's shell
-         exec /bin/bash
-       else
-         echo "Invalid OTP. Access denied."
-         exit 1
-       fi
-     # If the user taps "deny", deny access
-     elif [ "$RESPONSE" == "deny" ]; then
-       echo "Access denied by user."
-       exit 1
-     fi
-
-     # Sleep for a short duration to avoid busy-waiting (checking every 2 seconds)
-     sleep 2
-   done
+   sudo nano /var/www/html/status.php
    ```
 
-   **Explanation**:
-   - **OTP Generation**: The script generates a 6-digit OTP using `shuf`.
-   - **Pushbullet Notification**: The script sends a notification using `curl` to the Pushbullet API, asking the user to approve or deny the login attempt.
-   - **Approval Handling**: The script continuously checks for approval/denial responses from Pushbullet.
-   - **OTP Verification**: If the login is approved, the user is prompted to enter the OTP. If the OTP is correct, access is granted; if incorrect, access is denied.
+2. Add the following code:
 
-3. **Save and exit the editor**:
-   - Press `CTRL + X` to exit.
-   - Press `Y` to confirm saving the changes.
-   - Press `Enter` to confirm the file name.
+```php
+<?php
+session_start();
 
-4. **Make the script executable**:
+// Return the current approval status in JSON format
+echo json_encode([
+    'approved' => $_SESSION['approval_status'],
+    'user' => $_SESSION['user'],
+    'ip' => $_SESSION['ip']
+]);
+?>
+```
 
-   Change the script’s permissions to make it executable:
-
-   ```bash
-   chmod +x /home/your_username/ssh-login-notify.sh
-   ```
-
-5. **Test the script manually**:
-
-   Before integrating it with SSH, test it manually by running:
-
-   ```bash
-   /home/your_username/ssh-login-notify.sh
-   ```
-
-   You should receive a Pushbullet notification on your second device asking for approval. After tapping **Yes**, the script will prompt you for the OTP, and if correct, access will be granted.
+### **Explanation**:
+- This file queries the session for the approval status and returns it as a JSON response.
 
 ---
 
-### **Step 6: Configure SSH to Use the ForceCommand**
+## Step 2: Bash Script for SSH Login Handling
 
-To ensure that the script runs automatically during SSH login, configure SSH to use the `ForceCommand` option.
+Now we will create the Bash script that will handle the SSH login process, send notifications via Pushbullet, and poll the approval status from the PHP service.
 
-1. **Edit the SSH configuration file**:
+### **1. Bash Script (`ssh_approval.sh`)**
 
-   Open the SSH configuration file for editing:
+This script will:
+- Send a Pushbullet notification with a link to the PHP approval page.
+- Poll the `status.php` page to check the approval status.
+- Prompt the user for an OTP if the login is approved.
 
+1. Create the Bash script file:
+   ```bash
+   sudo nano /usr/local/bin/ssh_approval.sh
+   ```
+
+2. Add the following code:
+
+```bash
+#!/bin/bash
+
+# Pushbullet API Access Token and Device ID (Replace with actual values)
+ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
+DEVICE_ID="YOUR_DEVICE_ID"  # Obtain this from the Pushbullet API or settings page
+
+# Generate a 6-digit OTP (One-Time Password)
+OTP=$(shuf -i 100000-999999 -n 1)
+
+# Get the username and IP address of the SSH login attempt
+LOGIN_USER=$(whoami)
+LOGIN_IP=$(echo $SSH_CONNECTION | awk '{print $1}')
+
+# Pushbullet notification content
+MESSAGE="SSH login attempt detected on $(hostname) from IP $LOGIN_IP.\nDo you approve this login attempt?"
+
+# Create a link to the PHP approval page
+APPROVE_URL="http://localhost/approve_login.php?user=$LOGIN_USER&ip=$LOGIN_IP"
+
+# Send Pushbullet notification with the approval link
+curl -u $ACCESS_TOKEN: \
+     -X POST https://api.pushbullet.com/v2/pushes \
+     -d type="note" \
+     -d title="SSH Login Attempt" \
+     -d body="$MESSAGE" \
+     -d device_iden="$DEVICE_ID" \
+     -d "url=$APPROVE_URL" \
+     -d "url_title=Approve Login"
+
+# Notify the user on the terminal that the request has been sent to their device
+echo "Approval request has been sent to your second device (via Pushbullet). Please approve or deny the login attempt on your device."
+
+# Function to check the approval status from the web service
+check_approval_status() {
+    # Query the PHP web service for the approval status
+    RESPONSE=$(curl -s http://localhost/status.php)
+
+    # Parse the response using jq
+    APPROVAL=$(echo $RESPONSE | jq -r '.approved')
+
+    echo "$APPROVAL"
+}
+
+# Wait for the user to approve or deny the login attempt
+while :; do
+    # Check approval status from the web service
+    RESPONSE=$(check_approval_status)
+
+    if [ "$RESPONSE" == "Yes" ]; then
+        echo "Login approved. Please enter the OTP sent to your device:"
+        read USER_OTP
+
+        # Verify if the OTP entered by the user matches the generated OTP
+        if [ "$USER_OTP" == "$OTP" ]; then
+            echo "OTP verified. Access granted."
+            # Proceed to the user's shell
+            exec /bin/bash
+        else
+            echo "Invalid OTP. Access denied."
+            exit 1
+        fi
+    elif [ "$RESPONSE" == "No" ]; then
+        echo "Access denied by user."
+        exit 1
+    else
+        echo "Waiting for user to approve or deny the login attempt..."
+    fi
+
+    # Sleep for a short duration to avoid busy-waiting
+    sleep 2
+done
+```
+
+### **Explanation**:
+- The script sends a Pushbullet notification with a link to the `approve_login.php` page.
+- It checks the approval status from the `status.php` page by polling at regular intervals.
+- If approved, it asks the user for an OTP and grants access if the OTP is correct.
+- If denied, the script terminates with "Access Denied."
+
+### **2. Install `jq` for JSON parsing**
+If `jq` is not already installed, install it using:
+
+```bash
+sudo apt install jq
+```
+
+---
+
+## Step 3: Configure the SSH Server to Use the Approval Script
+
+To ensure the Bash script is executed when an SSH login attempt is made, we need to modify the SSH configuration.
+
+### **1. Modify `/etc/ssh/sshrc` or `/etc/ssh/sshd_config`**
+
+- **Option 1: Modify `/etc/ssh/sshrc`** (Run the script when any user logs in via SSH)
+
+1. Open `/etc/ssh/sshrc` for editing:
+   ```bash
+   sudo nano /etc/ssh/sshrc
+   ```
+
+2. Add the following line to run the script:
+   ```bash
+   /usr/local/bin/ssh_approval.sh
+   ```
+
+- **Option 2: Modify `/etc/ssh/sshd_config`** (Use a more targeted approach)
+
+1. Open `/etc/ssh/sshd_config`:
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-2. **Add the ForceCommand directive**:
-
-   Add the following line to the end of the file:
-
+2. Add the following line to force running the script when a user logs in:
    ```bash
-   ForceCommand /home/your_username/ssh-login-notify.sh
+   ForceCommand /usr/local/bin/ssh_approval.sh
    ```
 
-   This ensures the script is executed every time someone logs in via SSH.
-
-3. **Save and exit**:
-   - Press `CTRL + X` to exit.
-   - Press `Y` to confirm saving the changes.
-   - Press `Enter` to confirm.
-
-4. **Restart the SSH service**:
-
-   Restart the SSH service to apply the changes:
-
+3. Restart SSH:
    ```bash
-   sudo systemctl restart ssh
+   sudo systemctl restart sshd
    ```
+
+### **2. Restart Apache Web Server** (If not already restarted)
+```bash
+sudo systemctl restart apache2
+```
 
 ---
 
-### **Step 7: Test the Setup**
+## Step 4: Test the System
 
-1. **Log out from your server**:
+1. **SSH Login Attempt**:
+   - Try to log in via SSH from a
 
-   ```bash
-   exit
-   ```
+ different device or session.
+   
+2. **Pushbullet Notification**:
+   - You will receive a notification on your device with the approval link.
+   
+3. **Approve or Deny the Login**:
+   - Click the link in the Pushbullet notification and approve or deny the login.
 
-2. **Log in again via SSH**:
-
-   Open a new terminal session or device and attempt to SSH into the server:
-
-   ```bash
-   ssh your_username@your_server_ip
-   ```
-
-3. **Check your second device**:
-
-   - You should receive a Pushbullet notification on your second device asking you to approve or deny the login attempt.
-   - After tapping **Yes**, the script will prompt you for the OTP. If the OTP is correct, access will be granted.
+4. **Final Decision**:
+   - Based on your decision, the login attempt will either proceed (if approved and OTP verified) or be denied.
 
 ---
 
-###
+## Additional Considerations:
 
- **Troubleshooting Tips**
+1. **Security**:
+   - Make sure the PHP pages (`approve_login.php` and `status.php`) are secured to prevent unauthorized access (e.g., by adding authentication or IP restrictions).
+   
+2. **HTTPS**:
+   - For production, configure your Apache server to use HTTPS to secure communication between the user’s device and the web server.
 
-- **No Pushbullet notification?**
-  - Double-check the **Pushbullet API token** and **device ID**. Ensure your device is connected and receiving notifications.
-  
-- **Invalid OTP?**
-  - Ensure that the OTP displayed on the device matches the one entered during login.
+3. **Persistent Session**:
+   - For a production environment, you may want to store the session data in a database or a more persistent store rather than relying on PHP sessions.
 
-- **SSH login not working?**
-  - Verify that `ForceCommand` is correctly set in the SSH configuration and that the script is executable.
-
-- **No response from Pushbullet?**
-  - Ensure Pushbullet is running on the second device and that it is receiving notifications.
-
----
-
-### **Conclusion**
-
-This guide walks you through the manual setup of SSH login with OTP and approval via Pushbullet notifications on Linux, using **`curl`** and **`jq`** without requiring package installation. By generating OTPs and sending approval requests via Pushbullet, this method adds an extra layer of security to SSH logins.
+This should give you a complete, working system to approve or deny SSH login attempts with the added security of Pushbullet notifications and OTP verification.
 
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
