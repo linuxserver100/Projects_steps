@@ -8736,7 +8736,188 @@ AllowUsers youruser
 
 This updated guide should now match your email-based verification setup and integrate it into your SSH login process, with email verification being handled through a URL and automatic deletion of verified users from the database.
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰�🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥😊🫥😊🫥🫥😊😊🫥🫥😊🫥😊🫥😊🫥😊🫥☺️🫥😊🫥☺️🫥😊🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥
+Certainly! Below is the rewritten guide, maintaining the original structure and ensuring that both **SMS passcode** and **push notification** options trigger correctly during SSH login with Duo Security.
 
+---
+
+### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Duo (SMS and Push Authentication)
+
+This guide will help you implement **Two-Factor Authentication (2FA)** on an **Ubuntu server** using **Duo Security** with **SMS passcodes** and **push notifications**, and ensure that Duo 2FA triggers SMS authentication during SSH login.
+
+### Prerequisites
+- **Ubuntu server** with **SSH** configured.
+- **Duo account** with integration keys (Integration Key, Secret Key, and API hostname), available from the **Duo Admin Panel**.
+- **SSH key-based authentication** already set up.
+- **Mobile device** to receive push notifications or SMS passcodes.
+- **Firewall settings** allowing SSH connections.
+
+### Step 1: Install Dependencies
+Install the necessary packages:
+
+```bash
+sudo apt update
+sudo apt install build-essential libpam-dev libssl-dev libtool wget
+```
+
+### Step 2: Download and Install Duo Unix Package
+1. Download the latest Duo Unix package from Duo Security:
+
+```bash
+wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
+```
+
+2. Extract the downloaded package:
+
+```bash
+tar zxf duo_unix-latest.tar.gz
+cd duo_unix-*
+```
+
+3. Configure and compile the Duo Unix PAM module:
+
+```bash
+./configure --with-pam --prefix=/tmp
+sudo make install
+```
+
+### Step 3: Configure Duo with Your API Credentials
+1. Create a configuration directory for Duo:
+
+```bash
+sudo mkdir -p /etc/duo
+```
+
+2. Create the Duo PAM configuration file:
+
+```bash
+sudo nano /etc/duo/pam_duo.conf
+```
+
+3. Add your **Integration Key**, **Secret Key**, and **API Hostname** to the file. Replace the placeholder values with your actual Duo credentials:
+
+```ini
+[duo]
+ikey = <Your Integration Key>
+skey = <Your Secret Key>
+host = <Your API Hostname>
+```
+
+4. Save and close the file.
+
+### Step 4: Configure SSH for Public Key Authentication
+1. Open the SSH configuration file:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+2. Ensure the following settings are configured:
+
+```bash
+PubkeyAuthentication yes
+PasswordAuthentication no
+AuthenticationMethods publickey,keyboard-interactive
+ChallengeResponseAuthentication yes
+UsePAM yes
+UseDNS no
+```
+
+3. Save and close the file.
+
+### Step 5: Configure PAM for Duo Authentication
+1. Open the PAM configuration for SSH:
+
+```bash
+sudo nano /etc/pam.d/sshd
+```
+
+2. Add the following line to the top of the file to ensure the Duo PAM module is invoked for authentication:
+
+```bash
+auth required /lib64/security/pam_duo.so
+```
+
+If you’re on a 32-bit system or the module is located in `/lib/security`, adjust accordingly.
+
+Here’s an example of what the `sshd` PAM file should look like:
+
+```bash
+# @include common-auth
+auth required /lib64/security/pam_duo.so
+auth [success=1 default=ignore] /lib64/security/pam_duo.so
+auth requisite pam_deny.so
+auth required pam_permit.so
+```
+
+3. Save and close the file.
+
+### Step 6: Restart SSH Service
+To apply the changes, restart the SSH service:
+
+```bash
+sudo systemctl restart sshd
+```
+
+### Step 7: Set Up SSH Key Authentication (if not done)
+1. If you have not already set up SSH keys, generate an SSH key pair:
+
+```bash
+ssh-keygen -t rsa
+```
+
+2. Copy the public key to the server:
+
+```bash
+ssh-copy-id user@your_server_ip
+```
+
+### Step 8: Enroll a Device with Duo for SMS or Push Authentication
+1. SSH into your server for the first time after enabling Duo 2FA:
+
+```bash
+ssh user@your_server_ip
+```
+
+2. During your first login attempt, Duo will prompt you to enroll your device. Follow the instructions to enroll your device for authentication. You can choose either **push notification** or **SMS passcode** as your second factor.
+
+   - **Push Notification**: Duo will send a push notification to your mobile device.
+   - **SMS Passcode**: Duo will send a one-time passcode to your mobile device via SMS.
+
+### Step 9: Test the 2FA Login
+1. After enrolling a device, attempt to SSH into the server again:
+
+```bash
+ssh user@your_server_ip
+```
+
+2. On login, Duo will prompt you to approve a **push notification** or enter an **SMS passcode** from your enrolled device.
+
+### Step 10: Optional Configuration for Duo User Group (for Specific Users)
+To apply Duo 2FA only to specific users or groups, you can modify the `/etc/pam.d/sshd` file.
+
+For example, to apply Duo 2FA only to a specific user group (`sshusers`), add the `group` option to the `pam_duo.so` line:
+
+```bash
+auth required pam_duo.so group=sshusers
+```
+
+This will apply Duo 2FA only to users in the `sshusers` group.
+
+### Conclusion
+By following these steps, you have successfully implemented **Two-Factor Authentication (2FA)** for SSH on your Ubuntu server using **Duo Security**. Now, your SSH logins are secured with both your SSH key (or password) and a second factor of authentication, either a push notification or an SMS passcode.
+
+This configuration should now trigger the **SMS passcode** option for Duo during SSH login, ensuring your server is secured against unauthorized access.
+
+---
+
+### Notes:
+- Ensure that you’re using the correct path (`/lib64/security` or `/lib/security`) depending on your system architecture.
+- If Duo push notifications or SMS passcodes are not triggering correctly, verify that the Duo configuration file is set up properly and that your API credentials are accurate.
+- You can test your configuration by logging into the server from another machine and verifying that the Duo prompt for push/SMS appears.
+
+--- 
+
+This guide is now ready to implement Duo 2FA with both SMS and push authentication options, ensuring that Duo will trigger SMS passcode or push notification as part of the authentication flow during SSH login.
 
 
 
