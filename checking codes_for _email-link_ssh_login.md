@@ -8913,80 +8913,43 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 
 🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥
-Sure! Below is a detailed, step-by-step guide on how to implement a PHP-based SSH login approval system with Pushbullet notifications. The implementation involves a PHP web service for the approval/denial process, a Bash script to handle SSH login requests, and proper configuration for the web server. Let’s go through each part, ensuring there are no steps skipped.
+Certainly! Below is a revised version of the entire integration, focusing on properly fetching the approval status after it is set in the PHP application, and ensuring that the Bash script correctly handles both the approval and denial scenarios.
 
 ---
 
-## Step 1: PHP Web Service Setup
+### **Revised PHP and Bash Integration**
 
-### **1. Install PHP and Apache Web Server**
+---
 
-Ensure that your server has PHP and Apache installed.
+### **Step 1: PHP Web Service Setup**
 
-#### Install Apache
-```bash
-sudo apt update
-sudo apt install apache2
-```
+We will use two PHP files: one for handling the login approval (`approve_login.php`) and another to check the current status (`status.php`).
 
-#### Install PHP
-```bash
-sudo apt install php libapache2-mod-php
-```
+#### **1. PHP Web Application for SSH Login Approval**
 
-#### Restart Apache to load the PHP module
-```bash
-sudo systemctl restart apache2
-```
+1. **Create `approve_login.php`:**
 
-#### Verify PHP Installation
-Create a test file to verify the installation of PHP:
-```bash
-sudo nano /var/www/html/info.php
-```
-Add the following content:
-```php
-<?php phpinfo(); ?>
-```
-Navigate to `http://your-server-ip/info.php` in your browser to verify the PHP setup.
-
-### **2. Create PHP Web Application for SSH Login Approval**
-
-We will create two PHP files: `approve_login.php` for handling the login approval form, and `status.php` to return the approval status.
-
-#### `approve_login.php`
-This file will display the login attempt details and provide buttons for the user to approve or deny the login.
-
-1. Create the file:
-   ```bash
-   sudo nano /var/www/html/approve_login.php
-   ```
-
-2. Paste the following PHP code:
+This file will allow the admin to approve or deny the login attempt via a simple form.
 
 ```php
 <?php
 session_start();
 
-// Initialize session variables if not set
-if (!isset($_SESSION['approval_status'])) {
-    $_SESSION['approval_status'] = null;
-    $_SESSION['user'] = '';
-    $_SESSION['ip'] = '';
-}
+// Predefined user and IP for the login attempt
+$_SESSION['user'] = "testuser";  // Set the predefined user
+$_SESSION['ip'] = "192.168.1.100";  // Set the predefined IP address
 
 // Handle approval or denial via POST request
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approval'])) {
     $approval = $_POST['approval'];
-    $user = $_POST['user'];
-    $ip = $_POST['ip'];
 
-    // Save approval status to session
+    // Save approval status to session (this will be used by the Bash script)
     $_SESSION['approval_status'] = $approval;
-    $_SESSION['user'] = $user;
-    $_SESSION['ip'] = $ip;
 
     echo "Your choice to $approval the login attempt has been recorded.";
+    exit;
+} else {
+    echo "No approval request received.";
     exit;
 }
 ?>
@@ -9003,29 +8966,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <p>User: <?php echo $_SESSION['user']; ?> is attempting to log in from IP: <?php echo $_SESSION['ip']; ?>.</p>
     <p>Do you approve this login attempt?</p>
 
-    <form method="POST">
+    <form method="POST" action="approve_login.php">
         <input type="hidden" name="user" value="<?php echo $_SESSION['user']; ?>">
         <input type="hidden" name="ip" value="<?php echo $_SESSION['ip']; ?>">
-        <input type="submit" name="approval" value="Yes">
-        <input type="submit" name="approval" value="No">
+        <button type="submit" name="approval" value="Yes">Approve</button>
+        <button type="submit" name="approval" value="No">Deny</button>
     </form>
 </body>
 </html>
 ```
 
-### **Explanation**:
-- This page displays the SSH login attempt details and provides buttons to approve or deny the login.
-- It stores the approval status, username, and IP address in the session.
+In this PHP code:
 
-#### `status.php`
-This file will return the current approval status as a JSON object when requested by the Bash script.
+- The predefined `user` and `ip` are stored in the session when the page loads.
+- The form allows the admin to approve or deny the login attempt.
+- When the form is submitted, the approval decision is saved in the session.
 
-1. Create the file:
-   ```bash
-   sudo nano /var/www/html/status.php
-   ```
+2. **Create `status.php`:**
 
-2. Add the following code:
+This file simply returns the current approval status stored in the PHP session in JSON format.
 
 ```php
 <?php
@@ -9033,55 +8992,42 @@ session_start();
 
 // Return the current approval status in JSON format
 echo json_encode([
-    'approved' => $_SESSION['approval_status'],
-    'user' => $_SESSION['user'],
-    'ip' => $_SESSION['ip']
+    'approved' => $_SESSION['approval_status'] ?? null,
+    'user' => $_SESSION['user'] ?? '',
+    'ip' => $_SESSION['ip'] ?? ''
 ]);
 ?>
 ```
 
-### **Explanation**:
-- This file queries the session for the approval status and returns it as a JSON response.
+This PHP script checks the session for the approval status and returns it as a JSON response.
 
 ---
 
-## Step 2: Bash Script for SSH Login Handling
+### **Step 2: Bash Script for SSH Login Handling**
 
-Now we will create the Bash script that will handle the SSH login process, send notifications via Pushbullet, and poll the approval status from the PHP service.
+This Bash script will interact with the PHP web service to check the approval status. If approved, it will prompt for an OTP to finalize the login.
 
-### **1. Bash Script (`ssh_approval.sh`)**
-
-This script will:
-- Send a Pushbullet notification with a link to the PHP approval page.
-- Poll the `status.php` page to check the approval status.
-- Prompt the user for an OTP if the login is approved.
-
-1. Create the Bash script file:
-   ```bash
-   sudo nano /usr/local/bin/ssh_approval.sh
-   ```
-
-2. Add the following code:
+#### **Create `ssh_approval.sh`:**
 
 ```bash
 #!/bin/bash
 
-# Pushbullet API Access Token and Device ID (Replace with actual values)
-ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
-DEVICE_ID="YOUR_DEVICE_ID"  # Obtain this from the Pushbullet API or settings page
+# Predefined values (user and IP)
+USER="testuser"  
+IP="192.168.1.100"  
 
 # Generate a 6-digit OTP (One-Time Password)
 OTP=$(shuf -i 100000-999999 -n 1)
 
-# Get the username and IP address of the SSH login attempt
-LOGIN_USER=$(whoami)
-LOGIN_IP=$(echo $SSH_CONNECTION | awk '{print $1}')
+# Pushbullet API Access Token and Device ID (Replace with actual values)
+ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
+DEVICE_ID="YOUR_DEVICE_ID"  
 
 # Pushbullet notification content
-MESSAGE="SSH login attempt detected on $(hostname) from IP $LOGIN_IP.\nDo you approve this login attempt?"
+MESSAGE="SSH login attempt detected on $(hostname) from IP $IP.\nDo you approve this login attempt?"
 
 # Create a link to the PHP approval page
-APPROVE_URL="http://localhost/approve_login.php?user=$LOGIN_USER&ip=$LOGIN_IP"
+APPROVE_URL="http://localhost/approve_login.php"
 
 # Send Pushbullet notification with the approval link
 curl -u $ACCESS_TOKEN: \
@@ -9110,9 +9056,9 @@ check_approval_status() {
 # Wait for the user to approve or deny the login attempt
 while :; do
     # Check approval status from the web service
-    RESPONSE=$(check_approval_status)
+    APPROVAL_STATUS=$(check_approval_status)
 
-    if [ "$RESPONSE" == "Yes" ]; then
+    if [ "$APPROVAL_STATUS" == "Yes" ]; then
         echo "Login approved. Please enter the OTP sent to your device:"
         read USER_OTP
 
@@ -9125,7 +9071,7 @@ while :; do
             echo "Invalid OTP. Access denied."
             exit 1
         fi
-    elif [ "$RESPONSE" == "No" ]; then
+    elif [ "$APPROVAL_STATUS" == "No" ]; then
         echo "Access denied by user."
         exit 1
     else
@@ -9137,14 +9083,17 @@ while :; do
 done
 ```
 
-### **Explanation**:
-- The script sends a Pushbullet notification with a link to the `approve_login.php` page.
-- It checks the approval status from the `status.php` page by polling at regular intervals.
-- If approved, it asks the user for an OTP and grants access if the OTP is correct.
-- If denied, the script terminates with "Access Denied."
+In this Bash script:
 
-### **2. Install `jq` for JSON parsing**
-If `jq` is not already installed, install it using:
+- The predefined `USER` and `IP` are used for the login attempt.
+- Pushbullet is used to send a notification with a link to the PHP approval page.
+- The script checks the approval status from the `status.php` endpoint.
+- If the user approves the login, the script prompts for an OTP.
+- If the OTP is correct, the login is allowed. If it's incorrect or denied, access is rejected.
+
+#### **Install `jq` for JSON parsing:**
+
+Ensure `jq` is installed to parse the JSON response from the PHP service:
 
 ```bash
 sudo apt install jq
@@ -9152,78 +9101,65 @@ sudo apt install jq
 
 ---
 
-## Step 3: Configure the SSH Server to Use the Approval Script
+### **Step 3: Configure the SSH Server to Use the Approval Script**
 
-To ensure the Bash script is executed when an SSH login attempt is made, we need to modify the SSH configuration.
+To run the Bash script during an SSH login, you can use the following methods:
 
-### **1. Modify `/etc/ssh/sshrc` or `/etc/ssh/sshd_config`**
+1. **Modify `/etc/ssh/sshrc`:**
 
-- **Option 1: Modify `/etc/ssh/sshrc`** (Run the script when any user logs in via SSH)
-
-1. Open `/etc/ssh/sshrc` for editing:
-   ```bash
-   sudo nano /etc/ssh/sshrc
-   ```
-
-2. Add the following line to run the script:
-   ```bash
-   /usr/local/bin/ssh_approval.sh
-   ```
-
-- **Option 2: Modify `/etc/ssh/sshd_config`** (Use a more targeted approach)
-
-1. Open `/etc/ssh/sshd_config`:
-   ```bash
-   sudo nano /etc/ssh/sshd_config
-   ```
-
-2. Add the following line to force running the script when a user logs in:
-   ```bash
-   ForceCommand /usr/local/bin/ssh_approval.sh
-   ```
-
-3. Restart SSH:
-   ```bash
-   sudo systemctl restart sshd
-   ```
-
-### **2. Restart Apache Web Server** (If not already restarted)
 ```bash
-sudo systemctl restart apache2
+sudo nano /etc/ssh/sshrc
+```
+
+Add the following line to execute the approval script:
+
+```bash
+/usr/local/bin/ssh_approval.sh
+```
+
+2. **Alternatively, modify `/etc/ssh/sshd_config`:**
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Add the following line:
+
+```bash
+ForceCommand /usr/local/bin/ssh_approval.sh
+```
+
+3. **Restart the SSH service:**
+
+```bash
+sudo systemctl restart sshd
 ```
 
 ---
 
-## Step 4: Test the System
+### **Step 4: Test the System**
 
 1. **SSH Login Attempt**:
-   - Try to log in via SSH from a
+   - Try logging in via SSH from a different device or terminal.
 
- different device or session.
-   
 2. **Pushbullet Notification**:
-   - You will receive a notification on your device with the approval link.
-   
+   - You will receive a notification with a link to approve or deny the login attempt.
+
 3. **Approve or Deny the Login**:
-   - Click the link in the Pushbullet notification and approve or deny the login.
+   - Click the link and approve or deny the login attempt.
 
 4. **Final Decision**:
-   - Based on your decision, the login attempt will either proceed (if approved and OTP verified) or be denied.
+   - If approved, enter the OTP to proceed. If denied, the login attempt will be rejected.
 
 ---
 
-## Additional Considerations:
+### **Additional Considerations:**
 
-1. **Security**:
-   - Make sure the PHP pages (`approve_login.php` and `status.php`) are secured to prevent unauthorized access (e.g., by adding authentication or IP restrictions).
-   
-2. **HTTPS**:
-   - For production, configure your Apache server to use HTTPS to secure communication between the user’s device and the web server.
+- **Security**: You should secure the PHP pages (e.g., by using authentication or IP whitelisting) to prevent unauthorized access.
+- **HTTPS**: It is recommended to use HTTPS in production for securing the communication between the web service and the Bash script.
+- **Persistent Sessions**: For a more robust solution, consider storing session data in a database for persistence across different sessions.
 
-3. **Persistent Session**:
-   - For a production environment, you may want to store the session data in a database or a more persistent store rather than relying on PHP sessions.
-
-This should give you a complete, working system to approve or deny SSH login attempts with the added security of Pushbullet notifications and OTP verification.
+This solution ensures that the PHP web service correctly handles the approval process, and the Bash script fetches the status to determine whether to grant or deny access based on the approval.
 
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
