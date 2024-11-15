@@ -8913,7 +8913,7 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 
 🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥
-.Certainly! Here’s the updated guide with **manual installation steps for Pushbullet** without using the `pushbullet-cli` package. Instead, we’ll use a direct approach for interacting with the Pushbullet API via `curl` and `jq` to send and receive notifications.
+..Certainly! Below is the revised version of the guide, with added instructions for obtaining the Pushbullet **Access Token** and **Device ID (Android ID)**, and the setup is entirely manual without requiring the installation of any additional packages.
 
 ---
 
@@ -8945,33 +8945,63 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
 3. **Obtain the Pushbullet API Access Token**:
    - Once logged in, go to the [Pushbullet settings page](https://www.pushbullet.com/#settings).
    - Scroll down to the **Access Tokens** section and click on **Create Access Token**.
-   - Copy the generated access token; you'll use this in the script later.
-
-4. **Identify your device**:
-   - Go to the **Devices** section in your Pushbullet settings or use the Pushbullet API to fetch your device ID.
-   - Each device that can receive notifications has a unique **Device ID**. You'll need this ID to target notifications to the correct device.
+   - Copy the generated access token. You’ll need it in the script for authentication.
 
 ---
 
-### **Step 3: Install Dependencies on Your Ubuntu Server**
+### **Step 3: Get Your Device ID (Android ID)**
 
-You will use `curl` and `jq` to interact with the Pushbullet API. Follow the steps below to install the required tools:
+1. **Install Pushbullet on your Android device**:
+   - Download and install the **Pushbullet app** from the [Google Play Store](https://play.google.com/store/apps/details?id=com.pushbullet.android).
 
-1. **Install `curl` and `jq`**:
-   These tools are required to send HTTP requests to the Pushbullet API and process the JSON responses.
+2. **Sign in to Pushbullet**:
+   - Open the app and sign in using the same account that you used to generate your **Access Token**.
 
-   ```bash
-   sudo apt update
-   sudo apt install curl jq
-   ```
+3. **Obtain your device ID**:
+   - To get your Android device’s **device ID**, you can use the Pushbullet API:
+     - **Option 1**: Use the following command to fetch your device ID:
+       ```bash
+       curl -u YOUR_ACCESS_TOKEN: https://api.pushbullet.com/v2/devices
+       ```
+     - This command will return a JSON response containing details about your devices. Look for the `"iden"` field for the device ID of your Android phone.
+
+     **Example Output**:
+     ```json
+     {
+       "active": true,
+       "iden": "ujz8lg23g8x8s9m5n7q9",
+       "nickname": "My Android Phone",
+       "model": "Samsung Galaxy",
+       "type": "device"
+     }
+     ```
+     In this case, `"ujz8lg23g8x8s9m5n7q9"` is your **device ID**.
 
 ---
 
-### **Step 4: Create the SSH Login Script with OTP and Approval via Pushbullet**
+### **Step 4: Install Dependencies on Your Ubuntu Server**
+
+Ensure that you have **`curl`** and **`jq`** installed on your server to interact with the Pushbullet API. If you don’t have them already, you can install them manually by downloading the binaries (no package manager required).
+
+1. **Download `curl` and `jq` binaries**:
+
+   - **Download `curl`**:
+     - Visit [curl download page](https://curl.haxx.se/download.html) and download the appropriate version for Linux.
+     - Extract and install manually according to the instructions provided on the website.
+
+   - **Download `jq`**:
+     - Visit the [jq download page](https://stedolan.github.io/jq/download/) and download the appropriate binary for your system.
+     - Follow the installation instructions provided on the page.
+
+   **Note**: Both `curl` and `jq` can also be compiled from source if you're unable to use package management.
+
+---
+
+### **Step 5: Create the SSH Login Script with OTP and Pushbullet Approval**
 
 1. **Create the script file**:
 
-   Open a new script file for editing using the `nano` text editor:
+   Open a new script file for editing using your favorite text editor:
 
    ```bash
    nano /home/your_username/ssh-login-notify.sh
@@ -9070,7 +9100,7 @@ You will use `curl` and `jq` to interact with the Pushbullet API. Follow the ste
 
 ---
 
-### **Step 5: Configure SSH to Use the ForceCommand**
+### **Step 6: Configure SSH to Use the ForceCommand**
 
 To ensure that the script runs automatically during SSH login, configure SSH to use the `ForceCommand` option.
 
@@ -9107,7 +9137,7 @@ To ensure that the script runs automatically during SSH login, configure SSH to 
 
 ---
 
-### **Step 6: Test the Setup**
+### **Step 7: Test the Setup**
 
 1. **Log out from your server**:
 
@@ -9130,7 +9160,9 @@ To ensure that the script runs automatically during SSH login, configure SSH to 
 
 ---
 
-### **Troubleshooting Tips**
+###
+
+ **Troubleshooting Tips**
 
 - **No Pushbullet notification?**
   - Double-check the **Pushbullet API token** and **device ID**. Ensure your device is connected and receiving notifications.
@@ -9148,7 +9180,7 @@ To ensure that the script runs automatically during SSH login, configure SSH to 
 
 ### **Conclusion**
 
-This updated guide provides a streamlined SSH login process with OTP and approval via Pushbullet notifications on Linux, using manual **Pushbullet API integration** via `curl` and `jq`. This enhances security by adding a second layer of authentication and offers a user-friendly approval process directly from your second device.
+This guide walks you through the manual setup of SSH login with OTP and approval via Pushbullet notifications on Linux, using **`curl`** and **`jq`** without requiring package installation. By generating OTPs and sending approval requests via Pushbullet, this method adds an extra layer of security to SSH logins.
 
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
