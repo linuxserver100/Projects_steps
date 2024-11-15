@@ -8914,12 +8914,11 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥
 
-.
-Sure! Below is an updated version of the guide for setting up SSH login with OTP authentication and Pushbullet-based approval. This guide also includes proper installation steps for the necessary packages, ensuring everything is up-to-date and uses official repositories.
+Certainly! Here's an updated guide that uses the official **Pushbullet app** and package installation (without relying on Python) for sending SSH login notifications with OTP approval via Pushbullet on Linux.
 
 ---
 
-### **Updated Guide for SSH Login with OTP and Approval via Pushbullet**
+### **Updated Guide for SSH Login with OTP and Approval via Pushbullet on Linux**
 
 ---
 
@@ -8955,33 +8954,30 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
 
 ---
 
-### **Step 3: Install Required Packages and Pushbullet CLI on Your Ubuntu Server**
+### **Step 3: Install the Pushbullet CLI on Your Ubuntu Server**
 
-1. **Install required utilities (`curl`, `jq`)**:
+You can install the official **Pushbullet CLI** tool, `pushbullet-cli`, directly from your package manager:
 
-   These utilities are needed to interact with the Pushbullet API and manipulate JSON data. To install them, run:
+1. **Install required dependencies**:
+   - To install `pushbullet-cli`, you’ll need `curl` (to send HTTP requests to the Pushbullet API):
 
    ```bash
    sudo apt update
    sudo apt install curl jq
    ```
 
-2. **Install `pushbullet-cli`**:
-
-   `pushbullet-cli` is a lightweight command-line tool to send notifications via the Pushbullet API. The official way to install it is to download it from its GitHub release page:
+2. **Install the official `pushbullet-cli` tool**:
+   - You can install the official **Pushbullet CLI** using `npm` (Node.js package manager). First, ensure Node.js is installed:
 
    ```bash
-   # Download the latest release from GitHub
-   curl -s https://api.github.com/repos/Red5d/pushbullet-cli/releases/latest \
-     | jq -r '.assets[0].browser_download_url' \
-     | xargs wget -q -O pushbullet-cli-linux-x64.tar.gz
-
-   # Extract and move the binary to a system-wide location
-   tar -xzvf pushbullet-cli-linux-x64.tar.gz
-   sudo mv pushbullet-cli /usr/local/bin/
+   sudo apt install nodejs npm
    ```
 
-   This installs `pushbullet-cli` to `/usr/local/bin/`, which you can now use to send notifications through Pushbullet.
+   - Install `pushbullet-cli` globally:
+
+   ```bash
+   sudo npm install -g pushbullet-cli
+   ```
 
 ---
 
@@ -8997,7 +8993,7 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
 
 2. **Write the script**:
 
-   Here's the updated and cleaned-up script that generates an OTP, sends a Pushbullet notification for approval, and processes the user's response:
+   Here's the updated script that generates an OTP, sends a Pushbullet notification for approval, and processes the user's response:
 
    ```bash
    #!/bin/bash
@@ -9017,13 +9013,7 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
    MESSAGE="SSH login attempt detected on $(hostname) from IP $LOGIN_IP.\nDo you approve this login attempt?"
 
    # Send Pushbullet notification with actionable options (Yes/No)
-   curl -u $ACCESS_TOKEN: \
-     -d type="note" \
-     -d title="SSH Login Attempt" \
-     -d body="$MESSAGE" \
-     -d device_iden=$DEVICE_ID \
-     -d "actions=[{\"tag\":\"approve\",\"label\":\"Yes\"},{\"tag\":\"deny\",\"label\":\"No\"}]" \
-     https://api.pushbullet.com/v2/pushes
+   pushbullet --token $ACCESS_TOKEN --device $DEVICE_ID --message "$MESSAGE"
 
    # Notify the user on the terminal that the request has been sent to their device
    echo "Approval request has been sent to your second device (via Pushbullet). Please respond on your device."
@@ -9060,7 +9050,7 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
 
    **Explanation**:
    - **OTP Generation**: The script generates a 6-digit OTP using `shuf`.
-   - **Pushbullet Notification**: Sends a notification via Pushbullet with options ("Yes" or "No") for approval.
+   - **Pushbullet Notification**: Sends a notification via Pushbullet asking the user to approve or deny the login attempt.
    - **Approval Handling**: The script continuously checks for approval/denial responses.
    - **OTP Verification**: Once approved, the user enters the OTP. If the OTP is correct, access is granted; if incorrect, access is denied.
 
@@ -9167,7 +9157,7 @@ To ensure that the script runs automatically during SSH login, configure SSH to 
 
 ### **Conclusion**
 
-This updated guide provides a streamlined SSH login process with OTP and approval via Pushbullet notifications. This enhances security by adding a second layer of authentication and offers a user-friendly approval process directly from your second device
+This updated guide provides a streamlined SSH login process with OTP and approval via Pushbullet notifications on Linux, using the official **Pushbullet CLI** tool without requiring Python. This enhances security by adding a second layer of authentication and offers a user-friendly approval process directly from your second device.
 
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
