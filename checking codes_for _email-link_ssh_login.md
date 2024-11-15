@@ -8913,220 +8913,206 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 
 🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥
-To configure SSH login notifications with **Pushbullet** and **ForceCommand** (which is used to enforce a specific command when someone logs in via SSH), we can modify the process slightly to ensure that the notification script runs as the first thing on every SSH login. This approach uses the `ForceCommand` directive in the SSH configuration to execute the notification script automatically for every SSH login.
 
-Let's walk through the steps with **ForceCommand** integrated into the SSH setup.
-
----
-
-## **Step 1: Install SSH Server (if not installed)**
-
-If SSH is not installed on your Ubuntu server, follow these steps:
-
-1. **Update your server’s package list:**
-
-   ```bash
-   sudo apt update
-   ```
-
-2. **Install the OpenSSH server:**
-
-   ```bash
-   sudo apt install openssh-server
-   ```
-
-3. **Enable and start the SSH service:**
-
-   ```bash
-   sudo systemctl enable ssh
-   sudo systemctl start ssh
-   ```
-
-4. **Check if SSH is running correctly:**
-
-   ```bash
-   sudo systemctl status ssh
-   ```
-
-   The output should show that SSH is active and running.
-
-5. **Test SSH access:**
-
-   Try logging in from another terminal or machine:
-
-   ```bash
-   ssh your_username@your_server_ip
-   ```
+Sure! Below is the detailed, step-by-step guide for integrating OTP authentication with Pushbullet-based approval via a **Yes/No** response directly through tapping the notification on your second device. This solution streamlines the SSH login process by combining two-factor authentication (2FA) with the ease of using a notification for login approval.
 
 ---
 
-## **Step 2: Set Up Pushbullet Account**
-
-Before proceeding, you need a Pushbullet account.
-
-1. **Sign up for Pushbullet:**
-   - Go to [Pushbullet’s website](https://www.pushbullet.com/).
-   - Sign up using your Google or Facebook account.
-
-2. **Get your Pushbullet API Access Token:**
-   - Go to the [Pushbullet settings page](https://www.pushbullet.com/#settings).
-   - Copy the **Access Token** from the settings page.
-
-3. **Install Pushbullet on your mobile device:**
-   - Download the Pushbullet app on your Android or iPhone.
-   - Log in with the same account you just created.
+### **Updated Guide for SSH Login with OTP and Approval via Pushbullet**
 
 ---
 
-## **Step 3: Install Pushbullet CLI on Your Ubuntu Server**
+### **Step 1: Install SSH Server (if not installed)**
 
-We’ll use the `pushbullet-cli` to send notifications from the server to your mobile device.
+To begin, ensure that OpenSSH is installed and configured on your Ubuntu server. If SSH is not already installed, follow the steps below:
 
-1. **Install dependencies (`curl` and `jq`):**
+```bash
+sudo apt update
+sudo apt install openssh-server
+```
+
+This will install the OpenSSH server, allowing remote SSH access to your server.
+
+---
+
+### **Step 2: Set Up Pushbullet Account**
+
+1. **Go to Pushbullet**:
+   - Open [Pushbullet](https://www.pushbullet.com) in your web browser.
+
+2. **Sign up for a Pushbullet account**:
+   - If you don’t have a Pushbullet account, sign up using either your Google or Facebook account.
+
+3. **Obtain the Pushbullet API Access Token**:
+   - Once logged in, go to the [Pushbullet settings page](https://www.pushbullet.com/#settings).
+   - Scroll down to the **Access Tokens** section and click on **Create Access Token**.
+   - Copy the generated access token; you'll use this in the script later.
+
+4. **Identify your device**:
+   - Go to the **Devices** section in your Pushbullet settings, or use the Pushbullet API to fetch your device ID.
+   - Each device that can receive notifications has a unique **Device ID**. You'll need this ID to target notifications to the correct device.
+
+---
+
+### **Step 3: Install Required Packages and Pushbullet CLI on Your Ubuntu Server**
+
+1. **Install required utilities (`curl`, `jq`)**:
+
+   These are needed to interact with the Pushbullet API. To install them, run:
 
    ```bash
    sudo apt update
    sudo apt install curl jq
    ```
 
-2. **Install Pushbullet CLI:**
+2. **Download and Install Pushbullet CLI**:
 
-   Download the latest release of the `pushbullet-cli`:
+   `pushbullet-cli` is a lightweight tool to send notifications through the Pushbullet API. Download it and install it as follows:
 
    ```bash
    curl -s https://api.github.com/repos/Red5d/pushbullet-cli/releases/latest | jq -r '.assets[0].browser_download_url' | xargs wget -q -O pushbullet-cli-linux-x64.tar.gz
-   ```
-
-   Extract the tarball:
-
-   ```bash
    tar -xzvf pushbullet-cli-linux-x64.tar.gz
-   ```
-
-   Move the binary to `/usr/local/bin/`:
-
-   ```bash
    sudo mv pushbullet-cli /usr/local/bin/
    ```
 
+   This installs the `pushbullet-cli` command on your system.
+
 ---
 
-## **Step 4: Create a Notification Script**
+### **Step 4: Create the SSH Login Script with OTP and Approval via Pushbullet**
 
-Now let’s create a script to send the SSH login notification using Pushbullet.
+1. **Create the script file**:
 
-1. **Create the script file:**
-
-   Open the script file in a text editor:
+   Open a new script file for editing using the `nano` text editor:
 
    ```bash
    nano /home/your_username/ssh-login-notify.sh
    ```
 
-   Replace `your_username` with your actual username.
+2. **Write the script**:
 
-2. **Write the script:**
-
-   Add the following code to the file:
+   Here is the detailed script that includes OTP generation, sending a Pushbullet notification for approval, and processing the user’s response:
 
    ```bash
    #!/bin/bash
 
-   # Your Pushbullet Access Token
+   # Pushbullet API Access Token
    ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
+   DEVICE_ID="YOUR_DEVICE_ID"  # Obtain this from Pushbullet API or settings page
 
-   # The message to send
-   MESSAGE="SSH Login detected on server $(hostname) from $(who am i | awk '{print $5}')"
+   # Generate a 6-digit OTP (One Time Password)
+   OTP=$(shuf -i 100000-999999 -n 1)
 
-   # Send the notification using Pushbullet API
+   # Get the username and IP address of the SSH login attempt
+   LOGIN_USER=$(whoami)
+   LOGIN_IP=$(echo $SSH_CONNECTION | awk '{print $1}')
+
+   # Pushbullet notification content
+   MESSAGE="SSH login attempt detected on $(hostname) from IP $LOGIN_IP.\nDo you approve this login attempt?"
+
+   # Send Pushbullet notification with actionable options (Yes/No)
    curl -u $ACCESS_TOKEN: \
      -d type="note" \
-     -d title="SSH Login Alert" \
+     -d title="SSH Login Attempt" \
      -d body="$MESSAGE" \
+     -d device_iden=$DEVICE_ID \
+     -d "actions=[{\"tag\":\"approve\",\"label\":\"Yes\"},{\"tag\":\"deny\",\"label\":\"No\"}]" \
      https://api.pushbullet.com/v2/pushes
+
+   # Notify the user on the terminal that the request has been sent to their device
+   echo "Approval request has been sent to your second device (via Pushbullet). Please respond on your device."
+
+   # Wait for approval response from the Pushbullet notification
+   while :; do
+     # Check Pushbullet for user response (approve or deny)
+     RESPONSE=$(curl -s -u $ACCESS_TOKEN: "https://api.pushbullet.com/v2/pushes?active=true&target_device_iden=$DEVICE_ID" | jq -r '.pushes[0].action')
+
+     # If the user taps "approve", verify the OTP
+     if [ "$RESPONSE" == "approve" ]; then
+       echo "Login approved. Please enter the OTP sent to your device:"
+       read USER_OTP
+
+       # Verify if the OTP entered by the user matches the generated OTP
+       if [ "$USER_OTP" == "$OTP" ]; then
+         echo "OTP verified. Access granted."
+         # Proceed to the user's shell
+         exec /bin/bash
+       else
+         echo "Invalid OTP. Access denied."
+         exit 1
+       fi
+     # If the user taps "deny", deny access
+     elif [ "$RESPONSE" == "deny" ]; then
+       echo "Access denied by user."
+       exit 1
+     fi
+
+     # Sleep for a short duration to avoid busy-waiting (checking every 2 seconds)
+     sleep 2
+   done
    ```
 
-   Replace `YOUR_ACCESS_TOKEN` with the Pushbullet API access token you copied earlier.
+   **Explanation of the script**:
+   - **OTP Generation**: A random 6-digit OTP is generated using the `shuf` command.
+   - **Pushbullet Notification**: The script sends a notification to the second device using the Pushbullet API with "Yes" (approve) and "No" (deny) actions.
+   - **Approval Handling**: The script continuously checks for user responses from the second device. Once a response is received, it either prompts for OTP verification (if approved) or denies access (if denied).
+   - **OTP Verification**: If the user approves the login, the script asks for the OTP. If the entered OTP matches the generated one, access is granted. If incorrect, access is denied.
 
-3. **Save and exit:**
-
+3. **Save and exit the editor**:
    - Press `CTRL + X` to exit.
    - Press `Y` to confirm saving the changes.
-   - Hit `Enter`.
+   - Press `Enter` to confirm the file name.
 
-4. **Make the script executable:**
+4. **Make the script executable**:
+
+   Change the script’s permissions to make it executable:
 
    ```bash
    chmod +x /home/your_username/ssh-login-notify.sh
    ```
 
-5. **Test the script:**
+5. **Test the script manually**:
 
-   Run the script to test it manually:
+   Before integrating the script with SSH, test it manually by running:
 
    ```bash
    /home/your_username/ssh-login-notify.sh
    ```
 
-   You should receive a Pushbullet notification on your mobile device.
+   You should receive a Pushbullet notification on your second device asking for approval. After tapping **Yes**, the script will ask for the OTP, and if correct, access will be granted.
 
 ---
 
-## **Step 5: Configure SSH to Use ForceCommand**
+### **Step 5: Configure SSH to Use the ForceCommand**
 
-To ensure that the notification script is run every time someone logs in via SSH, we can configure **ForceCommand** in the SSH configuration.
+To ensure that the script is executed whenever someone logs in via SSH, you need to configure SSH to force the execution of the script.
 
-1. **Edit the SSH configuration file:**
+1. **Edit the SSH configuration file**:
 
-   Open the SSH server configuration file (`/etc/ssh/sshd_config`):
+   Open the SSH configuration file for editing:
 
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-2. **Add the ForceCommand directive:**
+2. **Add the ForceCommand directive**:
 
-   At the end of the file, add the following line:
+   Add the following line to the end of the file:
 
    ```bash
    ForceCommand /home/your_username/ssh-login-notify.sh
    ```
 
-   This will ensure that every time a user logs in via SSH, the `ssh-login-notify.sh` script will be executed.
+   This ensures that the script is executed each time an SSH login is attempted.
 
-3. **Ensure SSH logins still allow proper login behavior:**
-
-   By using `ForceCommand`, SSH will enforce the command and override the default shell. You can preserve normal login behavior by having the script run the login shell after the notification is sent. Modify the script like this:
-
-   ```bash
-   #!/bin/bash
-
-   # Your Pushbullet Access Token
-   ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
-
-   # The message to send
-   MESSAGE="SSH Login detected on server $(hostname) from $(who am i | awk '{print $5}')"
-
-   # Send the notification using Pushbullet API
-   curl -u $ACCESS_TOKEN: \
-     -d type="note" \
-     -d title="SSH Login Alert" \
-     -d body="$MESSAGE" \
-     https://api.pushbullet.com/v2/pushes
-
-   # Start the user’s shell (adjust for your shell, e.g., bash)
-   exec /bin/bash
-   ```
-
-   This ensures that after sending the notification, it will continue with the normal login process and run the user's shell (e.g., `/bin/bash`).
-
-4. **Save and exit the configuration file:**
-
+3. **Save and exit**:
    - Press `CTRL + X` to exit.
    - Press `Y` to confirm saving the changes.
-   - Hit `Enter`.
+   - Press `Enter` to confirm.
 
-5. **Restart the SSH service to apply the changes:**
+4. **Restart the SSH service**:
+
+   Restart the SSH service to apply the changes:
 
    ```bash
    sudo systemctl restart ssh
@@ -9134,43 +9120,49 @@ To ensure that the notification script is run every time someone logs in via SSH
 
 ---
 
-## **Step 6: Test the Setup**
+### **Step 6: Test the Setup**
 
-1. **Log out of your server (if you're logged in):**
+1. **Log out from your server**:
 
    ```bash
    exit
    ```
 
-2. **Log back in via SSH:**
+2. **Log in again via SSH**:
 
-   From another terminal or machine, log back into your server:
+   Open a new terminal session or device and attempt to SSH into the server:
 
    ```bash
    ssh your_username@your_server_ip
    ```
 
-3. **Check for the notification:**
+3. **Check your second device**:
 
-   You should receive a notification on your phone or device that an SSH login was detected.
-
----
-
-## **Troubleshooting Tips**
-
-- **No notification?** Double-check the access token and ensure the script has the correct permissions.
-- **SSH login not working?** If the user shell doesn’t start after the notification, check that the script is calling `exec /bin/bash` or the correct shell for your environment.
-- **Test manually** by running the notification script directly:
-
-   ```bash
-   /home/your_username/ssh-login-notify.sh
-   ```
+   - You should receive a Pushbullet notification on your second device asking you to approve or deny the login attempt.
+   - After tapping **Yes**, the script will prompt you for the OTP. If the OTP is correct, access will be granted.
 
 ---
 
-## **Conclusion**
+### **Troubleshooting Tips**
 
-With **ForceCommand** in place, your Ubuntu server will automatically send Pushbullet notifications every time someone logs in via SSH. This configuration ensures that SSH logins are tracked and you receive an immediate notification on your mobile device.
+- **No Pushbullet notification?**
+  - Double-check the **Pushbullet API token** and **device ID**. Make sure the device is connected to Pushbullet and can receive notifications.
+- **Invalid OTP?**
+  - Ensure that the OTP displayed matches the OTP you input during the login process.
+- **SSH login not working?**
+  - Verify that `ForceCommand` is set correctly in the SSH configuration and that the script is executable.
+- **No response from Pushbullet?**
+  - Ensure that Pushbullet is running properly on the second device and is receiving notifications.
+
+---
+
+### **Conclusion**
+
+This guide helps you set up a secure SSH login process that combines OTP authentication with approval
+
+ via a Pushbullet notification. The approval process is streamlined by enabling the user to tap **Yes** or **No** directly on their second device, improving security and usability.
+
+
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
 
