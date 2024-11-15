@@ -8914,7 +8914,8 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥
 
-Sure! Below is the detailed, step-by-step guide for integrating OTP authentication with Pushbullet-based approval via a **Yes/No** response directly through tapping the notification on your second device. This solution streamlines the SSH login process by combining two-factor authentication (2FA) with the ease of using a notification for login approval.
+.
+Sure! Below is an updated version of the guide for setting up SSH login with OTP authentication and Pushbullet-based approval. This guide also includes proper installation steps for the necessary packages, ensuring everything is up-to-date and uses official repositories.
 
 ---
 
@@ -8949,7 +8950,7 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
    - Copy the generated access token; you'll use this in the script later.
 
 4. **Identify your device**:
-   - Go to the **Devices** section in your Pushbullet settings, or use the Pushbullet API to fetch your device ID.
+   - Go to the **Devices** section in your Pushbullet settings or use the Pushbullet API to fetch your device ID.
    - Each device that can receive notifications has a unique **Device ID**. You'll need this ID to target notifications to the correct device.
 
 ---
@@ -8958,24 +8959,29 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
 
 1. **Install required utilities (`curl`, `jq`)**:
 
-   These are needed to interact with the Pushbullet API. To install them, run:
+   These utilities are needed to interact with the Pushbullet API and manipulate JSON data. To install them, run:
 
    ```bash
    sudo apt update
    sudo apt install curl jq
    ```
 
-2. **Download and Install Pushbullet CLI**:
+2. **Install `pushbullet-cli`**:
 
-   `pushbullet-cli` is a lightweight tool to send notifications through the Pushbullet API. Download it and install it as follows:
+   `pushbullet-cli` is a lightweight command-line tool to send notifications via the Pushbullet API. The official way to install it is to download it from its GitHub release page:
 
    ```bash
-   curl -s https://api.github.com/repos/Red5d/pushbullet-cli/releases/latest | jq -r '.assets[0].browser_download_url' | xargs wget -q -O pushbullet-cli-linux-x64.tar.gz
+   # Download the latest release from GitHub
+   curl -s https://api.github.com/repos/Red5d/pushbullet-cli/releases/latest \
+     | jq -r '.assets[0].browser_download_url' \
+     | xargs wget -q -O pushbullet-cli-linux-x64.tar.gz
+
+   # Extract and move the binary to a system-wide location
    tar -xzvf pushbullet-cli-linux-x64.tar.gz
    sudo mv pushbullet-cli /usr/local/bin/
    ```
 
-   This installs the `pushbullet-cli` command on your system.
+   This installs `pushbullet-cli` to `/usr/local/bin/`, which you can now use to send notifications through Pushbullet.
 
 ---
 
@@ -8991,7 +8997,7 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
 
 2. **Write the script**:
 
-   Here is the detailed script that includes OTP generation, sending a Pushbullet notification for approval, and processing the user’s response:
+   Here's the updated and cleaned-up script that generates an OTP, sends a Pushbullet notification for approval, and processes the user's response:
 
    ```bash
    #!/bin/bash
@@ -9000,7 +9006,7 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
    ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
    DEVICE_ID="YOUR_DEVICE_ID"  # Obtain this from Pushbullet API or settings page
 
-   # Generate a 6-digit OTP (One Time Password)
+   # Generate a 6-digit OTP (One-Time Password)
    OTP=$(shuf -i 100000-999999 -n 1)
 
    # Get the username and IP address of the SSH login attempt
@@ -9052,11 +9058,11 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
    done
    ```
 
-   **Explanation of the script**:
-   - **OTP Generation**: A random 6-digit OTP is generated using the `shuf` command.
-   - **Pushbullet Notification**: The script sends a notification to the second device using the Pushbullet API with "Yes" (approve) and "No" (deny) actions.
-   - **Approval Handling**: The script continuously checks for user responses from the second device. Once a response is received, it either prompts for OTP verification (if approved) or denies access (if denied).
-   - **OTP Verification**: If the user approves the login, the script asks for the OTP. If the entered OTP matches the generated one, access is granted. If incorrect, access is denied.
+   **Explanation**:
+   - **OTP Generation**: The script generates a 6-digit OTP using `shuf`.
+   - **Pushbullet Notification**: Sends a notification via Pushbullet with options ("Yes" or "No") for approval.
+   - **Approval Handling**: The script continuously checks for approval/denial responses.
+   - **OTP Verification**: Once approved, the user enters the OTP. If the OTP is correct, access is granted; if incorrect, access is denied.
 
 3. **Save and exit the editor**:
    - Press `CTRL + X` to exit.
@@ -9073,19 +9079,19 @@ This will install the OpenSSH server, allowing remote SSH access to your server.
 
 5. **Test the script manually**:
 
-   Before integrating the script with SSH, test it manually by running:
+   Before integrating it with SSH, test it manually by running:
 
    ```bash
    /home/your_username/ssh-login-notify.sh
    ```
 
-   You should receive a Pushbullet notification on your second device asking for approval. After tapping **Yes**, the script will ask for the OTP, and if correct, access will be granted.
+   You should receive a Pushbullet notification on your second device asking for approval. After tapping **Yes**, the script will prompt you for the OTP, and if correct, access will be granted.
 
 ---
 
 ### **Step 5: Configure SSH to Use the ForceCommand**
 
-To ensure that the script is executed whenever someone logs in via SSH, you need to configure SSH to force the execution of the script.
+To ensure that the script runs automatically during SSH login, configure SSH to use the `ForceCommand` option.
 
 1. **Edit the SSH configuration file**:
 
@@ -9103,7 +9109,7 @@ To ensure that the script is executed whenever someone logs in via SSH, you need
    ForceCommand /home/your_username/ssh-login-notify.sh
    ```
 
-   This ensures that the script is executed each time an SSH login is attempted.
+   This ensures the script is executed every time someone logs in via SSH.
 
 3. **Save and exit**:
    - Press `CTRL + X` to exit.
@@ -9146,22 +9152,22 @@ To ensure that the script is executed whenever someone logs in via SSH, you need
 ### **Troubleshooting Tips**
 
 - **No Pushbullet notification?**
-  - Double-check the **Pushbullet API token** and **device ID**. Make sure the device is connected to Pushbullet and can receive notifications.
+  - Double-check the **Pushbullet API token** and **device ID**. Ensure your device is connected and receiving notifications.
+  
 - **Invalid OTP?**
-  - Ensure that the OTP displayed matches the OTP you input during the login process.
+  - Ensure that the OTP displayed on the device matches the one entered during login.
+
 - **SSH login not working?**
-  - Verify that `ForceCommand` is set correctly in the SSH configuration and that the script is executable.
+  - Verify that `ForceCommand` is correctly set in the SSH configuration and that the script is executable.
+
 - **No response from Pushbullet?**
-  - Ensure that Pushbullet is running properly on the second device and is receiving notifications.
+  - Ensure Pushbullet is running on the second device and that it is receiving notifications.
 
 ---
 
 ### **Conclusion**
 
-This guide helps you set up a secure SSH login process that combines OTP authentication with approval
-
- via a Pushbullet notification. The approval process is streamlined by enabling the user to tap **Yes** or **No** directly on their second device, improving security and usability.
-
+This updated guide provides a streamlined SSH login process with OTP and approval via Pushbullet notifications. This enhances security by adding a second layer of authentication and offers a user-friendly approval process directly from your second device
 
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
