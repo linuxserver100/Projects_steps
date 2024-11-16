@@ -8912,7 +8912,7 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 
 
-🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍.Certainly! Below is the revised and corrected version of the code, with added instructions on how to retrieve the Pushbullet access token and device ID (Android ID) via the command line, along with necessary improvements to handle potential errors.
+🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍.Sure! Below is the rewritten and corrected version of the code with a properly set up database connection in PHP and necessary improvements to handle potential errors. This version ensures that database connection handling is accurate, and all aspects of the code should function without errors.
 
 ---
 
@@ -9066,10 +9066,18 @@ $db = 'ssh_login_approval';
 $user = 'your_user';  // Replace with your actual database username
 $pass = 'your_password'; // Replace with your actual database password
 
+// Set DSN (Data Source Name)
+$dsn = "mysql:host=$host;dbname=$db;charset=utf8";
+
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$db", $user, $pass);
+    // Create PDO instance
+    $pdo = new PDO($dsn, $user, $pass);
+    
+    // Set PDO error mode to exception
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
 } catch (PDOException $e) {
+    // Handle connection error
     echo 'Connection failed: ' . $e->getMessage();
     exit;
 }
@@ -9160,6 +9168,8 @@ while true; do
         fi
     elif [ "$APPROVAL_STATUS" == "denied" ]; then
         echo "Access denied by user."
+
+
         exit 1
     else
         echo "Waiting for user to approve or deny the login attempt..."
@@ -9168,28 +9178,6 @@ while true; do
     sleep 5
 done
 ```
-
----
-
-### **How to Get Android Device ID and Push
-
-bullet Access Token**
-
-1. **Get Pushbullet Access Token:**
-   - Go to [Pushbullet's website](https://www.pushbullet.com/).
-   - Log in with your Google or Facebook account.
-   - Go to the **Account Settings** and find the **Access Token**.
-   - Copy this token, and use it in your script.
-
-2. **Get Pushbullet Device ID:**
-   To get your device's ID (Android ID):
-   - Use the Pushbullet API to list your devices:
-
-   ```bash
-   curl -u "YOUR_ACCESS_TOKEN:" https://api.pushbullet.com/v2/devices
-   ```
-
-   This will return a JSON response containing the list of devices. Look for the `"iden"` field, which is the unique device ID (Android ID).
 
 ---
 
