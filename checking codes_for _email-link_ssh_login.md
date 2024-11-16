@@ -8912,7 +8912,7 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 
 
-🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍.Here’s the revised code with added steps to create a MySQL database user, grant privileges, and other necessary adjustments for full functionality. I'll also rewrite the scripts with corrections, including necessary modifications for database access, better security practices, and improved flow.
+🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍.Certainly! Below is the revised and corrected version of the code, with added instructions on how to retrieve the Pushbullet access token and device ID (Android ID) via the command line, along with necessary improvements to handle potential errors.
 
 ---
 
@@ -8959,7 +8959,7 @@ CREATE TABLE login_attempts (
 
 ### **Step 2: PHP Script for Approval (`approve_login.php`)**
 
-This PHP script will handle user approvals and denials of login attempts. Ensure the user session variables (`$_SESSION['user']`, `$_SESSION['ip']`) are set appropriately.
+This PHP script handles the user approval or denial of login attempts. Make sure the user session variables (`$_SESSION['user']`, `$_SESSION['ip']`) are set appropriately.
 
 ```php
 <?php
@@ -9023,7 +9023,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approval'])) {
 
 ### **Step 3: PHP Script to Fetch Approval Status (`status.php`)**
 
-This PHP script will check the approval status of the login attempt from the database.
+This PHP script checks the approval status of the login attempt from the database.
 
 ```php
 <?php
@@ -9057,7 +9057,7 @@ if ($attempt) {
 
 ### **Step 4: Database Connection (`db.php`)**
 
-This PHP file contains the database connection logic using PDO. It connects to the MySQL database using the credentials defined earlier.
+This PHP file contains the database connection logic using PDO to connect to the MySQL database.
 
 ```php
 <?php
@@ -9080,7 +9080,7 @@ try {
 
 ### **Step 5: Bash Script for SSH Login Handling (`ssh_approval.sh`)**
 
-This script handles the SSH login process, including requesting approval via Pushbullet, waiting for approval, and verifying OTP before granting access.
+This script handles the SSH login process, sends approval notifications via Pushbullet, and checks the approval status from the database before allowing access.
 
 ```bash
 #!/bin/bash
@@ -9171,25 +9171,45 @@ done
 
 ---
 
+### **How to Get Android Device ID and Push
 
+bullet Access Token**
+
+1. **Get Pushbullet Access Token:**
+   - Go to [Pushbullet's website](https://www.pushbullet.com/).
+   - Log in with your Google or Facebook account.
+   - Go to the **Account Settings** and find the **Access Token**.
+   - Copy this token, and use it in your script.
+
+2. **Get Pushbullet Device ID:**
+   To get your device's ID (Android ID):
+   - Use the Pushbullet API to list your devices:
+
+   ```bash
+   curl -u "YOUR_ACCESS_TOKEN:" https://api.pushbullet.com/v2/devices
+   ```
+
+   This will return a JSON response containing the list of devices. Look for the `"iden"` field, which is the unique device ID (Android ID).
+
+---
 
 ### **Step 6: Configuring SSH to Use the Bash Script**
 
-1. **Modify `/etc/ssh/sshrc`**:
+1. **Modify `/etc/ssh/sshrc`:**
    Add the following line to execute the script upon SSH login:
 
    ```bash
    /usr/local/bin/ssh_approval.sh
    ```
 
-2. **Alternatively, modify `/etc/ssh/sshd_config`**:
+2. **Alternatively, modify `/etc/ssh/sshd_config`:**
    Add the following line:
 
    ```bash
    ForceCommand /usr/local/bin/ssh_approval.sh
    ```
 
-3. **Restart SSH service**:
+3. **Restart SSH service:**
 
    ```bash
    sudo systemctl restart sshd
@@ -9209,7 +9229,7 @@ done
 
 ### **Conclusion**
 
-This solution now ensures that the SSH login approval process is properly integrated with MySQL. The `.sh` script sends an approval notification via Pushbullet, and after the user approves or denies the login, the Bash script checks the approval status from the MySQL database and verifies the OTP before granting access. Once access is granted, the user's record is deleted from the database. LG
+This solution integrates SSH login approval with MySQL, using Pushbullet for notifications. The Bash script waits for approval or denial, and then performs OTP verification before granting access. The instructions to retrieve the Pushbullet Access Token and Android Device ID have been added.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
