@@ -9142,8 +9142,8 @@ USER="ubuntu"
 IP="54.159.128.204"
 
 # MySQL database connection details with port
-DB_HOST="mysql-1234ac1b-linuxserverub-5cee.d.aivencloud.com"
-DB_PORT="19392"  # MySQL port (default 3306)
+DB_HOST="mydb_ip"
+DB_PORT="192"  # MySQL port (default 3306)
 DB_NAME="ssh_login_approval"
 DB_USER="verify_user1"  # Replace with your database username
 DB_PASS="Qwerty"  # Replace with your database password
