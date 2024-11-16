@@ -8912,7 +8912,7 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 
 
-🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍.Sure! Below is the rewritten and corrected version of the code with a properly set up database connection in PHP and necessary improvements to handle potential errors. This version ensures that database connection handling is accurate, and all aspects of the code should function without errors.
+🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍.Sure! Let's rewrite your code step by step, with the database connection including the port number explicitly specified in each script.
 
 ---
 
@@ -8959,7 +8959,7 @@ CREATE TABLE login_attempts (
 
 ### **Step 2: PHP Script for Approval (`approve_login.php`)**
 
-This PHP script handles the user approval or denial of login attempts. Make sure the user session variables (`$_SESSION['user']`, `$_SESSION['ip']`) are set appropriately.
+This PHP script handles the user approval or denial of login attempts, including the database connection with the port number specified.
 
 ```php
 <?php
@@ -9023,7 +9023,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approval'])) {
 
 ### **Step 3: PHP Script to Fetch Approval Status (`status.php`)**
 
-This PHP script checks the approval status of the login attempt from the database.
+This PHP script checks the approval status of the login attempt from the database, including the port number in the database connection.
 
 ```php
 <?php
@@ -9057,17 +9057,18 @@ if ($attempt) {
 
 ### **Step 4: Database Connection (`db.php`)**
 
-This PHP file contains the database connection logic using PDO to connect to the MySQL database.
+This PHP file contains the database connection logic using PDO, including the port number for MySQL (if non-default).
 
 ```php
 <?php
 $host = '127.0.0.1';
+$port = '3306';  // Default MySQL port, change if your MySQL uses a different port
 $db = 'ssh_login_approval';
 $user = 'your_user';  // Replace with your actual database username
 $pass = 'your_password'; // Replace with your actual database password
 
 // Set DSN (Data Source Name)
-$dsn = "mysql:host=$host;dbname=$db;charset=utf8";
+$dsn = "mysql:host=$host;port=$port;dbname=$db;charset=utf8";
 
 try {
     // Create PDO instance
@@ -9088,7 +9089,7 @@ try {
 
 ### **Step 5: Bash Script for SSH Login Handling (`ssh_approval.sh`)**
 
-This script handles the SSH login process, sends approval notifications via Pushbullet, and checks the approval status from the database before allowing access.
+This script handles the SSH login process, sends approval notifications via Pushbullet, and checks the approval status from the database before allowing access. The database connection now includes the port number.
 
 ```bash
 #!/bin/bash
@@ -9100,8 +9101,9 @@ IP="192.168.1.100"
 # Generate a 6-digit OTP (One-Time Password)
 OTP=$(shuf -i 100000-999999 -n 1)
 
-# MySQL database connection details
+# MySQL database connection details with port
 DB_HOST="127.0.0.1"
+DB_PORT="3306"  # MySQL port (default 3306)
 DB_NAME="ssh_login_approval"
 DB_USER="your_user"  # Replace with your database username
 DB_PASS="your_password"  # Replace with your database password
@@ -9133,12 +9135,12 @@ fi
 echo "Approval request sent to your device. Please approve or deny the login attempt."
 
 # Store the login attempt in the database with 'pending' status
-mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -D "$DB_NAME" -e \
+mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
     "INSERT INTO login_attempts (user, ip, otp, approval_status) VALUES ('$USER', '$IP', '$OTP', 'pending');"
 
 # Function to check the approval status from the database
 check_approval_status() {
-    RESPONSE=$(mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -D "$DB_NAME" -e "SELECT approval_status FROM login_attempts WHERE user='$USER' AND ip='$IP' ORDER BY timestamp DESC LIMIT 1" -s)
+    RESPONSE=$(mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e "SELECT approval_status FROM login_attempts WHERE user='$USER' AND ip='$IP' ORDER BY timestamp DESC LIMIT 1" -s)
 
     if [ -z "$RESPONSE" ]; then
         echo "Error: No approval status found in database."
@@ -9159,17 +9161,17 @@ while true; do
         if [ "$USER_OTP" == "$OTP" ]; then
             echo "OTP verified. Access granted."
             # Delete the user from the database after successful authentication
-            mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -D "$DB_NAME" -e \
+            mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
                 "DELETE FROM login_attempts WHERE user='$USER' AND ip='$IP';"
-            exec /bin/bash  # Allow SSH session to proceed
+            exec /bin/bash  # Allow SSH session
+
+ to proceed
         else
             echo "Invalid OTP. Access denied."
             exit 1
         fi
     elif [ "$APPROVAL_STATUS" == "denied" ]; then
         echo "Access denied by user."
-
-
         exit 1
     else
         echo "Waiting for user to approve or deny the login attempt..."
@@ -9217,7 +9219,7 @@ done
 
 ### **Conclusion**
 
-This solution integrates SSH login approval with MySQL, using Pushbullet for notifications. The Bash script waits for approval or denial, and then performs OTP verification before granting access. The instructions to retrieve the Pushbullet Access Token and Android Device ID have been added.
+This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
