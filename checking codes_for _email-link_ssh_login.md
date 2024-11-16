@@ -8912,21 +8912,37 @@ This guide is now ready to implement Duo 2FA with both SMS and push authenticati
 
 
 
-🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍.Sure! Below is a more detailed breakdown of the process that achieves the following steps:
-
-1. **When the `.sh` file is executed**: It sends an approval notification to the Pushbullet API.
-2. **User Approval**: User clicks on the notification and selects either "Yes" (approve) or "No" (deny), which is saved in the MySQL database.
-3. **Bash Script Behavior**: The `.sh` script waits for the approval status from the MySQL database and either grants or denies SSH access based on the approval. If access is granted, OTP verification is performed. If the OTP is correct, the user is granted access, and their record is deleted from the database.
+🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍.Here’s the revised code with added steps to create a MySQL database user, grant privileges, and other necessary adjustments for full functionality. I'll also rewrite the scripts with corrections, including necessary modifications for database access, better security practices, and improved flow.
 
 ---
 
 ### **Step 1: MySQL Database Setup**
 
-You will need a database to store user login attempts, including their approval status, OTP, and timestamp.
+1. **Create the database and user with necessary privileges:**
 
 ```sql
+-- Log into MySQL as root
+mysql -u root -p
+
+-- Create the database
 CREATE DATABASE ssh_login_approval;
 
+-- Create a user for your application (replace 'your_user' and 'your_password' with secure values)
+CREATE USER 'your_user'@'localhost' IDENTIFIED BY 'your_password';
+
+-- Grant necessary privileges to the new user
+GRANT ALL PRIVILEGES ON ssh_login_approval.* TO 'your_user'@'localhost';
+
+-- Flush privileges to apply changes
+FLUSH PRIVILEGES;
+
+-- Exit MySQL
+EXIT;
+```
+
+2. **Create the table for storing login attempts:**
+
+```sql
 USE ssh_login_approval;
 
 CREATE TABLE login_attempts (
@@ -8943,7 +8959,7 @@ CREATE TABLE login_attempts (
 
 ### **Step 2: PHP Script for Approval (`approve_login.php`)**
 
-This PHP script is used to handle the approval (or denial) of the SSH login attempt.
+This PHP script will handle user approvals and denials of login attempts. Ensure the user session variables (`$_SESSION['user']`, `$_SESSION['ip']`) are set appropriately.
 
 ```php
 <?php
@@ -9007,7 +9023,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approval'])) {
 
 ### **Step 3: PHP Script to Fetch Approval Status (`status.php`)**
 
-This script will be used by the Bash script to check the approval status of the login attempt.
+This PHP script will check the approval status of the login attempt from the database.
 
 ```php
 <?php
@@ -9041,14 +9057,14 @@ if ($attempt) {
 
 ### **Step 4: Database Connection (`db.php`)**
 
-This PHP file contains the connection details for MySQL using PDO.
+This PHP file contains the database connection logic using PDO. It connects to the MySQL database using the credentials defined earlier.
 
 ```php
 <?php
 $host = '127.0.0.1';
 $db = 'ssh_login_approval';
-$user = 'root';  // Replace with your database username
-$pass = '';      // Replace with your database password
+$user = 'your_user';  // Replace with your actual database username
+$pass = 'your_password'; // Replace with your actual database password
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$db", $user, $pass);
@@ -9064,7 +9080,7 @@ try {
 
 ### **Step 5: Bash Script for SSH Login Handling (`ssh_approval.sh`)**
 
-This script is responsible for handling the SSH login process. It sends a Pushbullet notification to request approval, waits for the approval, verifies OTP if approved, and grants or denies access accordingly.
+This script handles the SSH login process, including requesting approval via Pushbullet, waiting for approval, and verifying OTP before granting access.
 
 ```bash
 #!/bin/bash
@@ -9079,8 +9095,8 @@ OTP=$(shuf -i 100000-999999 -n 1)
 # MySQL database connection details
 DB_HOST="127.0.0.1"
 DB_NAME="ssh_login_approval"
-DB_USER="root"  # Replace with your database username
-DB_PASS=""      # Replace with your database password
+DB_USER="your_user"  # Replace with your database username
+DB_PASS="your_password"  # Replace with your database password
 
 # Pushbullet API Access Token and Device ID (Replace with actual values)
 ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
@@ -9155,14 +9171,14 @@ done
 
 ---
 
+
+
 ### **Step 6: Configuring SSH to Use the Bash Script**
 
 1. **Modify `/etc/ssh/sshrc`**:
    Add the following line to execute the script upon SSH login:
 
    ```bash
-
-
    /usr/local/bin/ssh_approval.sh
    ```
 
@@ -9193,7 +9209,7 @@ done
 
 ### **Conclusion**
 
-This solution now ensures that when the `.sh` file is executed, it sends a Pushbullet notification. Upon approval or denial, the decision is recorded in the MySQL database. The Bash script then checks the approval status, verifies the OTP, and grants or denies SSH access accordingly. The user's record is deleted from the database once access is granted.
+This solution now ensures that the SSH login approval process is properly integrated with MySQL. The `.sh` script sends an approval notification via Pushbullet, and after the user approves or denies the login, the Bash script checks the approval status from the MySQL database and verifies the OTP before granting access. Once access is granted, the user's record is deleted from the database. LG
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 Here’s a corrected and revised version of the implementation, ensuring proper functionality and best practices for integrating Twilio and Duo Security for phone call-based SSH login:
