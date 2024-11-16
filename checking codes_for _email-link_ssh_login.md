@@ -9156,7 +9156,7 @@ DEVICE_ID="ujzzHM4MncasjC65m66dEG"
 MESSAGE="SSH login attempt detected on $(hostname) from IP $IP.\nDo you approve this login attempt?"
 APPROVE_URL="http://54.159.128.204/approve_login.php"
 
-response=$(curl -s -w "%{http_code}" -u "$ACCESS_TOKEN:" \
+response=$(curl -s -w "%{http_code}" -o /dev/null -u "$ACCESS_TOKEN:" \
      -X POST https://api.pushbullet.com/v2/pushes \
      -d type="note" \
      -d title="SSH Login Attempt" \
@@ -9206,7 +9206,7 @@ while true; do
 
         # Send OTP to the user's device via Pushbullet
         OTP_MESSAGE="Your OTP for SSH login is: $OTP"
-        otp_response=$(curl -s -w "%{http_code}" -u "$ACCESS_TOKEN:" \
+        otp_response=$(curl -s -w "%{http_code}" -o /dev/null -u "$ACCESS_TOKEN:" \
             -X POST https://api.pushbullet.com/v2/pushes \
             -d type="note" \
             -d title="Your OTP for SSH Login" \
