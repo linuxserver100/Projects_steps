@@ -9133,29 +9133,28 @@ try {
 This script handles the SSH login process, sends approval notifications via Pushbullet, and checks the approval status from the database before allowing access. The database connection now includes the port number.
 
 ```bash
-#!/bin/bash
+     
+     
+       #!/bin/bash
 
 # Predefined values (user and IP)
-USER="testuser"
-IP="192.168.1.100"
-
-# Generate a 6-digit OTP (One-Time Password)
-OTP=$(shuf -i 100000-999999 -n 1)
+USER="ubuntu"
+IP="54.159.128.204"
 
 # MySQL database connection details with port
-DB_HOST="127.0.0.1"
-DB_PORT="3306"  # MySQL port (default 3306)
+DB_HOST="mysql-1234ac1b-linuxserverub-5cee.d.aivencloud.com"
+DB_PORT="19392"  # MySQL port (default 3306)
 DB_NAME="ssh_login_approval"
-DB_USER="your_user"  # Replace with your database username
-DB_PASS="your_password"  # Replace with your database password
+DB_USER="verify_user1"  # Replace with your database username
+DB_PASS="Qwerty"  # Replace with your database password
 
 # Pushbullet API Access Token and Device ID (Replace with actual values)
-ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
-DEVICE_ID="YOUR_DEVICE_ID"
+ACCESS_TOKEN="o.e95YnHTNPEdwSfdSk1ZYb0MoPk3VnR2R"
+DEVICE_ID="ujzzHM4MncasjC65m66dEG"
 
 # Send Pushbullet notification with the approval link
 MESSAGE="SSH login attempt detected on $(hostname) from IP $IP.\nDo you approve this login attempt?"
-APPROVE_URL="http://localhost/approve_login.php"
+APPROVE_URL="http://54.159.128.204/approve_login.php"
 
 response=$(curl -s -w "%{http_code}" -u "$ACCESS_TOKEN:" \
      -X POST https://api.pushbullet.com/v2/pushes \
@@ -9177,18 +9176,21 @@ echo "Approval request sent to your device. Please approve or deny the login att
 
 # Store the login attempt in the database with 'pending' status
 mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
-    "INSERT INTO login_attempts (user, ip, otp, approval_status) VALUES ('$USER', '$IP', '$OTP', 'pending');"
+    "INSERT INTO login_attempts (user, ip, approval_status) VALUES ('$USER', '$IP', 'pending');"
 
 # Function to check the approval status from the database
 check_approval_status() {
-    RESPONSE=$(mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e "SELECT approval_status FROM login_attempts WHERE user='$USER' AND ip='$IP' ORDER BY timestamp DESC LIMIT 1" -s)
-
-    if [ -z "$RESPONSE" ]; then
+    RESPONSE=$(mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
+        "SELECT approval_status FROM login_attempts WHERE user='$USER' AND ip='$IP' ORDER BY timestamp DESC LIMIT 1;")
+    
+    # Clean up the response and get the status
+    APPROVAL_STATUS=$(echo "$RESPONSE" | tail -n 1)
+    if [ -z "$APPROVAL_STATUS" ]; then
         echo "Error: No approval status found in database."
         exit 1
     fi
 
-    echo "$RESPONSE"
+    echo "$APPROVAL_STATUS"
 }
 
 # Wait for approval or denial
@@ -9196,30 +9198,58 @@ while true; do
     APPROVAL_STATUS=$(check_approval_status)
 
     if [ "$APPROVAL_STATUS" == "approved" ]; then
-        echo "Login approved. Please enter the OTP sent to your device:"
+        echo "Login approved. Generating OTP..."
+
+        # Generate and send OTP only if approved
+        OTP=$(shuf -i 100000-999999 -n 1)
+        echo "OTP generated: $OTP"
+
+        # Send OTP to the user's device via Pushbullet
+        OTP_MESSAGE="Your OTP for SSH login is: $OTP"
+        otp_response=$(curl -s -w "%{http_code}" -u "$ACCESS_TOKEN:" \
+            -X POST https://api.pushbullet.com/v2/pushes \
+            -d type="note" \
+            -d title="Your OTP for SSH Login" \
+            -d body="$OTP_MESSAGE" \
+            -d device_iden="$DEVICE_ID")
+
+        otp_http_code=$(echo "$otp_response" | tail -n1)
+        if [ "$otp_http_code" -ne 200 ]; then
+            echo "Error: Failed to send OTP (HTTP Code: $otp_http_code)."
+            exit 1
+        fi
+
+        echo "OTP sent to your device. Please enter the OTP to proceed."
+
+        # Get OTP from user and validate
         read USER_OTP
 
         if [ "$USER_OTP" == "$OTP" ]; then
             echo "OTP verified. Access granted."
-            # Delete the user from the database after successful authentication
+            # Delete the login attempt from the database after successful authentication
             mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
                 "DELETE FROM login_attempts WHERE user='$USER' AND ip='$IP';"
-            exec /bin/bash  # Allow SSH session
-
- to proceed
+            exec /bin/bash  # Allow SSH session to proceed
         else
             echo "Invalid OTP. Access denied."
             exit 1
         fi
+
     elif [ "$APPROVAL_STATUS" == "denied" ]; then
         echo "Access denied by user."
+        # Delete the pending login attempt if denied
+        mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
+            "DELETE FROM login_attempts WHERE user='$USER' AND ip='$IP';"
         exit 1
     else
         echo "Waiting for user to approve or deny the login attempt..."
     fi
 
-    sleep 5
+    sleep 5  # Check every 5 seconds for the approval status
 done
+
+
+
 ```
 
 ---
