@@ -8949,10 +8949,18 @@ CREATE TABLE login_attempts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user VARCHAR(255) NOT NULL,
     ip VARCHAR(255) NOT NULL,
-    otp VARCHAR(6) NOT NULL,
     approval_status ENUM('pending', 'approved', 'denied') DEFAULT 'pending',
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verified TINYINT(1) DEFAULT 0
 );
+
+```
+if you have created table alread without including verified columd then run 
+```sql
+ALTER TABLE login_attempts
+ADD COLUMN verified TINYINT(1) DEFAULT 0;
+
+
 ```
 
 ---
@@ -8962,40 +8970,71 @@ CREATE TABLE login_attempts (
 This PHP script handles the user approval or denial of login attempts, including the database connection with the port number specified.
 
 ```php
-<?php
+  
+
+    <?php
 session_start();
 require 'db.php';  // Include database connection
 
-// Assuming user and IP details are set in session (can be dynamically fetched in a real app)
+// Ensure user and IP details are set in the session (can be dynamically fetched in a real app)
 if (!isset($_SESSION['user'])) {
-    $_SESSION['user'] = "testuser";  // Replace with dynamic value
+    $_SESSION['user'] = "ubuntu";  // Replace with dynamic value from the session or auth system
 }
 if (!isset($_SESSION['ip'])) {
-    $_SESSION['ip'] = "192.168.1.100";  // Replace with dynamic value
+    $_SESSION['ip'] = "54.159.128.204";  // Replace with dynamic value
 }
 
-// Handle the approval or denial of login attempt
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approval'])) {
-    $approval = $_POST['approval'];
-
-    if ($approval !== 'Yes' && $approval !== 'No') {
-        echo "Invalid input. Please select 'Yes' or 'No'.";
-        exit;
-    }
-
-    // Update the login attempt approval status in the database
-    $stmt = $pdo->prepare("UPDATE login_attempts SET approval_status = :approval WHERE user = :user AND ip = :ip ORDER BY timestamp DESC LIMIT 1");
+// Insert the login attempt with pending status (for demonstration purposes)
+try {
+    $stmt = $pdo->prepare("INSERT INTO login_attempts (user, ip, approval_status, timestamp) VALUES (:user, :ip, 'pending', NOW())");
     $stmt->execute([
-        ':approval' => $approval,
         ':user' => $_SESSION['user'],
         ':ip' => $_SESSION['ip']
     ]);
+} catch (PDOException $e) {
+    echo "Error: " . $e->getMessage();
+}
 
-    echo "Your choice to $approval the login attempt has been recorded.";
-    exit;
-} else {
-    echo "No approval request received.";
-    exit;
+// Handle the approval or denial of the login attempt when the form is submitted
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Check if 'approval' is set and either 'Yes' or 'No'
+    if (isset($_POST['approval']) && ($_POST['approval'] === 'Yes' || $_POST['approval'] === 'No')) {
+        $approval = $_POST['approval'];
+
+        // Set status based on the approval decision
+        $status = ($approval === 'Yes') ? 'approved' : 'denied';
+
+        try {
+            // Update the most recent login attempt with 'approved' or 'denied' status
+            $stmt = $pdo->prepare("
+                UPDATE login_attempts 
+                SET approval_status = :approval_status, verified = 1
+                WHERE user = :user 
+                  AND ip = :ip 
+                  AND approval_status = 'pending' 
+                ORDER BY timestamp DESC 
+                LIMIT 1
+            ");
+            $stmt->execute([
+                ':approval_status' => $status,
+                ':user' => $_SESSION['user'],
+                ':ip' => $_SESSION['ip']
+            ]);
+
+            // Check if the update was successful
+            if ($stmt->rowCount() > 0) {
+                echo "Your choice to $status the login attempt has been recorded.";
+            } else {
+                echo "No pending login attempt found for this user and IP.";
+            }
+        } catch (PDOException $e) {
+            // Handle database errors gracefully
+            echo "Error: " . $e->getMessage();
+        }
+    } else {
+        echo "Invalid input. Please select 'Approve' or 'Deny'.";
+    }
+    exit;  // Ensure no further processing occurs after handling the form
 }
 ?>
 
@@ -9008,17 +9047,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approval'])) {
 </head>
 <body>
     <h1>SSH Login Attempt</h1>
-    <p>User: <?php echo $_SESSION['user']; ?> is attempting to log in from IP: <?php echo $_SESSION['ip']; ?>.</p>
+    <p>User: <?php echo htmlspecialchars($_SESSION['user']); ?> is attempting to log in from IP: <?php echo htmlspecialchars($_SESSION['ip']); ?>.</p>
     <p>Do you approve this login attempt?</p>
 
-    <form method="POST" action="approve_login.php">
+    <form method="POST" action="">
         <button type="submit" name="approval" value="Yes">Approve</button>
         <button type="submit" name="approval" value="No">Deny</button>
     </form>
 </body>
 </html>
-```
 
+
+
+```
 ---
 
 ### **Step 3: PHP Script to Fetch Approval Status (`status.php`)**
