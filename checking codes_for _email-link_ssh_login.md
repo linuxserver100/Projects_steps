@@ -9149,8 +9149,8 @@ DB_USER="verify_user1"  # Replace with your database username
 DB_PASS="Qwerty"  # Replace with your database password
 
 # Pushbullet API Access Token and Device ID (Replace with actual values)
-ACCESS_TOKEN="o.e95YnHTNPEdwSfdSk1ZYb0MoPk3VnR2R"
-DEVICE_ID="ujzzHM4MncasjC65m66dEG"
+ACCESS_TOKEN="oe95VnR2R"
+DEVICE_ID="ujm66dEG"
 
 # Send Pushbullet notification with the approval link
 MESSAGE="SSH login attempt detected on $(hostname) from IP $IP.\nDo you approve this login attempt?"
@@ -9202,7 +9202,7 @@ while true; do
 
         # Generate and send OTP only if approved
         OTP=$(shuf -i 100000-999999 -n 1)
-        echo "OTP generated: $OTP"
+        
 
         # Send OTP to the user's device via Pushbullet
         OTP_MESSAGE="Your OTP for SSH login is: $OTP"
