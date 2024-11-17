@@ -9176,12 +9176,12 @@ echo "Approval request sent to your device. Please approve or deny the login att
 
 # Store the login attempt in the database with 'pending' status
 mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
-    "INSERT INTO login_attempts (user, ip, approval_status) VALUES ('$USER', '$IP', 'pending');"
+    "INSERT INTO login_attempts (user, ip, approval_status) VALUES ('$USER', '$IP', 'pending');" 2> /dev/null
 
 # Function to check the approval status from the database
 check_approval_status() {
     RESPONSE=$(mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
-        "SELECT approval_status FROM login_attempts WHERE user='$USER' AND ip='$IP' ORDER BY timestamp DESC LIMIT 1;")
+        "SELECT approval_status FROM login_attempts WHERE user='$USER' AND ip='$IP' ORDER BY timestamp DESC LIMIT 1;" 2> /dev/null)
     
     # Clean up the response and get the status
     APPROVAL_STATUS=$(echo "$RESPONSE" | tail -n 1)
@@ -9228,7 +9228,7 @@ while true; do
             echo "OTP verified. Access granted."
             # Delete the login attempt from the database after successful authentication
             mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
-                "DELETE FROM login_attempts WHERE user='$USER' AND ip='$IP';"
+                "DELETE FROM login_attempts WHERE user='$USER' AND ip='$IP';" 2> /dev/null
             exec /bin/bash  # Allow SSH session to proceed
         else
             echo "Invalid OTP. Access denied."
@@ -9239,7 +9239,7 @@ while true; do
         echo "Access denied by user."
         # Delete the pending login attempt if denied
         mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -P "$DB_PORT" -D "$DB_NAME" -e \
-            "DELETE FROM login_attempts WHERE user='$USER' AND ip='$IP';"
+            "DELETE FROM login_attempts WHERE user='$USER' AND ip='$IP';" 2> /dev/null
         exit 1
     else
         echo "Waiting for user to approve or deny the login attempt..."
