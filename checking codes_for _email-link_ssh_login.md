@@ -9293,11 +9293,19 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-Certainly! Here's the updated version of the code, where the API keys and other necessary variables are predefined within the script, without the need to export them as environment variables.
+.
+
+Certainly! Below is the updated solution where we integrate Duo's OTP system using the **Duo package** via an HTTP client from a tarball. This version bypasses the need for `python-duo` and directly makes HTTP requests to the Duo API. All necessary package installation steps have been adapted for this method, and the flow includes the Duo HTTP API integration.
 
 ---
 
-### 1. **Twilio SMS OTP Script (`twilio_sms_otp.sh`)**
+### **Updated Solution with Duo HTTP API Integration**
+
+In this solution, we will integrate Duo's OTP services using the HTTP client and a tarball for Duo. This method avoids using the `python-duo` package and directly communicates with Duo's API through HTTP.
+
+---
+
+### **1. Twilio SMS OTP Script (`twilio_sms_otp.sh`)**
 
 ```bash
 #!/bin/bash
@@ -9329,6 +9337,17 @@ else
 fi
 ```
 
+#### **Required Package**:
+- `curl` to send HTTP requests to the Twilio API.
+
+#### **Installation**:
+Ensure `curl` is installed by running:
+
+```bash
+sudo apt update
+sudo apt install curl
+```
+
 Make the script executable:
 
 ```bash
@@ -9337,7 +9356,7 @@ chmod +x /path/to/twilio_sms_otp.sh
 
 ---
 
-### 2. **Twilio Call OTP Script (`twilio_call_otp.sh`)**
+### **2. Twilio Call OTP Script (`twilio_call_otp.sh`)**
 
 ```bash
 #!/bin/bash
@@ -9369,6 +9388,17 @@ else
 fi
 ```
 
+#### **Required Package**:
+- `curl` to send HTTP requests to the Twilio API.
+
+#### **Installation**:
+Ensure `curl` is installed:
+
+```bash
+sudo apt update
+sudo apt install curl
+```
+
 Make the script executable:
 
 ```bash
@@ -9377,7 +9407,27 @@ chmod +x /path/to/twilio_call_otp.sh
 
 ---
 
-### 3. **Duo SMS OTP Script (`duo_sms_otp.sh`)**
+### **3. Duo SMS OTP Script (`duo_sms_otp.sh`)**
+
+In this updated version, we'll install Duo's HTTP client libraries via a **tarball** and make HTTP requests to interact with Duo's API.
+
+#### **Step 1: Install Duo HTTP Client Dependencies**
+First, download and install the necessary dependencies from the Duo website. Follow these steps to install the Duo client using a tarball:
+
+```bash
+# Download the Duo client tarball
+curl -O https://dl.duosecurity.com/duo_unix.tar.gz
+
+# Extract the files
+tar -xvzf duo_unix.tar.gz
+cd duo_unix
+
+# Compile and install Duo client
+make
+sudo make install
+```
+
+#### **Step 2: Duo API Script to Send SMS OTP**
 
 ```bash
 #!/bin/bash
@@ -9390,7 +9440,7 @@ SK_KEY="your_secret_key"
 HOST="api-xxxxxxxx.duosecurity.com"
 DUO_API_URL="https://$HOST/rest/v1/auth/sms"
 
-# Send SMS OTP via Duo API
+# Send SMS OTP via Duo API using HTTP client
 response=$(curl -s -X POST $DUO_API_URL \
   -d "username=$username" \
   -d "phone=$phone_number" \
@@ -9405,6 +9455,22 @@ else
 fi
 ```
 
+#### **Required Packages**:
+- `curl` to send HTTP requests.
+- Duo's **HTTP client** installed from the tarball.
+
+#### **Installation**:
+Ensure that you’ve installed Duo’s HTTP client from the tarball:
+
+```bash
+# If Duo client is not installed, follow the installation steps from above
+curl -O https://dl.duosecurity.com/duo_unix.tar.gz
+tar -xvzf duo_unix.tar.gz
+cd duo_unix
+make
+sudo make install
+```
+
 Make the script executable:
 
 ```bash
@@ -9413,7 +9479,7 @@ chmod +x /path/to/duo_sms_otp.sh
 
 ---
 
-### 4. **Duo Call OTP Script (`duo_call_otp.sh`)**
+### **4. Duo Call OTP Script (`duo_call_otp.sh`)**
 
 ```bash
 #!/bin/bash
@@ -9426,7 +9492,7 @@ SK_KEY="your_secret_key"
 HOST="api-xxxxxxxx.duosecurity.com"
 DUO_API_URL="https://$HOST/rest/v1/auth/call"
 
-# Initiate OTP call via Duo API
+# Initiate OTP call via Duo API using HTTP client
 response=$(curl -s -X POST $DUO_API_URL \
   -d "username=$username" \
   -d "phone=$phone_number" \
@@ -9441,7 +9507,12 @@ else
 fi
 ```
 
-Make the script executable:
+#### **Required Packages**:
+- `curl` for HTTP requests.
+- Duo's **HTTP client** installed from the tarball.
+
+#### **Installation**:
+Make sure you have installed the Duo HTTP client as described above. After that, make the script executable:
 
 ```bash
 chmod +x /path/to/duo_call_otp.sh
@@ -9449,7 +9520,7 @@ chmod +x /path/to/duo_call_otp.sh
 
 ---
 
-### 5. **Combined MFA Flow for SSH Login (`multi_factor_auth.sh`)**
+### **5. Combined MFA Flow for SSH Login (`multi_factor_auth.sh`)**
 
 ```bash
 #!/bin/bash
@@ -9514,7 +9585,7 @@ chmod +x /path/to/multi_factor_auth.sh
 
 ---
 
-### 6. **Enforce MFA with `ForceCommand` in SSH**
+### **6. Enforce MFA with `ForceCommand` in SSH**
 
 Edit `/etc/ssh/sshd_config`:
 
@@ -9530,17 +9601,22 @@ sudo systemctl restart sshd
 
 ---
 
-### 7. **Test SSH Login**
+### **7. Test SSH Login**
 
 ```bash
 ssh user@server_ip
 ```
 
-The user will be prompted to choose an authentication method (Twilio SMS, Twilio Call, Duo SMS, or Duo Call) and proceed through the MFA process.
+The user will be prompted to
+
+ choose an authentication method (Twilio SMS, Twilio Call, Duo SMS, or Duo Call) and proceed through the MFA process.
 
 ---
 
-### Conclusion
+### **Conclusion**
 
-In this updated solution, all variables for Twilio and Duo API credentials are predefined directly within the scripts instead of using environment variables. The authentication process remains the same, allowing the user to choose between various multi-factor authentication methods for SSH login.
+In this version:
 
+- **Duo SDK** is replaced with direct HTTP calls to the Duo API using `curl`, following the Duo integration via the **HTTP client from a tarball**.
+- **Twilio** API calls remain unchanged, utilizing `curl`.
+- **Duo HTTP client** is installed manually from a tarball, following the Duo website instructions for Unix-based systems.
