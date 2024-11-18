@@ -8065,7 +8065,7 @@ This solution demonstrates how to secure SSH access using email verification and
 ### **1. Set Up PlanetScale MySQL Database with SSL**
 
 1. **Sign Up for PlanetScale**:
-   - Sign up for a free account at [PlanetScale](https://www.planetscale.com).
+   - Sign up for a free account at [PlanetScale](https://www.planetscale.com).or you may try for aiven free database lifetime free and supporting
    - Create a new database, and ensure SSL is enabled in the PlanetScale settings.
 
 2. **Download SSL Certificates**:
@@ -8155,7 +8155,7 @@ TOKEN=$(uuidgen)
 
 # Store the email in the database with verification status (false by default)
 mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS $MYSQL_DB --ssl-ca=$SSL_CA_PATH -e "
-INSERT INTO emails (email, verified) VALUES ('$EMAIL', false);
+INSERT INTO emails (email, verified) VALUES ('$EMAIL', false);" 2> /dev/null
 "
 
 # Define the verification URL (points to the PHP script for verification)
@@ -8283,12 +8283,12 @@ USER_EMAIL="email_address whwe email will br sent"
 # Query the MySQL database to check if the email is verified
 EMAIL_STATUS=$(mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB --ssl-ca=$SSL_CA_PATH -se "
 SELECT verified FROM emails WHERE email = '$USER_EMAIL';
-")
+" 2> /dev/null)
 
 # Check if the email is verified
 if [[ "$EMAIL_STATUS" == "1" ]]; then
     mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB -e "
-    DELETE FROM emails WHERE email = '$USER_EMAIL';
+    DELETE FROM emails WHERE email = '$USER_EMAIL';" 2> /dev/null
     # Email is verified, grant access
     echo "Email verified. Access granted."
 
@@ -8298,7 +8298,7 @@ if [[ "$EMAIL_STATUS" == "1" ]]; then
     # After SSH session ends, delete the email record from the database
     mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASS -D $MYSQL_DB -e "
     DELETE FROM emails WHERE email = '$USER_EMAIL';
-    "
+    " 2> /dev/null
 else
     # Email is not verified, deny access
     echo "Email not verified. Access denied."
@@ -8334,7 +8334,7 @@ fi
 
     /path/to/send_email.sh  # Run the first script
     sleep 15                # Wait for 15 seconds
-    /path/to/verify_email.sh  # Run the second script
+    /path/to/validate_email.sh  # Run the second script
 
     ```
 
