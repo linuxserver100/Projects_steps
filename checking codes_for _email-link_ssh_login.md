@@ -9293,59 +9293,33 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-### Multi-Factor Authentication (MFA) for SSH Login with Twilio and Duo OTPs
+Certainly! Here's the updated version of the code, where the API keys and other necessary variables are predefined within the script, without the need to export them as environment variables.
 
-This solution integrates **Twilio SMS OTP**, **Twilio Call OTP**, **Duo SMS OTP**, and **Duo Call OTP** to create a comprehensive **multi-factor authentication (MFA)** flow for SSH login. Users can choose their preferred authentication method during the login process.
+---
 
-### Overview
-- **Twilio SMS OTP** and **Twilio Call OTP** for phone-based authentication.
-- **Duo SMS OTP** and **Duo Call OTP** for SMS or phone-based authentication.
-- Enforced via SSH using the `ForceCommand` directive.
-
-### Prerequisites
-- **Twilio Account** for SMS and Call OTP.
-- **Duo Security Account** for SMS and Call OTP.
-- **Ubuntu Server** with SSH access enabled.
-- **Duo Admin Panel Permissions**: Ensure the Duo integration keys are properly configured, and you have set up Duo's API to allow SMS and call-based OTP requests.
-
-### Steps
-
-#### 1. **Install Required Dependencies**
-
-```bash
-sudo apt update
-sudo apt install -y curl jq
-```
-
-#### 2. **Set Up Twilio for SMS and Call OTP Authentication**
-
-##### 2.1 Configure Twilio Environment Variables
-
-```bash
-export TWILIO_ACCOUNT_SID="your_account_sid"
-export TWILIO_AUTH_TOKEN="your_auth_token"
-export TWILIO_PHONE_NUMBER="your_twilio_phone_number"
-```
-
-##### 2.2 Twilio SMS OTP Script
-
-Create `/path/to/twilio_sms_otp.sh` to send an SMS OTP:
+### 1. **Twilio SMS OTP Script (`twilio_sms_otp.sh`)**
 
 ```bash
 #!/bin/bash
 to_phone_number=$1
-OTP=$(shuf -i 100000-999999 -n 1)
-ACCOUNT_SID="$TWILIO_ACCOUNT_SID"
-AUTH_TOKEN="$TWILIO_AUTH_TOKEN"
-FROM_NUMBER="$TWILIO_PHONE_NUMBER"
+
+# Predefined Twilio credentials and settings
+ACCOUNT_SID="your_account_sid"
+AUTH_TOKEN="your_auth_token"
+FROM_NUMBER="your_twilio_phone_number"
 TWILIO_API_URL="https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json"
 
+# Generate a random OTP
+OTP=$(shuf -i 100000-999999 -n 1)
+
+# Send SMS via Twilio API
 response=$(curl -s -X POST $TWILIO_API_URL \
   --data-urlencode "To=$to_phone_number" \
   --data-urlencode "From=$FROM_NUMBER" \
   --data-urlencode "Body=Your OTP is: $OTP" \
   -u "$ACCOUNT_SID:$AUTH_TOKEN")
 
+# Check if OTP was sent successfully
 if [[ $response == *"sid"* ]]; then
   echo "OTP sent successfully to $to_phone_number."
   echo $OTP
@@ -9361,25 +9335,31 @@ Make the script executable:
 chmod +x /path/to/twilio_sms_otp.sh
 ```
 
-##### 2.3 Twilio Call OTP Script
+---
 
-Create `/path/to/twilio_call_otp.sh` to initiate a phone call with OTP:
+### 2. **Twilio Call OTP Script (`twilio_call_otp.sh`)**
 
 ```bash
 #!/bin/bash
 to_phone_number=$1
-OTP=$(shuf -i 100000-999999 -n 1)
-ACCOUNT_SID="$TWILIO_ACCOUNT_SID"
-AUTH_TOKEN="$TWILIO_AUTH_TOKEN"
-FROM_NUMBER="$TWILIO_PHONE_NUMBER"
+
+# Predefined Twilio credentials and settings
+ACCOUNT_SID="your_account_sid"
+AUTH_TOKEN="your_auth_token"
+FROM_NUMBER="your_twilio_phone_number"
 TWILIO_API_URL="https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json"
 
+# Generate a random OTP
+OTP=$(shuf -i 100000-999999 -n 1)
+
+# Make the call with Twilio API
 response=$(curl -s -X POST $TWILIO_API_URL \
   --data-urlencode "To=$to_phone_number" \
   --data-urlencode "From=$FROM_NUMBER" \
   --data-urlencode "Url=http://twimlets.com/holdmusic?Bucket=com.twilio.music.ambient&Message=Your%20OTP%20is%20$OTP" \
   -u "$ACCOUNT_SID:$AUTH_TOKEN")
 
+# Check if the call was initiated successfully
 if [[ $response == *"sid"* ]]; then
   echo "Phone call initiated successfully to $to_phone_number."
   echo $OTP
@@ -9395,34 +9375,28 @@ Make the script executable:
 chmod +x /path/to/twilio_call_otp.sh
 ```
 
-#### 3. **Set Up Duo Security for SMS and Call OTP Authentication**
+---
 
-##### 3.1 Configure Duo Environment Variables
-
-```bash
-export DUO_INTEGRATION_KEY="your_integration_key"
-export DUO_SECRET_KEY="your_secret_key"
-export DUO_API_HOSTNAME="api-xxxxxxxx.duosecurity.com"
-```
-
-##### 3.2 Duo SMS OTP Script
-
-Create `/path/to/duo_sms_otp.sh` to trigger Duo SMS OTP:
+### 3. **Duo SMS OTP Script (`duo_sms_otp.sh`)**
 
 ```bash
 #!/bin/bash
 username=$1
 phone_number=$2
-ikey="$DUO_INTEGRATION_KEY"
-skey="$DUO_SECRET_KEY"
-host="$DUO_API_HOSTNAME"
-DUO_API_URL="https://$host/rest/v1/auth/sms"
 
+# Predefined Duo credentials and settings
+IK_KEY="your_integration_key"
+SK_KEY="your_secret_key"
+HOST="api-xxxxxxxx.duosecurity.com"
+DUO_API_URL="https://$HOST/rest/v1/auth/sms"
+
+# Send SMS OTP via Duo API
 response=$(curl -s -X POST $DUO_API_URL \
   -d "username=$username" \
   -d "phone=$phone_number" \
-  -u "$ikey:$skey")
+  -u "$IK_KEY:$SK_KEY")
 
+# Check if the OTP was sent successfully
 if echo "$response" | grep -q '"stat":"OK"'; then
   echo "SMS OTP sent successfully to $phone_number."
 else
@@ -9437,24 +9411,28 @@ Make the script executable:
 chmod +x /path/to/duo_sms_otp.sh
 ```
 
-##### 3.3 Duo Call OTP Script
+---
 
-Create `/path/to/duo_call_otp.sh` to trigger Duo Call OTP:
+### 4. **Duo Call OTP Script (`duo_call_otp.sh`)**
 
 ```bash
 #!/bin/bash
 username=$1
 phone_number=$2
-ikey="$DUO_INTEGRATION_KEY"
-skey="$DUO_SECRET_KEY"
-host="$DUO_API_HOSTNAME"
-DUO_API_URL="https://$host/rest/v1/auth/call"
 
+# Predefined Duo credentials and settings
+IK_KEY="your_integration_key"
+SK_KEY="your_secret_key"
+HOST="api-xxxxxxxx.duosecurity.com"
+DUO_API_URL="https://$HOST/rest/v1/auth/call"
+
+# Initiate OTP call via Duo API
 response=$(curl -s -X POST $DUO_API_URL \
   -d "username=$username" \
   -d "phone=$phone_number" \
-  -u "$ikey:$skey")
+  -u "$IK_KEY:$SK_KEY")
 
+# Check if the call was initiated successfully
 if echo "$response" | grep -q '"stat":"OK"'; then
   echo "Phone call OTP initiated to $phone_number."
 else
@@ -9469,19 +9447,19 @@ Make the script executable:
 chmod +x /path/to/duo_call_otp.sh
 ```
 
-#### 4. **Combined MFA Flow for SSH Login**
+---
 
-##### 4.1 Multi-Factor Authentication Script
-
-Create `/path/to/multi_factor_auth.sh` to handle the MFA flow and let the user select their authentication method:
+### 5. **Combined MFA Flow for SSH Login (`multi_factor_auth.sh`)**
 
 ```bash
 #!/bin/bash
 
+# Predefined parameters
 username=$1
 phone_number=$2
 email_address=$3
 
+# Display options for authentication methods
 echo "Choose Authentication Method:"
 echo "1. Twilio SMS OTP"
 echo "2. Twilio Call OTP"
@@ -9534,15 +9512,9 @@ Make the script executable:
 chmod +x /path/to/multi_factor_auth.sh
 ```
 
-##### 4.2 Test the Combined Authentication Flow
+---
 
-```bash
-/path/to/multi_factor_auth.sh username +1234567890 user@example.com
-```
-
-#### 5. **Enforce MFA with `ForceCommand` in SSH**
-
-##### 5.1 Modify SSH Configuration
+### 6. **Enforce MFA with `ForceCommand` in SSH**
 
 Edit `/etc/ssh/sshd_config`:
 
@@ -9550,33 +9522,25 @@ Edit `/etc/ssh/sshd_config`:
 ForceCommand /path/to/multi_factor_auth.sh
 ```
 
-##### 5.2 Restart SSH Service
+Restart the SSH service:
 
 ```bash
 sudo systemctl restart sshd
 ```
 
-#### 6. **Test SSH Login**
+---
+
+### 7. **Test SSH Login**
 
 ```bash
 ssh user@server_ip
 ```
 
-The user will be prompted to choose one of the four authentication methods (Twilio SMS, Twilio Call, Duo SMS, or Duo Call) and proceed through the selected MFA process.
+The user will be prompted to choose an authentication method (Twilio SMS, Twilio Call, Duo SMS, or Duo Call) and proceed through the MFA process.
 
-### Security Considerations
-- **Secure API Keys**: Store Twilio and Duo API keys securely (e.g., environment variables or a secrets manager).
-- **HTTPS**: Ensure that all API requests to Twilio and Duo are over HTTPS.
-- **SSH Keys**: For enhanced security, combine this MFA process with SSH key authentication.
-
-### Duo Admin Panel Configuration
-1. **Configure Duo Admin Panel for MFA**:
-   - Ensure your Duo integration keys are set up correctly for SMS and call OTP.
-   - In the **Duo Admin Panel**, make sure the **SMS OTP** and **Call OTP** options
-
- are enabled.
-   - Test OTP delivery settings in the **API** section of the Duo Admin Panel to ensure that both SMS and Call-based OTPs are functioning as expected.
+---
 
 ### Conclusion
-This solution integrates Twilio and Duo for a robust MFA solution for SSH login, allowing users to select their preferred authentication method. It enforces MFA through the `ForceCommand` directive, ensuring all users go through the multi-factor authentication process before accessing the server.
+
+In this updated solution, all variables for Twilio and Duo API credentials are predefined directly within the scripts instead of using environment variables. The authentication process remains the same, allowing the user to choose between various multi-factor authentication methods for SSH login.
 
