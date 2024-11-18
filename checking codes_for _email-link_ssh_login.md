@@ -9293,23 +9293,22 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-.
-
-### **Multi-Factor Authentication (MFA) for SSH Login with Twilio and Duo OTPs**
+### Multi-Factor Authentication (MFA) for SSH Login with Twilio and Duo OTPs
 
 This solution integrates **Twilio SMS OTP**, **Twilio Call OTP**, **Duo SMS OTP**, and **Duo Call OTP** to create a comprehensive **multi-factor authentication (MFA)** flow for SSH login. Users can choose their preferred authentication method during the login process.
 
-### **Overview**
+### Overview
 - **Twilio SMS OTP** and **Twilio Call OTP** for phone-based authentication.
 - **Duo SMS OTP** and **Duo Call OTP** for SMS or phone-based authentication.
-- Enforced via SSH using `ForceCommand` directive.
+- Enforced via SSH using the `ForceCommand` directive.
 
-### **Prerequisites**
+### Prerequisites
 - **Twilio Account** for SMS and Call OTP.
 - **Duo Security Account** for SMS and Call OTP.
 - **Ubuntu Server** with SSH access enabled.
+- **Duo Admin Panel Permissions**: Ensure the Duo integration keys are properly configured, and you have set up Duo's API to allow SMS and call-based OTP requests.
 
-### **Steps**
+### Steps
 
 #### 1. **Install Required Dependencies**
 
@@ -9565,11 +9564,19 @@ ssh user@server_ip
 
 The user will be prompted to choose one of the four authentication methods (Twilio SMS, Twilio Call, Duo SMS, or Duo Call) and proceed through the selected MFA process.
 
-### **Security Considerations**
+### Security Considerations
 - **Secure API Keys**: Store Twilio and Duo API keys securely (e.g., environment variables or a secrets manager).
 - **HTTPS**: Ensure that all API requests to Twilio and Duo are over HTTPS.
 - **SSH Keys**: For enhanced security, combine this MFA process with SSH key authentication.
 
-### **Conclusion**
+### Duo Admin Panel Configuration
+1. **Configure Duo Admin Panel for MFA**:
+   - Ensure your Duo integration keys are set up correctly for SMS and call OTP.
+   - In the **Duo Admin Panel**, make sure the **SMS OTP** and **Call OTP** options
+
+ are enabled.
+   - Test OTP delivery settings in the **API** section of the Duo Admin Panel to ensure that both SMS and Call-based OTPs are functioning as expected.
+
+### Conclusion
 This solution integrates Twilio and Duo for a robust MFA solution for SSH login, allowing users to select their preferred authentication method. It enforces MFA through the `ForceCommand` directive, ensuring all users go through the multi-factor authentication process before accessing the server.
 
