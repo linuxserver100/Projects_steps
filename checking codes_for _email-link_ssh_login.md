@@ -9293,19 +9293,11 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-.
-
-Certainly! Below is the updated solution where we integrate Duo's OTP system using the **Duo package** via an HTTP client from a tarball. This version bypasses the need for `python-duo` and directly makes HTTP requests to the Duo API. All necessary package installation steps have been adapted for this method, and the flow includes the Duo HTTP API integration.
+Certainly! Here’s an advanced version of the scripts with further improvements in error handling, logging, and user-friendly messages. Each script is robust and includes clear error messages for troubleshooting, particularly focusing on the handling of HTTP status codes (301 and 10401 for Duo API) and other potential issues.
 
 ---
 
-### **Updated Solution with Duo HTTP API Integration**
-
-In this solution, we will integrate Duo's OTP services using the HTTP client and a tarball for Duo. This method avoids using the `python-duo` package and directly communicates with Duo's API through HTTP.
-
----
-
-### **1. Twilio SMS OTP Script (`twilio_sms_otp.sh`)**
+### 1. **Twilio SMS OTP Script (`twilio_sms_otp.sh`)**
 
 ```bash
 #!/bin/bash
@@ -9321,31 +9313,33 @@ TWILIO_API_URL="https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages
 OTP=$(shuf -i 100000-999999 -n 1)
 
 # Send SMS via Twilio API
-response=$(curl -s -X POST $TWILIO_API_URL \
+response=$(curl -s -w "%{http_code}" -X POST $TWILIO_API_URL \
   --data-urlencode "To=$to_phone_number" \
   --data-urlencode "From=$FROM_NUMBER" \
   --data-urlencode "Body=Your OTP is: $OTP" \
   -u "$ACCOUNT_SID:$AUTH_TOKEN")
 
-# Check if OTP was sent successfully
-if [[ $response == *"sid"* ]]; then
+# Capture HTTP response code
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | sed '$d')
+
+# Handle errors based on response code
+if [[ $http_code -eq 201 ]]; then
   echo "OTP sent successfully to $to_phone_number."
   echo $OTP
+elif [[ $http_code -eq 400 ]]; then
+  echo "Bad Request. Possible incorrect parameters. Response: $body"
+  exit 1
+elif [[ $http_code -eq 401 ]]; then
+  echo "Authentication failed. Invalid Twilio credentials. Response: $body"
+  exit 1
+elif [[ $http_code -eq 404 ]]; then
+  echo "Not Found. Twilio API endpoint might be incorrect. Response: $body"
+  exit 1
 else
-  echo "Failed to send OTP. Response: $response"
+  echo "Failed to send OTP. HTTP Status Code: $http_code. Response: $body"
   exit 1
 fi
-```
-
-#### **Required Package**:
-- `curl` to send HTTP requests to the Twilio API.
-
-#### **Installation**:
-Ensure `curl` is installed by running:
-
-```bash
-sudo apt update
-sudo apt install curl
 ```
 
 Make the script executable:
@@ -9356,7 +9350,7 @@ chmod +x /path/to/twilio_sms_otp.sh
 
 ---
 
-### **2. Twilio Call OTP Script (`twilio_call_otp.sh`)**
+### 2. **Twilio Call OTP Script (`twilio_call_otp.sh`)**
 
 ```bash
 #!/bin/bash
@@ -9372,31 +9366,33 @@ TWILIO_API_URL="https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.js
 OTP=$(shuf -i 100000-999999 -n 1)
 
 # Make the call with Twilio API
-response=$(curl -s -X POST $TWILIO_API_URL \
+response=$(curl -s -w "%{http_code}" -X POST $TWILIO_API_URL \
   --data-urlencode "To=$to_phone_number" \
   --data-urlencode "From=$FROM_NUMBER" \
   --data-urlencode "Url=http://twimlets.com/holdmusic?Bucket=com.twilio.music.ambient&Message=Your%20OTP%20is%20$OTP" \
   -u "$ACCOUNT_SID:$AUTH_TOKEN")
 
-# Check if the call was initiated successfully
-if [[ $response == *"sid"* ]]; then
+# Capture HTTP response code
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | sed '$d')
+
+# Handle errors based on response code
+if [[ $http_code -eq 201 ]]; then
   echo "Phone call initiated successfully to $to_phone_number."
   echo $OTP
+elif [[ $http_code -eq 400 ]]; then
+  echo "Bad Request. Possible incorrect parameters. Response: $body"
+  exit 1
+elif [[ $http_code -eq 401 ]]; then
+  echo "Authentication failed. Invalid Twilio credentials. Response: $body"
+  exit 1
+elif [[ $http_code -eq 404 ]]; then
+  echo "Not Found. Twilio API endpoint might be incorrect. Response: $body"
+  exit 1
 else
-  echo "Failed to initiate phone call. Response: $response"
+  echo "Failed to initiate phone call. HTTP Status Code: $http_code. Response: $body"
   exit 1
 fi
-```
-
-#### **Required Package**:
-- `curl` to send HTTP requests to the Twilio API.
-
-#### **Installation**:
-Ensure `curl` is installed:
-
-```bash
-sudo apt update
-sudo apt install curl
 ```
 
 Make the script executable:
@@ -9407,27 +9403,9 @@ chmod +x /path/to/twilio_call_otp.sh
 
 ---
 
-### **3. Duo SMS OTP Script (`duo_sms_otp.sh`)**
+### 3. **Duo SMS OTP Script (`duo_sms_otp.sh`)**
 
-In this updated version, we'll install Duo's HTTP client libraries via a **tarball** and make HTTP requests to interact with Duo's API.
-
-#### **Step 1: Install Duo HTTP Client Dependencies**
-First, download and install the necessary dependencies from the Duo website. Follow these steps to install the Duo client using a tarball:
-
-```bash
-# Download the Duo client tarball
-curl -O https://dl.duosecurity.com/duo_unix.tar.gz
-
-# Extract the files
-tar -xvzf duo_unix.tar.gz
-cd duo_unix
-
-# Compile and install Duo client
-make
-sudo make install
-```
-
-#### **Step 2: Duo API Script to Send SMS OTP**
+#### **Updated for Duo API v2 with Advanced Error Handling**
 
 ```bash
 #!/bin/bash
@@ -9437,38 +9415,60 @@ phone_number=$2
 # Predefined Duo credentials and settings
 IK_KEY="your_integration_key"
 SK_KEY="your_secret_key"
-HOST="api-xxxxxxxx.duosecurity.com"
-DUO_API_URL="https://$HOST/rest/v1/auth/sms"
+HOST="api-xxxxxxxx.duosecurity.com"  # Ensure you are using the correct API host
+DUO_API_URL="https://$HOST/api/v2/auth/sms"
 
-# Send SMS OTP via Duo API using HTTP client
-response=$(curl -s -X POST $DUO_API_URL \
+# Duo API Authentication (use new v2 API)
+response=$(curl -s -w "%{http_code}" -X POST $DUO_API_URL \
   -d "username=$username" \
   -d "phone=$phone_number" \
   -u "$IK_KEY:$SK_KEY")
 
-# Check if the OTP was sent successfully
-if echo "$response" | grep -q '"stat":"OK"'; then
-  echo "SMS OTP sent successfully to $phone_number."
-else
-  echo "Failed to send SMS OTP. Response: $response"
-  exit 1
-fi
-```
+# Capture HTTP response code and body
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | sed '$d')
 
-#### **Required Packages**:
-- `curl` to send HTTP requests.
-- Duo's **HTTP client** installed from the tarball.
-
-#### **Installation**:
-Ensure that you’ve installed Duo’s HTTP client from the tarball:
-
-```bash
-# If Duo client is not installed, follow the installation steps from above
-curl -O https://dl.duosecurity.com/duo_unix.tar.gz
-tar -xvzf duo_unix.tar.gz
-cd duo_unix
-make
-sudo make install
+# Handle errors based on response code
+case $http_code in
+  200)
+    if echo "$body" | grep -q '"stat":"OK"'; then
+      echo "SMS OTP sent successfully to $phone_number."
+    else
+      echo "Duo API error: $body"
+      exit 1
+    fi
+    ;;
+  301)
+    echo "Error 301: Duo API has moved permanently. Please verify the API URL."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  10401)
+    echo "Error 10401: Authentication failed. Invalid Integration Key or Secret Key."
+    echo "Error Message: $body"
+    echo "Please verify your credentials in the Duo Admin Panel."
+    exit 1
+    ;;
+  400)
+    echo "Error 400: Bad Request. Invalid parameters sent."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  403)
+    echo "Error 403: Forbidden. Access denied. Check Duo Admin settings."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  404)
+    echo "Error 404: Not Found. The endpoint URL might be incorrect."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  *)
+    echo "Unexpected error occurred. HTTP Status Code: $http_code. Response: $body"
+    exit 1
+    ;;
+esac
 ```
 
 Make the script executable:
@@ -9479,7 +9479,9 @@ chmod +x /path/to/duo_sms_otp.sh
 
 ---
 
-### **4. Duo Call OTP Script (`duo_call_otp.sh`)**
+### 4. **Duo Call OTP Script (`duo_call_otp.sh`)**
+
+#### **Updated for Duo API v2 with Advanced Error Handling**
 
 ```bash
 #!/bin/bash
@@ -9489,30 +9491,63 @@ phone_number=$2
 # Predefined Duo credentials and settings
 IK_KEY="your_integration_key"
 SK_KEY="your_secret_key"
-HOST="api-xxxxxxxx.duosecurity.com"
-DUO_API_URL="https://$HOST/rest/v1/auth/call"
+HOST="api-xxxxxxxx.duosecurity.com"  # Ensure you are using the correct API host
+DUO_API_URL="https://$HOST/api/v2/auth/call"
 
-# Initiate OTP call via Duo API using HTTP client
-response=$(curl -s -X POST $DUO_API_URL \
+# Duo API Authentication (use new v2 API)
+response=$(curl -s -w "%{http_code}" -X POST $DUO_API_URL \
   -d "username=$username" \
   -d "phone=$phone_number" \
   -u "$IK_KEY:$SK_KEY")
 
-# Check if the call was initiated successfully
-if echo "$response" | grep -q '"stat":"OK"'; then
-  echo "Phone call OTP initiated to $phone_number."
-else
-  echo "Failed to initiate phone call. Response: $response"
-  exit 1
-fi
+# Capture HTTP response code and body
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | sed '$d')
+
+# Handle errors based on response code
+case $http_code in
+  200)
+    if echo "$body" | grep -q '"stat":"OK"'; then
+      echo "Phone call OTP initiated to $phone_number."
+    else
+      echo "Duo API error: $body"
+      exit 1
+    fi
+    ;;
+  301)
+    echo "Error 301: Duo API has moved permanently. Please verify the API URL."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  10401)
+    echo "Error 10401: Authentication failed. Invalid Integration Key or Secret Key."
+    echo "Error Message: $body"
+    echo "Please verify your credentials in the Duo Admin Panel."
+    exit 1
+    ;;
+  400)
+    echo "Error 400: Bad Request. Invalid parameters sent."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  403)
+    echo "Error 403: Forbidden. Access denied. Check Duo Admin settings."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  404)
+    echo "Error 404: Not Found. The endpoint URL might be incorrect."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  *)
+    echo "Unexpected error occurred. HTTP Status Code: $http_code. Response: $body"
+    exit 1
+    ;;
+esac
 ```
 
-#### **Required Packages**:
-- `curl` for HTTP requests.
-- Duo's **HTTP client** installed from the tarball.
-
-#### **Installation**:
-Make sure you have installed the Duo HTTP client as described above. After that, make the script executable:
+Make the script executable:
 
 ```bash
 chmod +x /path/to/duo_call_otp.sh
@@ -9520,7 +9555,7 @@ chmod +x /path/to/duo_call_otp.sh
 
 ---
 
-### **5. Combined MFA Flow for SSH Login (`multi_factor_auth.sh`)**
+### 5. **Combined MFA Flow for SSH Login (`multi_factor_auth.sh`)**
 
 ```bash
 #!/bin/bash
@@ -9530,7 +9565,9 @@ username=$1
 phone_number=$2
 email_address=$3
 
-# Display options for authentication methods
+# Display options for authentication
+
+ methods
 echo "Choose Authentication Method:"
 echo "1. Twilio SMS OTP"
 echo "2. Twilio Call OTP"
@@ -9585,7 +9622,7 @@ chmod +x /path/to/multi_factor_auth.sh
 
 ---
 
-### **6. Enforce MFA with `ForceCommand` in SSH**
+### 6. **Enforce MFA with `ForceCommand` in SSH**
 
 Edit `/etc/ssh/sshd_config`:
 
@@ -9601,22 +9638,16 @@ sudo systemctl restart sshd
 
 ---
 
-### **7. Test SSH Login**
+### 7. **Test SSH Login**
 
 ```bash
 ssh user@server_ip
 ```
 
-The user will be prompted to
-
- choose an authentication method (Twilio SMS, Twilio Call, Duo SMS, or Duo Call) and proceed through the MFA process.
+The user will be prompted to choose an authentication method (Twilio SMS, Twilio Call, Duo SMS, or Duo Call) and proceed through the MFA process.
 
 ---
 
-### **Conclusion**
-
-In this version:
-
-- **Duo SDK** is replaced with direct HTTP calls to the Duo API using `curl`, following the Duo integration via the **HTTP client from a tarball**.
-- **Twilio** API calls remain unchanged, utilizing `curl`.
-- **Duo HTTP client** is installed manually from a tarball, following the Duo website instructions for Unix-based systems.
+### **Key Updates and Error Handling Enhancements**:
+- **Clear Error Codes and Messages**: Each script handles various HTTP status codes and provides a clear, detailed explanation of the error, especially for common problems like 301 (URL change) or 10401 (authentication failure).
+- **Improved Troubleshooting**: The script includes detailed logs for the errors returned by the APIs, making it easier for users to debug and fix any issues.
