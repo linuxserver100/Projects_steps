@@ -9293,257 +9293,239 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-Here’s a revised version of your guide, where the **Duo PAM configuration** (`pam_duo.conf`) is updated to handle SMS, push, and call-based authentication options, and these options are shown during SSH login. The SSH login will allow users to select one of the Duo authentication methods: **Push**, **SMS**, or **Call**.
+.
+To implement **Two-Factor Authentication (2FA)** for SSH login on an Ubuntu server with the ability to choose between **Duo Authentication** and **Twilio Authentication (via SMS or Voice Call)** during the login process, follow the steps below:
 
 ---
-
-### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Duo and Twilio (SMS, Push Authentication, and Call Option)
-
-This guide helps you implement **Two-Factor Authentication (2FA)** on an **Ubuntu server** using **Duo Security** and **Twilio** for SMS passcodes, push notifications, and phone call-based authentication during SSH login. The user will have the ability to choose from five different 2FA methods: **Duo Push**, **Duo SMS**, **Duo Call**, **Twilio SMS**, and **Twilio Call**.
 
 ### Prerequisites
-- **Ubuntu server** with **SSH** configured.
-- **Duo account** with integration keys (Integration Key, Secret Key, and API hostname), available from the **Duo Admin Panel**.
-- **Twilio account** with API credentials (Account SID, Auth Token, and Twilio phone number).
-- **Mobile device** to receive push notifications, SMS passcodes, or phone calls for authentication.
-- **Firewall settings** allowing SSH connections.
 
-### Step 1: Install Dependencies
-Install the necessary packages:
-
-```bash
-sudo apt update
-sudo apt install build-essential libpam-dev libssl-dev libtool wget
-```
-
-### Step 2: Install Duo Unix Package
-1. Download the latest Duo Unix package from Duo Security:
-
-```bash
-wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
-```
-
-2. Extract the downloaded package:
-
-```bash
-tar zxf duo_unix-latest.tar.gz
-cd duo_unix-*
-```
-
-3. Configure and compile the Duo Unix PAM module:
-
-```bash
-./configure --with-pam --prefix=/tmp
-sudo make install
-```
-
-### Step 3: Install Twilio CLI Tools (for Call and SMS)
-1. Install the Twilio command-line interface (CLI) to interact with Twilio’s SMS and call APIs. First, ensure you have Node.js installed:
-
-```bash
-sudo apt install nodejs npm
-```
-
-2. Install the Twilio CLI:
-
-```bash
-sudo npm install -g twilio-cli
-```
-
-3. Configure Twilio CLI with your account credentials:
-
-```bash
-twilio login
-```
-
-You will be prompted to enter your **Account SID** and **Auth Token**.
-
-### Step 4: Configure Duo with Your API Credentials
-1. Create a configuration directory for Duo:
-
-```bash
-sudo mkdir /etc/duo
-```
-
-2. Create the Duo PAM configuration file:
-
-```bash
-sudo nano /etc/duo/pam_duo.conf
-```
-
-3. In the configuration file, add the following parameters:
-
-```bash
-# Duo API credentials
-ikey = YOUR_INTEGRATION_KEY
-skey = YOUR_SECRET_KEY
-host = YOUR_API_HOSTNAME
-
-# Define authentication methods
-# Options: duo_push, duo_sms, duo_call
-method = duo_push
-fallback_method = duo_sms
-```
-
-Replace `YOUR_INTEGRATION_KEY`, `YOUR_SECRET_KEY`, and `YOUR_API_HOSTNAME` with your Duo credentials. This configuration will try **Duo Push** first and will fall back to **Duo SMS** if the push fails.
-
-4. Save and close the file.
-
-### Step 5: Configure Twilio with Your API Credentials
-1. Create a configuration file for Twilio:
-
-```bash
-sudo nano /etc/twilio/twilio_config.sh
-```
-
-2. In the file, add the following Twilio API credentials:
-
-```bash
-TWILIO_ACCOUNT_SID='YOUR_TWILIO_ACCOUNT_SID'
-TWILIO_AUTH_TOKEN='YOUR_TWILIO_AUTH_TOKEN'
-TWILIO_PHONE_NUMBER='YOUR_TWILIO_PHONE_NUMBER'
-```
-
-Replace the placeholders with your Twilio credentials.
-
-3. Save and close the file.
-
-### Step 6: Configure SSH for Public Key Authentication
-1. Open the SSH configuration file:
-
-```bash
-sudo nano /etc/ssh/sshd_config
-```
-
-2. Ensure the following settings are configured:
-
-```bash
-PubkeyAuthentication yes
-PasswordAuthentication no
-AuthenticationMethods publickey,keyboard-interactive
-ChallengeResponseAuthentication yes
-UsePAM yes
-UseDNS no
-```
-
-3. Save and close the file.
-
-### Step 7: Configure PAM for Duo and Twilio Authentication
-1. Open the PAM configuration for SSH:
-
-```bash
-sudo nano /etc/pam.d/sshd
-```
-
-2. Add the following line to the top of the file to ensure the Duo and Twilio PAM modules are invoked for authentication:
-
-```bash
-auth required /lib64/security/pam_duo.so
-auth required /etc/security/pam_twilio.so
-```
-
-If you're on a 32-bit system or the module is located in `/lib/security`, adjust accordingly.
-
-3. In the same file, configure the prompt to allow the user to choose between the five authentication options:
-
-```bash
-auth required /lib64/security/pam_duo.so method=duo_push
-auth required /lib64/security/pam_duo.so method=duo_sms
-auth required /lib64/security/pam_duo.so method=duo_call
-auth required /etc/security/pam_twilio.so method=twilio_sms
-auth required /etc/security/pam_twilio.so method=twilio_call
-```
-
-This setup ensures that the user will see options to choose their authentication method from **Duo Push**, **Duo SMS**, **Duo Call**, **Twilio SMS**, and **Twilio Call** when attempting to SSH into the server.
-
-### Step 8: Write Twilio PAM Script (Bash Version)
-1. Create a script file for Twilio integration:
-
-```bash
-sudo nano /etc/security/pam_twilio.sh
-```
-
-2. Add the following bash code, which uses `twilio-cli` to send an SMS or make a call:
-
-```bash
-#!/bin/bash
-
-# Load Twilio credentials
-source /etc/twilio/twilio_config.sh
-
-# Function to send SMS
-send_twilio_sms() {
-    local phone_number=$1
-    local message=$2
-    twilio api:core messages:create \
-        --to "$phone_number" \
-        --from "$TWILIO_PHONE_NUMBER" \
-        --body "$message"
-}
-
-# Function to make a call
-make_twilio_call() {
-    local phone_number=$1
-    twilio api:core calls:create \
-        --to "$phone_number" \
-        --from "$TWILIO_PHONE_NUMBER" \
-        --url "http://twimlets.com/holdmusic?Bucket=ambient"  # Play hold music as example
-}
-
-# Main function
-method=$1
-phone_number=$2
-
-if [[ "$method" == "twilio_sms" ]]; then
-    send_twilio_sms "$phone_number" "Your authentication code is: 123456"
-elif [[ "$method" == "twilio_call" ]]; then
-    make_twilio_call "$phone_number"
-else
-    echo "Invalid method"
-    exit 1
-fi
-```
-
-3. Make the script executable:
-
-```bash
-sudo chmod +x /etc/security/pam_twilio.sh
-```
-
-### Step 9: Set Permissions and Test the Configuration
-1. Restart the SSH service to apply changes:
-
-```bash
-sudo systemctl restart sshd
-```
-
-### Step 10: Enroll a Device with Duo and Twilio for SMS, Push, or Call Authentication
-1. SSH into your server for the first time after enabling Duo and Twilio 2FA:
-
-```bash
-ssh user@your_server_ip
-```
-
-2. During your first login attempt, Duo and Twilio will prompt you to enroll your device for authentication. You can choose either **Duo Push**, **Duo SMS**, **Duo Call**, **Twilio SMS**, or **Twilio Call**.
-
-   - **Duo Push**: Duo will send a push notification to your mobile device.
-   - **Duo SMS**: Duo will send a one-time passcode to your mobile device via SMS.
-   - **Duo Call**: Duo will call your phone and prompt you to approve the login.
-   - **Twilio SMS**: Twilio will send a one-time passcode to your phone via SMS.
-   - **Twilio Call**: Twilio will call your phone with instructions to approve the login.
-
-### Step 11: Test the 2FA Login
-1. After enrolling a device, attempt to SSH into the server again:
-
-```bash
-ssh user@your_server_ip
-```
-
-2. On login, you will see a prompt to choose between **Duo Push**, **Duo SMS**, **Duo Call**, **Twilio SMS**, or **Twilio Call** as the authentication method.
-
-### Conclusion
-By following these steps, you have successfully implemented **Two-Factor Authentication (2FA)** for SSH on your Ubuntu server using **Duo Security** and **Twilio**. Now, when you SSH into the server, you’ll be prompted to choose from five different 2FA methods, including **Duo Push**, **Duo SMS**, **Duo Call**, **Twilio SMS**, and **Twilio Call**, allowing you to select your preferred method for enhanced security.
+1. **Ubuntu server** with **SSH** configured.
+2. **Duo Security** account with API credentials (Integration Key, Secret Key, and API hostname).
+3. **Twilio account** with an active phone number for SMS and Voice Calls.
+4. **SSH Key Authentication** already set up.
+5. A **Twilio API Key and Auth Token**.
 
 ---
 
-This setup ensures that users can choose the Duo authentication method that best fits their needs, whether that’s through a push notification, SMS, or a phone call. Additionally, Twilio is integrated for further options.
+### Step-by-Step Integration
+
+#### 1. **Install Dependencies for Duo Unix PAM and Twilio (via `curl`)**
+
+1. **Install necessary packages**:
+
+   ```bash
+   sudo apt update
+   sudo apt install build-essential libpam-dev libssl-dev libtool wget curl
+   ```
+
+2. **Install Twilio Curl Utility**:
+
+   Twilio API requests will be sent using `curl`, so ensure `curl` is installed.
+
+3. **Install Duo Unix PAM Module**:
+
+   ```bash
+   wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
+   tar zxf duo_unix-latest.tar.gz
+   cd duo_unix-*
+   ./configure --with-pam --prefix=/tmp
+   sudo make install
+   ```
+
+---
+
+#### 2. **Configure Duo Security PAM**
+
+1. **Create Duo Configuration Directory**:
+
+   ```bash
+   sudo mkdir -p /etc/duo
+   ```
+
+2. **Create the Duo Configuration File**:
+
+   ```bash
+   sudo nano /etc/duo/pam_duo.conf
+   ```
+
+   Add the following configuration (replace with your Duo credentials):
+
+   ```text
+   [duo]
+   ikey = YOUR_INTEGRATION_KEY
+   skey = YOUR_SECRET_KEY
+   api_host = api-xxxxxx.duosecurity.com
+   ```
+
+3. **Configure SSH for Public Key Authentication**:
+
+   Open the SSH configuration file:
+
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Modify or add the following lines:
+
+   ```bash
+   PubkeyAuthentication yes
+   PasswordAuthentication no
+   AuthenticationMethods publickey,keyboard-interactive
+   ChallengeResponseAuthentication yes
+   UsePAM yes
+   ```
+
+4. **Restart SSH Service**:
+
+   ```bash
+   sudo systemctl restart sshd
+   ```
+
+---
+
+#### 3. **Configure PAM to Use Duo**
+
+1. **Modify `/etc/pam.d/sshd`** to enable Duo authentication:
+
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+   Add the following line at the top of the file:
+
+   ```bash
+   auth required /lib64/security/pam_duo.so
+   ```
+
+   Adjust the path for 32-bit systems or if you're using non-standard paths.
+
+2. **Save and Exit**.
+
+---
+
+#### 4. **Twilio Integration for SMS and Voice Authentication**
+
+We'll create a script that allows users to choose between **Duo** or **Twilio** for 2FA, triggered during SSH login.
+
+1. **Create a Shell Script for Twilio Authentication**:
+
+   ```bash
+   sudo nano /usr/local/bin/twilio_2fa.sh
+   ```
+
+   Paste the following script:
+
+   ```bash
+   #!/bin/bash
+
+   # Twilio credentials
+   ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
+   AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
+   TWILIO_PHONE_NUMBER="YOUR_TWILIO_PHONE_NUMBER"
+   USER_PHONE_NUMBER="$1"  # The phone number from the PAM user
+
+   # Generate a random 6-digit code
+   VERIFICATION_CODE=$(shuf -i 100000-999999 -n 1)
+
+   # Ask user for the authentication method
+   echo "Please select an authentication method:"
+   echo "1: Duo Authentication"
+   echo "2: Twilio Authentication"
+   read -p "Enter 1 for Duo or 2 for Twilio: " AUTH_METHOD
+
+   if [ "$AUTH_METHOD" == "1" ]; then
+       # Trigger Duo Authentication (push or passcode)
+       echo "You chose Duo Authentication. Please follow the Duo prompt on your device."
+       exit 0
+   elif [ "$AUTH_METHOD" == "2" ]; then
+       # Ask for SMS or Voice call option
+       echo "Please select an authentication method:"
+       echo "1: Receive SMS"
+       echo "2: Receive Voice Call"
+       read -p "Enter 1 or 2: " TWILIO_AUTH_METHOD
+
+       if [ "$TWILIO_AUTH_METHOD" == "1" ]; then
+           # Send SMS using Twilio API
+           curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json \
+               --data-urlencode "Body=Your 2FA code is $VERIFICATION_CODE" \
+               --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+               --data-urlencode "To=$USER_PHONE_NUMBER" \
+               -u $ACCOUNT_SID:$AUTH_TOKEN
+       elif [ "$TWILIO_AUTH_METHOD" == "2" ]; then
+           # Place a voice call using Twilio API
+           curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json \
+               --data-urlencode "To=$USER_PHONE_NUMBER" \
+               --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+               --data-urlencode "Url=http://demo.twilio.com/docs/voice.xml?code=$VERIFICATION_CODE" \
+               -u $ACCOUNT_SID:$AUTH_TOKEN
+       else
+           echo "Invalid selection. Please select either 1 or 2."
+           exit 1
+       fi
+   else
+       echo "Invalid selection. Please select either 1 (Duo) or 2 (Twilio)."
+       exit 1
+   fi
+
+   # Optionally print the code for debugging (remove in production)
+   echo "Sent 2FA code: $VERIFICATION_CODE"
+   ```
+
+2. **Make the Script Executable**:
+
+   ```bash
+   sudo chmod +x /usr/local/bin/twilio_2fa.sh
+   ```
+
+3. **Modify PAM to Use the Twilio Script**:
+
+   After configuring Duo in PAM, we will call the Twilio script after the Duo check. Modify `/etc/pam.d/sshd`:
+
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+   Add the following line after the Duo authentication line:
+
+   ```bash
+   auth [success=1 default=ignore] pam_exec.so /usr/local/bin/twilio_2fa.sh %PAM_USER
+   ```
+
+   This allows the user to choose between Duo and Twilio for the second factor of authentication.
+
+---
+
+#### 5. **Test the SSH Login and 2FA Flow**
+
+1. **Test SSH Login**:
+
+   Try SSH login to your server:
+
+   ```bash
+   ssh user@your_server_ip
+   ```
+
+   After entering your SSH key passphrase (if applicable), Duo will trigger the 2FA push or passcode request. Then, the Twilio script will prompt the user to select the authentication method (either SMS or voice call).
+
+2. **Enter the Verification Code**:
+
+   After receiving the SMS or voice call from Twilio, enter the verification code as prompted.
+
+---
+
+#### Optional: Restrict 2FA to Specific Users
+
+If you want to apply 2FA only to specific users or groups, you can modify `/etc/pam.d/sshd` to include conditions based on usernames or groups.
+
+Example for user `sshusers`:
+
+```bash
+auth required pam_duo.so group=sshusers
+```
+
+---
+
+### Conclusion
+
+This setup integrates both **Duo Security** and **Twilio SMS/Voice Call** for SSH-based **Two-Factor Authentication (2FA)**. Users can select their preferred authentication method when prompted during SSH login, offering flexibility and security.
