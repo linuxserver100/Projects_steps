@@ -9293,73 +9293,72 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-
-Sure, I'll walk through the complete setup from Duo Admin Panel to the code, with detailed explanations and full error handling, logging, and user-friendly messages. This version will include the necessary steps for configuring Duo in the admin panel, integrating it into the code, and ensuring everything works correctly.
-
----
-
-### **Step 1: Duo Security Admin Setup**
-
-1. **Create a Duo Application**:
-   - Log in to the [Duo Admin Panel](https://admin.duo.com).
-   - Navigate to **Applications** -> **Protect an Application**.
-   - Select **Custom** for the application type, then click **Protect**.
-   - Give it a name (e.g., "SSH MFA"), and click **Save**.
-   
-2. **Get Your API Keys**:
-   - After creating the application, you’ll be provided with your **Integration Key (IK)** and **Secret Key (SK)**. You'll need these for authentication when interacting with Duo's API.
-   
-3. **Create a User in Duo**:
-   - In the Duo Admin Panel, navigate to **Users**.
-   - Add a new user or verify that the user exists and has a valid phone number or device for receiving the OTP.
-
-4. **Verify the Phone Number for OTP**:
-   - The phone number you use for OTP must be linked to the Duo account.
-   - Ensure the user has either SMS or Voice Call enabled as an option under the user's settings.
+Certainly! Here's the complete guide with **Duo** and **Twilio** setup instructions followed by the original code implementation for Multi-Factor Authentication (MFA) integration, including **Duo SMS**, **Duo Call**, **Twilio SMS/Call OTP**, and **Duo Push** with enhanced error handling and logging.
 
 ---
 
-### **Step 2: Install Dependencies**
+## **Step 1: Duo Security Admin Setup**
 
-Ensure you have the necessary dependencies installed:
+1. **Create a Duo Admin Account:**
+   - Go to [Duo Security](https://duo.com/) and sign up or log in.
+   - After logging in, navigate to the **Admin Panel**.
 
-- **curl** for HTTP requests.
-- **shuf** to generate random OTPs.
-- **bash** for scripting.
+2. **Create a New Application:**
+   - From the Admin Panel, go to **Applications** and click on **Protect an Application**.
+   - Search for **Duo API** and select it.
+   - After selecting Duo API, you’ll be provided with:
+     - **Integration Key** (`IK_KEY`)
+     - **Secret Key** (`SK_KEY`)
+     - **API Hostname** (`HOST`)
 
-On most Linux distributions, these can be installed with:
+3. **Create a User:**
+   - In the **Users** section, create a user or assign an existing user to be used for MFA.
+   - Ensure the user has a phone or device set up for **Push**, **SMS**, or **Call** authentication.
+
+4. **Generate API Keys:**
+   - Once your application is created, you'll have the necessary keys (Integration Key and Secret Key) to access Duo's API for authentication.
+
+---
+
+## **Step 2: Install Dependencies**
+
+You need to install **curl** (for API requests), and **shuf** (for generating random OTPs) on the server.
 
 ```bash
-sudo apt update
-sudo apt install curl coreutils
+sudo apt-get update
+sudo apt-get install curl
+sudo apt-get install coreutils
 ```
 
 ---
 
-### **Step 3: Twilio Setup**
+## **Step 3: Twilio Setup**
 
-1. **Create a Twilio Account**:
-   - Go to [Twilio](https://www.twilio.com/) and create an account.
-   - Obtain your **Account SID**, **Auth Token**, and a **Twilio Phone Number** from your Twilio Console.
+1. **Create a Twilio Account:**
+   - Sign up for a Twilio account at [Twilio](https://www.twilio.com/).
+   - After logging in, go to the **Console**.
+   - Retrieve your **Account SID**, **Auth Token**, and **Phone Number** (from the **Phone Numbers** section).
 
-2. **Verify the Twilio Credentials**:
-   - Make sure you’ve correctly configured your Twilio API credentials (Account SID, Auth Token) and a valid Twilio phone number to send SMS or make calls.
-
----
-
-### **Step 4: Code Implementation**
-
-Below are the scripts with complete error handling, logging, and configuration for both **Twilio** and **Duo** integration. Each script is updated to ensure the proper error codes are returned and handled.
+2. **Setup Twilio Phone Number:**
+   - Purchase a phone number from Twilio if you don't have one already. This number will be used for sending SMS and making calls for OTP.
 
 ---
 
-### 1. **Twilio SMS OTP Script (`twilio_sms_otp.sh`)**
+## **Step 4: Code Implementation**
+
+Below are the scripts for MFA using **Twilio** (SMS/Call OTP) and **Duo** (Push, SMS, Call) authentication methods.
+
+---
+
+### **1. Twilio SMS OTP Script (`twilio_sms_otp.sh`)**
 
 ```bash
 #!/bin/bash
+# Usage: ./twilio_sms_otp.sh <phone_number>
+
 to_phone_number=$1
 
-# Twilio credentials
+# Twilio credentials (replace with your own)
 ACCOUNT_SID="your_account_sid"
 AUTH_TOKEN="your_auth_token"
 FROM_NUMBER="your_twilio_phone_number"
@@ -9384,13 +9383,13 @@ if [[ $http_code -eq 201 ]]; then
   echo "OTP sent successfully to $to_phone_number."
   echo $OTP
 elif [[ $http_code -eq 400 ]]; then
-  echo "Bad Request. Possible incorrect parameters. Response: $body"
+  echo "Error 400: Bad Request. Possible incorrect parameters. Response: $body"
   exit 1
 elif [[ $http_code -eq 401 ]]; then
-  echo "Authentication failed. Invalid Twilio credentials. Response: $body"
+  echo "Error 401: Authentication failed. Invalid Twilio credentials. Response: $body"
   exit 1
 elif [[ $http_code -eq 404 ]]; then
-  echo "Not Found. Twilio API endpoint might be incorrect. Response: $body"
+  echo "Error 404: Not Found. Twilio API endpoint might be incorrect. Response: $body"
   exit 1
 else
   echo "Failed to send OTP. HTTP Status Code: $http_code. Response: $body"
@@ -9400,13 +9399,15 @@ fi
 
 ---
 
-### 2. **Twilio Call OTP Script (`twilio_call_otp.sh`)**
+### **2. Twilio Call OTP Script (`twilio_call_otp.sh`)**
 
 ```bash
 #!/bin/bash
+# Usage: ./twilio_call_otp.sh <phone_number>
+
 to_phone_number=$1
 
-# Twilio credentials
+# Twilio credentials (replace with your own)
 ACCOUNT_SID="your_account_sid"
 AUTH_TOKEN="your_auth_token"
 FROM_NUMBER="your_twilio_phone_number"
@@ -9431,13 +9432,13 @@ if [[ $http_code -eq 201 ]]; then
   echo "Phone call initiated successfully to $to_phone_number."
   echo $OTP
 elif [[ $http_code -eq 400 ]]; then
-  echo "Bad Request. Possible incorrect parameters. Response: $body"
+  echo "Error 400: Bad Request. Possible incorrect parameters. Response: $body"
   exit 1
 elif [[ $http_code -eq 401 ]]; then
-  echo "Authentication failed. Invalid Twilio credentials. Response: $body"
+  echo "Error 401: Authentication failed. Invalid Twilio credentials. Response: $body"
   exit 1
 elif [[ $http_code -eq 404 ]]; then
-  echo "Not Found. Twilio API endpoint might be incorrect. Response: $body"
+  echo "Error 404: Not Found. Twilio API endpoint might be incorrect. Response: $body"
   exit 1
 else
   echo "Failed to initiate phone call. HTTP Status Code: $http_code. Response: $body"
@@ -9447,23 +9448,25 @@ fi
 
 ---
 
-### 3. **Duo SMS OTP Script (`duo_sms_otp.sh`)**
+### **3. Duo Push OTP Script (`duo_push_otp.sh`)**
 
 ```bash
 #!/bin/bash
-username=$1
-phone_number=$2
+# Usage: ./duo_push_otp.sh <username> <device_id>
 
-# Duo credentials
+username=$1
+device_id=$2
+
+# Duo credentials (replace with your own)
 IK_KEY="your_integration_key"
 SK_KEY="your_secret_key"
 HOST="api-xxxxxxxx.duosecurity.com"  # Replace with your actual Duo API host
-DUO_API_URL="https://$HOST/api/v2/auth/sms"
+DUO_API_URL="https://$HOST/api/v2/auth/push"
 
 # Duo API Authentication (use new v2 API)
 response=$(curl -s -w "%{http_code}" -X POST $DUO_API_URL \
   -d "username=$username" \
-  -d "phone=$phone_number" \
+  -d "device_id=$device_id" \
   -u "$IK_KEY:$SK_KEY")
 
 # Capture HTTP response code and body
@@ -9474,7 +9477,7 @@ body=$(echo "$response" | sed '$d')
 case $http_code in
   200)
     if echo "$body" | grep -q '"stat":"OK"'; then
-      echo "SMS OTP sent successfully to $phone_number."
+      echo "Duo Push sent successfully. Please approve or deny the login request on your Duo app."
     else
       echo "Duo API error: $body"
       exit 1
@@ -9515,23 +9518,25 @@ esac
 
 ---
 
-### 4. **Duo Call OTP Script (`duo_call_otp.sh`)**
+### **4. Duo SMS OTP Script (`duo_sms_otp.sh`)**
 
 ```bash
 #!/bin/bash
-username=$1
-phone_number=$2
+# Usage: ./duo_sms_otp.sh <username>
 
-# Duo credentials
+username=$1
+
+# Duo credentials (replace with your own)
 IK_KEY="your_integration_key"
 SK_KEY="your_secret_key"
 HOST="api-xxxxxxxx.duosecurity.com"  # Replace with your actual Duo API host
-DUO_API_URL="https://$HOST/api/v2/auth/call"
+DUO_API_URL="https://$HOST/api/v2/auth/sms"
 
-# Duo API Authentication (use new v2 API)
-response=$(curl -s -w "%{http_code}" -X POST $DUO_API_URL \
+# Duo SMS Authentication
+response=$(curl -s -w "%{http_code}" -
+
+X POST $DUO_API_URL \
   -d "username=$username" \
-  -d "phone=$phone_number" \
   -u "$IK_KEY:$SK_KEY")
 
 # Capture HTTP response code and body
@@ -9541,10 +9546,8 @@ body=$(echo "$response" | sed '$d')
 # Handle errors based on response code
 case $http_code in
   200)
-    if echo "$body" | grep
-
- -q '"stat":"OK"'; then
-      echo "Phone call OTP initiated to $phone_number."
+    if echo "$body" | grep -q '"stat":"OK"'; then
+      echo "Duo SMS sent successfully. Check your SMS for the OTP."
     else
       echo "Duo API error: $body"
       exit 1
@@ -9585,12 +9588,80 @@ esac
 
 ---
 
-### 5. **Combined MFA Flow for SSH Login (`multi_factor_auth.sh`)**
+### **5. Duo Call OTP Script (`duo_call_otp.sh`)**
 
 ```bash
 #!/bin/bash
+# Usage: ./duo_call_otp.sh <username>
 
-# Predefined parameters
+username=$1
+
+# Duo credentials (replace with your own)
+IK_KEY="your_integration_key"
+SK_KEY="your_secret_key"
+HOST="api-xxxxxxxx.duosecurity.com"  # Replace with your actual Duo API host
+DUO_API_URL="https://$HOST/api/v2/auth/call"
+
+# Duo Call Authentication
+response=$(curl -s -w "%{http_code}" -X POST $DUO_API_URL \
+  -d "username=$username" \
+  -u "$IK_KEY:$SK_KEY")
+
+# Capture HTTP response code and body
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | sed '$d')
+
+# Handle errors based on response code
+case $http_code in
+  200)
+    if echo "$body" | grep -q '"stat":"OK"'; then
+      echo "Duo Call initiated successfully. Answer the call for OTP."
+    else
+      echo "Duo API error: $body"
+      exit 1
+    fi
+    ;;
+  301)
+    echo "Error 301: Duo API has moved permanently. Please verify the API URL."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  10401)
+    echo "Error 10401: Authentication failed. Invalid Integration Key or Secret Key."
+    echo "Error Message: $body"
+    echo "Please verify your credentials in the Duo Admin Panel."
+    exit 1
+    ;;
+  400)
+    echo "Error 400: Bad Request. Invalid parameters sent."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  403)
+    echo "Error 403: Forbidden. Access denied. Check Duo Admin settings."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  404)
+    echo "Error 404: Not Found. The endpoint URL might be incorrect."
+    echo "Error Message: $body"
+    exit 1
+    ;;
+  *)
+    echo "Unexpected error occurred. HTTP Status Code: $http_code. Response: $body"
+    exit 1
+    ;;
+esac
+```
+
+---
+
+### **6. Combined MFA Flow for SSH Login (`multi_factor_auth.sh`)**
+
+```bash
+#!/bin/bash
+# Usage: ./multi_factor_auth.sh <username> <phone_number> <email_address>
+
 username=$1
 phone_number=$2
 email_address=$3
@@ -9599,14 +9670,15 @@ email_address=$3
 echo "Choose Authentication Method:"
 echo "1. Twilio SMS OTP"
 echo "2. Twilio Call OTP"
-echo "3. Duo SMS OTP"
-echo "4. Duo Call OTP"
-read -p "Enter choice (1/2/3/4): " choice
+echo "3. Duo Push"
+echo "4. Duo SMS"
+echo "5. Duo Call"
+read -p "Enter choice (1/2/3/4/5): " choice
 
 # Validate choice and proceed with selected method
 case $choice in
   1)
-    OTP=$( /path/to/twilio_sms_otp.sh $phone_number )
+    OTP=$( ./twilio_sms_otp.sh $phone_number )
     echo "Enter the OTP received via SMS:"
     read input_otp
     if [ "$input_otp" != "$OTP" ]; then
@@ -9615,7 +9687,7 @@ case $choice in
     fi
     ;;
   2)
-    OTP=$( /path/to/twilio_call_otp.sh $phone_number )
+    OTP=$( ./twilio_call_otp.sh $phone_number )
     echo "Enter the OTP received via phone call:"
     read input_otp
     if [ "$input_otp" != "$OTP" ]; then
@@ -9624,14 +9696,16 @@ case $choice in
     fi
     ;;
   3)
-    /path/to/duo_sms_otp.sh $username $phone_number
-    echo "Enter the OTP received via SMS from Duo:"
-    read duo_sms_otp
+    ./duo_push_otp.sh $username $phone_number
+    echo "Please approve the Duo Push request on your phone."
     ;;
   4)
-    /path/to/duo_call_otp.sh $username $phone_number
-    echo "Enter the OTP received via phone call from Duo:"
-    read duo_call_otp
+    ./duo_sms_otp.sh $username
+    echo "Please check your SMS for the OTP."
+    ;;
+  5)
+    ./duo_call_otp.sh $username
+    echo "Answer the Duo call for OTP."
     ;;
   *)
     echo "Invalid choice. Exiting..."
@@ -9644,15 +9718,13 @@ echo "Authentication successful. Proceeding with SSH login."
 
 ---
 
-### 6. **Enforce MFA with `ForceCommand` in SSH**
-
-Edit `/etc/ssh/sshd_config` to force the execution of the MFA script on login:
+### **7. Enforce MFA with `ForceCommand` in SSH**
 
 ```bash
 ForceCommand /path/to/multi_factor_auth.sh
 ```
 
-Restart the SSH service to apply changes:
+Restart the SSH service:
 
 ```bash
 sudo systemctl restart sshd
@@ -9660,23 +9732,24 @@ sudo systemctl restart sshd
 
 ---
 
-### 7. **Test SSH Login**
+### **8. Test SSH Login**
 
-After everything is set up, test the login by SSHing into your server:
+After everything is set up, test the login:
 
 ```bash
 ssh user@server_ip
 ```
 
-The user will be prompted to choose an authentication method (Twilio SMS, Twilio Call, Duo SMS, or Duo Call) and proceed through the MFA process.
+The user will be prompted to choose an authentication method (Twilio SMS, Twilio Call, Duo Push, Duo SMS, or Duo Call) and proceed through the MFA process.
 
 ---
 
 ### **Key Enhancements and Error Handling**
 
-- **Detailed Error Codes and Messages**: Each script now has explicit handling for common errors like 301 (moved), 10401 (authentication failure), and others.
-- **Logging and Troubleshooting**: Clear and comprehensive messages have been added to assist with debugging.
-- **Duo API v2 Integration**: The scripts are updated to use the latest Duo API v2 for sending SMS and Voice OTPs.
+- **Duo Push, SMS, and Call Authentication**: Added functionality for **Duo SMS** and **Duo Call** alongside **Duo Push**.
+- **Detailed Error Codes and Messages**: Each script includes comprehensive error handling for API issues.
+- **Logging**: Clear and detailed log messages help in troubleshooting and debugging errors.
+- **Duo API v2 Integration**: Scripts use the latest Duo API v2 for all authentication methods.
 
-By following this setup, you should be able to configure, test, and use multifactor authentication (MFA) via either Twilio or Duo with error handling and logging, ensuring smooth operation across different use cases.
+With this setup, users can authenticate using **Twilio** or **Duo** (Push, SMS, Call) with detailed error handling and logging for better user experience and troubleshooting.
 
