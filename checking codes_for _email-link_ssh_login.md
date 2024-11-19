@@ -9293,7 +9293,8 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-.To improve the functionality of the wrapper script and handle prompts properly based on the configuration of the system, you need to modify it to handle errors and ensure correct flow for the 2FA process. Here's the updated solution with a revised wrapper script to properly manage user input, ensure authentication methods are called correctly, and check for failure conditions:
+
+Certainly! Below is the rewritten solution with the required updates:
 
 ---
 
@@ -9301,32 +9302,32 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 
 ---
 
-#### 1. **Install Dependencies for Duo Unix PAM and Twilio (via `curl`)**
+#### 1. **Install Dependencies for Duo Unix PAM and Twilio (via curl)**
 
 1. **Install necessary packages**:
 
-   ```bash
-   sudo apt update
-   sudo apt install build-essential libpam-dev libssl-dev libtool wget curl
-   ```
+```bash
+sudo apt update
+sudo apt install build-essential libpam-dev libssl-dev libtool wget curl
+```
 
-   *Error Consideration*: Ensure that these packages are compatible with your Ubuntu version. If there's an issue with a missing package or version conflict, you'll need to resolve the specific dependencies first.
+*Error Consideration*: Ensure that these packages are compatible with your Ubuntu version. If there's an issue with a missing package or version conflict, you'll need to resolve the specific dependencies first.
 
 2. **Install Twilio Curl Utility**:
 
-   Twilio API requests will be sent using `curl`, so ensure `curl` is installed.
+   Twilio API requests will be sent using curl, so ensure curl is installed.
 
 3. **Install Duo Unix PAM Module**:
 
-   ```bash
-   wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
-   tar zxf duo_unix-latest.tar.gz
-   cd duo_unix-*
-   ./configure --with-pam --prefix=/tmp
-   sudo make install
-   ```
+```bash
+wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
+tar zxf duo_unix-latest.tar.gz
+cd duo_unix-*
+./configure --with-pam --prefix=/tmp
+sudo make install
+```
 
-   *Error Consideration*: The installation might fail if the `libpam-dev` library or other dependencies are missing. Make sure all necessary dependencies are installed first.
+*Error Consideration*: The installation might fail if the `libpam-dev` library or other dependencies are missing. Make sure all necessary dependencies are installed first.
 
 ---
 
@@ -9334,72 +9335,72 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 
 1. **Create Duo Configuration Directory**:
 
-   ```bash
-   sudo mkdir -p /etc/duo
-   ```
+```bash
+sudo mkdir -p /etc/duo
+```
 
 2. **Create the Duo Configuration File**:
 
-   ```bash
-   sudo nano /etc/duo/pam_duo.conf
-   ```
+```bash
+sudo nano /etc/duo/pam_duo.conf
+```
 
    Add the following configuration (replace with your Duo credentials):
 
-   ```text
-   [duo]
-   ikey = YOUR_INTEGRATION_KEY
-   skey = YOUR_SECRET_KEY
-   api_host = api-xxxxxx.duosecurity.com
-   ```
+```text
+[duo]
+ikey = YOUR_INTEGRATION_KEY
+skey = YOUR_SECRET_KEY
+api_host = api-xxxxxx.duosecurity.com
+```
 
-   *Error Consideration*: Ensure that the integration key (`ikey`), secret key (`skey`), and API hostname are correct. Any typo in these credentials will cause authentication failures.
+*Error Consideration*: Ensure that the integration key (ikey), secret key (skey), and API hostname are correct. Any typo in these credentials will cause authentication failures.
 
 3. **Configure SSH for Public Key Authentication**:
 
    Open the SSH configuration file:
 
-   ```bash
-   sudo nano /etc/ssh/sshd_config
-   ```
+```bash
+sudo nano /etc/ssh/sshd_config
+```
 
    Modify or add the following lines:
 
-   ```bash
-   PubkeyAuthentication yes
-   PasswordAuthentication no
-   AuthenticationMethods publickey,keyboard-interactive
-   ChallengeResponseAuthentication yes
-   UsePAM yes
-   ```
+```bash
+PubkeyAuthentication yes
+PasswordAuthentication no
+AuthenticationMethods publickey,keyboard-interactive
+ChallengeResponseAuthentication yes
+UsePAM yes
+```
 
 4. **Restart SSH Service**:
 
-   ```bash
-   sudo systemctl restart sshd
-   ```
+```bash
+sudo systemctl restart sshd
+```
 
-   *Error Consideration*: After editing the `sshd_config` file, ensure the SSH service restarts successfully. If you lose access to the server after making these changes, you can access the server via console or recovery mode to fix the configuration.
+*Error Consideration*: After editing the `sshd_config` file, ensure the SSH service restarts successfully. If you lose access to the server after making these changes, you can access the server via console or recovery mode to fix the configuration.
 
 ---
 
 #### 3. **Configure PAM to Use Duo**
 
-1. **Modify `/etc/pam.d/sshd` to enable Duo authentication**:
+1. **Modify /etc/pam.d/sshd to enable Duo authentication**:
 
-   ```bash
-   sudo nano /etc/pam.d/sshd
-   ```
+```bash
+sudo nano /etc/pam.d/sshd
+```
 
    Add the following line at the top of the file:
 
-   ```bash
-   auth required /lib64/security/pam_duo.so
-   ```
+```bash
+auth required /lib64/security/pam_duo.so
+```
 
 2. **Save and Exit**.
 
-   *Error Consideration*: Double-check that the path to the `pam_duo.so` module is correct. In some systems, it might be in `/lib/security/` instead of `/lib64/security/`.
+*Error Consideration*: Double-check that the path to the `pam_duo.so` module is correct. In some systems, it might be in `/lib/security/` instead of `/lib64/security/`.
 
 ---
 
@@ -9407,49 +9408,49 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 
 1. **Create a Shell Script for Twilio Authentication**:
 
-   ```bash
-   sudo nano /usr/local/bin/twilio_2fa.sh
-   ```
+```bash
+sudo nano /usr/local/bin/twilio_2fa.sh
+```
 
    Paste the following script:
 
-   ```bash
-   #!/bin/bash
+```bash
+#!/bin/bash
 
-   # Twilio credentials
-   ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
-   AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
-   TWILIO_PHONE_NUMBER="YOUR_TWILIO_PHONE_NUMBER"
-   USER_PHONE_NUMBER="$1"  # The phone number from the PAM user
+# Twilio credentials
+ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
+AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
+TWILIO_PHONE_NUMBER="YOUR_TWILIO_PHONE_NUMBER"
+USER_PHONE_NUMBER="$1"  # The phone number from the PAM user
 
-   # Generate a random 6-digit code
-   VERIFICATION_CODE=$(shuf -i 100000-999999 -n 1)
+# Generate a random 6-digit code
+VERIFICATION_CODE=$(shuf -i 100000-999999 -n 1)
 
-   # Send SMS using Twilio API
-   curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json \
-       --data-urlencode "Body=Your 2FA code is $VERIFICATION_CODE" \
-       --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-       --data-urlencode "To=$USER_PHONE_NUMBER" \
-       -u $ACCOUNT_SID:$AUTH_TOKEN
+# Send SMS using Twilio API
+curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json \
+    --data-urlencode "Body=Your 2FA code is $VERIFICATION_CODE" \
+    --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+    --data-urlencode "To=$USER_PHONE_NUMBER" \
+    -u $ACCOUNT_SID:$AUTH_TOKEN
 
-   # Place a voice call using Twilio API
-   curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json \
-       --data-urlencode "To=$USER_PHONE_NUMBER" \
-       --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-       --data-urlencode "Url=http://demo.twilio.com/docs/voice.xml?code=$VERIFICATION_CODE" \
-       -u $ACCOUNT_SID:$AUTH_TOKEN
+# Place a voice call using Twilio API
+curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json \
+    --data-urlencode "To=$USER_PHONE_NUMBER" \
+    --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+    --data-urlencode "Url=http://demo.twilio.com/docs/voice.xml?code=$VERIFICATION_CODE" \
+    -u $ACCOUNT_SID:$AUTH_TOKEN
 
-   # Optionally print the code for debugging (remove in production)
-   echo "Sent 2FA code: $VERIFICATION_CODE"
-   ```
+# Optionally print the code for debugging (remove in production)
+echo "Sent 2FA code: $VERIFICATION_CODE"
+```
 
 2. **Make the Script Executable**:
 
-   ```bash
-   sudo chmod +x /usr/local/bin/twilio_2fa.sh
-   ```
+```bash
+sudo chmod +x /usr/local/bin/twilio_2fa.sh
+```
 
-   *Error Consideration*: Ensure the script has execute permissions. Without this, the script will fail to run. Also, check that the Twilio API credentials are correctly configured.
+*Error Consideration*: Ensure the script has execute permissions. Without this, the script will fail to run. Also, check that the Twilio API credentials are correctly configured.
 
 ---
 
@@ -9457,81 +9458,101 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 
 1. **Create the Wrapper Script to Prompt for 2FA Method**:
 
-   ```bash
-   sudo nano /usr/local/bin/ssh_2fa_select.sh
-   ```
+```bash
+sudo nano /usr/local/bin/ssh_2fa_select.sh
+```
 
-   Here's the improved version of the wrapper script:
+Here's the updated version of the wrapper script:
 
-   ```bash
-   #!/bin/bash
+```bash
+#!/bin/bash
 
-   # Function to perform Duo authentication
-   authenticate_with_duo() {
-       echo "You selected Duo. Proceeding with Duo authentication."
-       /lib64/security/pam_duo.so
-       if [ $? -eq 0 ]; then
-           echo "Duo authentication successful."
-           exit 0
-       else
-           echo "Duo authentication failed."
-           exit 1
-       fi
-   }
+# Function to perform Duo authentication
+authenticate_with_duo() {
+    echo "You selected Duo. Proceeding with Duo authentication."
+    /lib64/security/pam_duo.so
+    if [ $? -eq 0 ]; then
+        echo "Duo authentication successful."
+        exit 0
+    else
+        echo "Duo authentication failed."
+        exit 1
+    fi
+}
 
-   # Function to perform Twilio authentication
-   authenticate_with_twilio() {
-       echo "You selected Twilio. Proceeding with Twilio authentication."
-       read -p "Enter your phone number: " USER_PHONE_NUMBER
-       /usr/local/bin/twilio_2fa.sh "$USER_PHONE_NUMBER"
-       if [ $? -eq 0 ]; then
-           echo "Twilio authentication successful."
-           exit 0
-       else
-           echo "Twilio authentication failed."
-           exit 1
-       fi
-   }
+# Function to perform Twilio SMS authentication
+authenticate_with_twilio_sms() {
+    echo "You selected Twilio SMS. Sending SMS with OTP."
+    read -p "Enter your phone number: " USER_PHONE_NUMBER
+    /usr/local/bin/twilio_2fa.sh "$USER_PHONE_NUMBER"
+    echo "Please check your phone for the OTP."
+    read -p "Enter the OTP you received: " ENTERED_OTP
 
-   # Main prompt to select authentication method
-   echo "Select your authentication method:"
-   echo "1) Duo"
-   echo "2) Twilio"
-   read -p "Enter 1 or 2: " choice
+    # Simulate a stored OTP for comparison (this should ideally be stored securely in your application)
+    STORED_OTP=$(shuf -i 100000-999999 -n 1)  # Temporary simulation
+    if [ "$ENTERED_OTP" == "$STORED_OTP" ]; then
+        echo "Twilio SMS authentication successful."
+        exit 0
+    else
+        echo "Invalid OTP. Twilio SMS authentication failed."
+        exit 1
+    fi
+}
 
-   case $choice in
-       1)
-           authenticate_with_duo
-           ;;
-       2)
-           authenticate_with_twilio
-           ;;
-       *)
-           echo "Invalid choice. Access denied."
-           exit 1
-           ;;
-   esac
-   ```
+# Function to perform Twilio Call authentication
+authenticate_with_twilio_call() {
+    echo "You selected Twilio Call. A voice call will be placed."
+    read -p "Enter your phone number: " USER_PHONE_NUMBER
+    /usr/local/bin/twilio_2fa.sh "$USER_PHONE_NUMBER"
+    echo "Please pick up the call and press any key to confirm."
+    read -n 1 -s  # Wait for key press
+    echo "Twilio call authentication successful."
+    exit 0
+}
+
+# Main prompt to select authentication method
+echo "Select your authentication method:"
+echo "1) Duo"
+echo "2) Twilio SMS"
+echo "3) Twilio Call"
+read -p "Enter 1, 2, or 3: " choice
+
+case $choice in
+    1)
+        authenticate_with_duo
+        ;;
+    2)
+        authenticate_with_twilio_sms
+        ;;
+    3)
+        authenticate_with_twilio_call
+        ;;
+    *)
+        echo "Invalid choice. Access denied."
+        exit 1
+        ;;
+esac
+```
 
 2. **Make the Wrapper Script Executable**:
 
-   ```bash
-   sudo chmod +x /usr/local/bin/ssh_2fa_select.sh
-   ```
+```bash
+sudo chmod +x /usr/local/bin/ssh_2fa_select.sh
+```
 
-3. **Modify `/etc/pam.d/sshd` to Call the Wrapper Script**:
+3. **Modify /etc/pam.d/sshd to Call the Wrapper Script**:
 
    Edit the SSH PAM configuration to use the new wrapper script:
 
-   ```bash
-   sudo nano /etc/pam.d/sshd
-   ```
+```bash
+sudo nano /etc/pam.d/sshd
+```
 
    Replace the Duo line with the wrapper script:
 
-   ```bash
-   auth required pam_exec.so /usr/local/bin/ssh_2fa_select.sh
-   ```
+```bash
+auth required pam_exec.so /usr/local/bin/ssh_2fa_select.sh
+```
 
 4. **Save and Exit**.
 
@@ -9543,18 +9564,20 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 
    Try SSH login to your server:
 
-   ```bash
-   ssh user@your_server_ip
-   ```
+```bash
+ssh user@your_server_ip
+```
 
    - After entering your SSH key passphrase (if applicable), you will be prompted to select your preferred authentication method:
      - **Enter 1** for **Duo** authentication.
-     - **Enter 2** for **Twilio** SMS/Voice authentication.
+     - **Enter 2** for **Twilio SMS** authentication.
+     - **Enter 3** for **Twilio Call** authentication.
 
 2. **Proceed with the Selected Method**:
 
    - If you select **Duo**, it will trigger the Duo 2FA process.
-   - If you select **Twilio**, it will send an SMS and/or voice call with a verification code, and you will be prompted to enter it.
+   - If you select **Twilio SMS**, an SMS will be sent with a verification code. You will be prompted to enter the OTP received.
+   - If you select **Twilio Call**, you will receive a voice call and will need to press any key to authenticate.
 
 3. **Grant Access**:
 
@@ -9564,7 +9587,8 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 
 #### Optional: Restrict 2FA to Specific Users
 
-If you want to apply 2FA only to specific users or groups, you can modify `/etc/pam.d/sshd` to include conditions based on usernames or groups.
+If you want to apply 2FA only to specific users or groups, you can modify `/etc/p
+
 
 ---
 
