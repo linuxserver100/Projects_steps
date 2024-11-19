@@ -9293,21 +9293,13 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-To modify the solution to allow the user to choose between **Duo** or **Twilio** authentication during SSH login, we need to prompt the user for their choice and then proceed with the selected authentication method. Here's the updated solution:
+.To improve the functionality of the wrapper script and handle prompts properly based on the configuration of the system, you need to modify it to handle errors and ensure correct flow for the 2FA process. Here's the updated solution with a revised wrapper script to properly manage user input, ensure authentication methods are called correctly, and check for failure conditions:
 
 ---
 
-### Prerequisites
-
-1. **Ubuntu server** with **SSH** configured.
-2. **Duo Security** account with API credentials (Integration Key, Secret Key, and API hostname).
-3. **Twilio account** with an active phone number for SMS and Voice Calls.
-4. **SSH Key Authentication** already set up.
-5. A **Twilio API Key and Auth Token**.
+### Step-by-Step Integration with Improved Wrapper Script
 
 ---
-
-### Step-by-Step Integration
 
 #### 1. **Install Dependencies for Duo Unix PAM and Twilio (via `curl`)**
 
@@ -9317,6 +9309,8 @@ To modify the solution to allow the user to choose between **Duo** or **Twilio**
    sudo apt update
    sudo apt install build-essential libpam-dev libssl-dev libtool wget curl
    ```
+
+   *Error Consideration*: Ensure that these packages are compatible with your Ubuntu version. If there's an issue with a missing package or version conflict, you'll need to resolve the specific dependencies first.
 
 2. **Install Twilio Curl Utility**:
 
@@ -9331,6 +9325,8 @@ To modify the solution to allow the user to choose between **Duo** or **Twilio**
    ./configure --with-pam --prefix=/tmp
    sudo make install
    ```
+
+   *Error Consideration*: The installation might fail if the `libpam-dev` library or other dependencies are missing. Make sure all necessary dependencies are installed first.
 
 ---
 
@@ -9357,6 +9353,8 @@ To modify the solution to allow the user to choose between **Duo** or **Twilio**
    api_host = api-xxxxxx.duosecurity.com
    ```
 
+   *Error Consideration*: Ensure that the integration key (`ikey`), secret key (`skey`), and API hostname are correct. Any typo in these credentials will cause authentication failures.
+
 3. **Configure SSH for Public Key Authentication**:
 
    Open the SSH configuration file:
@@ -9381,11 +9379,13 @@ To modify the solution to allow the user to choose between **Duo** or **Twilio**
    sudo systemctl restart sshd
    ```
 
+   *Error Consideration*: After editing the `sshd_config` file, ensure the SSH service restarts successfully. If you lose access to the server after making these changes, you can access the server via console or recovery mode to fix the configuration.
+
 ---
 
 #### 3. **Configure PAM to Use Duo**
 
-1. **Modify `/etc/pam.d/sshd`** to enable Duo authentication:
+1. **Modify `/etc/pam.d/sshd` to enable Duo authentication**:
 
    ```bash
    sudo nano /etc/pam.d/sshd
@@ -9399,11 +9399,11 @@ To modify the solution to allow the user to choose between **Duo** or **Twilio**
 
 2. **Save and Exit**.
 
+   *Error Consideration*: Double-check that the path to the `pam_duo.so` module is correct. In some systems, it might be in `/lib/security/` instead of `/lib64/security/`.
+
 ---
 
 #### 4. **Twilio Integration for SMS and Voice Authentication**
-
-We will modify the system to prompt the user for their preferred authentication method—**Duo** or **Twilio**—and proceed with the selected method.
 
 1. **Create a Shell Script for Twilio Authentication**:
 
@@ -9449,44 +9449,26 @@ We will modify the system to prompt the user for their preferred authentication 
    sudo chmod +x /usr/local/bin/twilio_2fa.sh
    ```
 
+   *Error Consideration*: Ensure the script has execute permissions. Without this, the script will fail to run. Also, check that the Twilio API credentials are correctly configured.
+
 ---
 
 #### 5. **Configure PAM to Prompt User for Authentication Method**
 
-To prompt the user to choose between **Duo** or **Twilio** and proceed with the selected method, we'll create a wrapper script. This script will ask the user for their preference and trigger the appropriate authentication method.
-
-1. **Create a Wrapper Script to Prompt for Authentication Choice**:
+1. **Create the Wrapper Script to Prompt for 2FA Method**:
 
    ```bash
    sudo nano /usr/local/bin/ssh_2fa_select.sh
    ```
 
-   Add the following content:
+   Here's the improved version of the wrapper script:
 
    ```bash
    #!/bin/bash
 
-   # Ask the user which 2FA method to use
-   echo "Select your authentication method:"
-   echo "1) Duo"
-   echo "2) Twilio"
-   read -p "Enter 1 or 2: " choice
-
-   # Get the username and phone number for Twilio (if selected)
-   PAM_USER="$PAM_USER"
-   if [ "$choice" -eq 2 ]; then
-       # Prompt for user's phone number for Twilio (can also get from system or PAM)
-       read -p "Enter your phone number: " USER_PHONE_NUMBER
-       /usr/local/bin/twilio_2fa.sh $USER_PHONE_NUMBER
-       if [ $? -eq 0 ]; then
-           echo "Twilio authentication successful."
-           exit 0
-       else
-           echo "Twilio authentication failed."
-           exit 1
-       fi
-   elif [ "$choice" -eq 1 ]; then
-       # Trigger Duo authentication
+   # Function to perform Duo authentication
+   authenticate_with_duo() {
+       echo "You selected Duo. Proceeding with Duo authentication."
        /lib64/security/pam_duo.so
        if [ $? -eq 0 ]; then
            echo "Duo authentication successful."
@@ -9495,10 +9477,40 @@ To prompt the user to choose between **Duo** or **Twilio** and proceed with the 
            echo "Duo authentication failed."
            exit 1
        fi
-   else
-       echo "Invalid choice. Access denied."
-       exit 1
-   fi
+   }
+
+   # Function to perform Twilio authentication
+   authenticate_with_twilio() {
+       echo "You selected Twilio. Proceeding with Twilio authentication."
+       read -p "Enter your phone number: " USER_PHONE_NUMBER
+       /usr/local/bin/twilio_2fa.sh "$USER_PHONE_NUMBER"
+       if [ $? -eq 0 ]; then
+           echo "Twilio authentication successful."
+           exit 0
+       else
+           echo "Twilio authentication failed."
+           exit 1
+       fi
+   }
+
+   # Main prompt to select authentication method
+   echo "Select your authentication method:"
+   echo "1) Duo"
+   echo "2) Twilio"
+   read -p "Enter 1 or 2: " choice
+
+   case $choice in
+       1)
+           authenticate_with_duo
+           ;;
+       2)
+           authenticate_with_twilio
+           ;;
+       *)
+           echo "Invalid choice. Access denied."
+           exit 1
+           ;;
+   esac
    ```
 
 2. **Make the Wrapper Script Executable**:
@@ -9554,14 +9566,6 @@ To prompt the user to choose between **Duo** or **Twilio** and proceed with the 
 
 If you want to apply 2FA only to specific users or groups, you can modify `/etc/pam.d/sshd` to include conditions based on usernames or groups.
 
-Example for user `sshusers`:
-
-```bash
-auth required pam_exec.so /usr/local/bin/ssh_2fa_select.sh
-```
-
 ---
 
-### Conclusion
-
-This updated solution now prompts the user to select between **Duo** and **Twilio** for 2FA during an SSH login attempt. The user can select their preferred authentication method, and once it's successfully completed, access is granted. This ensures flexibility in the 2FA process while maintaining security.
+This solution ensures that the wrapper script is properly handling user input, providing a seamless flow for both Duo and Twilio 2FA options. The user is prompted to select an authentication method, and the process continues based on their choice.
