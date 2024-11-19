@@ -9293,9 +9293,7 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-To modify the previous solution so that both **Twilio** and **Duo** are triggered at the same time, and once one of them is successfully authenticated, the user gains access without the need to complete the second authentication, you can adjust the flow to check for either authentication success before granting access.
-
-The following is the updated solution with this functionality:
+To modify the solution to allow the user to choose between **Duo** or **Twilio** authentication during SSH login, we need to prompt the user for their choice and then proceed with the selected authentication method. Here's the updated solution:
 
 ---
 
@@ -9405,7 +9403,7 @@ The following is the updated solution with this functionality:
 
 #### 4. **Twilio Integration for SMS and Voice Authentication**
 
-We will modify the system to trigger **Duo** and **Twilio** simultaneously when an SSH login is attempted. The flow will ensure that if either **Duo** or **Twilio** is successfully authenticated, the user is granted access without needing to complete the other.
+We will modify the system to prompt the user for their preferred authentication method—**Duo** or **Twilio**—and proceed with the selected method.
 
 1. **Create a Shell Script for Twilio Authentication**:
 
@@ -9453,16 +9451,14 @@ We will modify the system to trigger **Duo** and **Twilio** simultaneously when 
 
 ---
 
-#### 5. **Configure PAM to Trigger Both Duo and Twilio Simultaneously**
+#### 5. **Configure PAM to Prompt User for Authentication Method**
 
-To trigger both **Duo** and **Twilio** in parallel, and grant access once one of them is successfully authenticated, we will use a wrapper script that runs both the Duo PAM module and the Twilio 2FA script at the same time. If either one succeeds, the user will be granted access.
+To prompt the user to choose between **Duo** or **Twilio** and proceed with the selected method, we'll create a wrapper script. This script will ask the user for their preference and trigger the appropriate authentication method.
 
-1. **Create a Wrapper Script to Run Duo and Twilio Simultaneously**:
-
-   Create a new script to call both Duo and Twilio:
+1. **Create a Wrapper Script to Prompt for Authentication Choice**:
 
    ```bash
-   sudo nano /usr/local/bin/ssh_2fa_wrapper.sh
+   sudo nano /usr/local/bin/ssh_2fa_select.sh
    ```
 
    Add the following content:
@@ -9470,49 +9466,45 @@ To trigger both **Duo** and **Twilio** in parallel, and grant access once one of
    ```bash
    #!/bin/bash
 
-   # Function to check if Duo succeeded
-   function check_duo_success {
-       # Assuming Duo sends an exit status of 0 on success
-       if [ $? -eq 0 ]; then
-           echo "Duo authentication successful."
-           return 0
-       else
-           return 1
-       fi
-   }
+   # Ask the user which 2FA method to use
+   echo "Select your authentication method:"
+   echo "1) Duo"
+   echo "2) Twilio"
+   read -p "Enter 1 or 2: " choice
 
-   # Function to check if Twilio succeeded
-   function check_twilio_success {
-       # Assuming Twilio sends an exit status of 0 on success
+   # Get the username and phone number for Twilio (if selected)
+   PAM_USER="$PAM_USER"
+   if [ "$choice" -eq 2 ]; then
+       # Prompt for user's phone number for Twilio (can also get from system or PAM)
+       read -p "Enter your phone number: " USER_PHONE_NUMBER
+       /usr/local/bin/twilio_2fa.sh $USER_PHONE_NUMBER
        if [ $? -eq 0 ]; then
            echo "Twilio authentication successful."
-           return 0
+           exit 0
        else
-           return 1
+           echo "Twilio authentication failed."
+           exit 1
        fi
-   }
-
-   # Trigger Duo authentication in background
-   /lib64/security/pam_duo.so &
-
-   # Trigger Twilio 2FA in background
-   /usr/local/bin/twilio_2fa.sh $PAM_USER &
-
-   # Wait for either Duo or Twilio to succeed
-   wait -n
-
-   # Check if Duo or Twilio succeeded
-   if check_duo_success || check_twilio_success; then
-       exit 0  # Grant access if any authentication succeeds
+   elif [ "$choice" -eq 1 ]; then
+       # Trigger Duo authentication
+       /lib64/security/pam_duo.so
+       if [ $? -eq 0 ]; then
+           echo "Duo authentication successful."
+           exit 0
+       else
+           echo "Duo authentication failed."
+           exit 1
+       fi
    else
-       exit 1  # Deny access if both fail
+       echo "Invalid choice. Access denied."
+       exit 1
    fi
    ```
 
 2. **Make the Wrapper Script Executable**:
 
    ```bash
-   sudo chmod +x /usr/local/bin/ssh_2fa_wrapper.sh
+   sudo chmod +x /usr/local/bin/ssh_2fa_select.sh
    ```
 
 3. **Modify `/etc/pam.d/sshd` to Call the Wrapper Script**:
@@ -9526,7 +9518,7 @@ To trigger both **Duo** and **Twilio** in parallel, and grant access once one of
    Replace the Duo line with the wrapper script:
 
    ```bash
-   auth required pam_exec.so /usr/local/bin/ssh_2fa_wrapper.sh
+   auth required pam_exec.so /usr/local/bin/ssh_2fa_select.sh
    ```
 
 4. **Save and Exit**.
@@ -9543,12 +9535,18 @@ To trigger both **Duo** and **Twilio** in parallel, and grant access once one of
    ssh user@your_server_ip
    ```
 
-   - After entering your SSH key passphrase (if applicable), **Duo** will trigger a 2FA push or passcode request.
-   - **Twilio** will simultaneously trigger, sending both an **SMS** and a **Voice Call** with the verification code.
+   - After entering your SSH key passphrase (if applicable), you will be prompted to select your preferred authentication method:
+     - **Enter 1** for **Duo** authentication.
+     - **Enter 2** for **Twilio** SMS/Voice authentication.
 
-2. **Enter the Verification Code**:
+2. **Proceed with the Selected Method**:
 
-   After receiving the **SMS** or **Voice Call** from Twilio, enter the verification code when prompted. If **Duo** is successfully authenticated first, the user will gain access, and **Twilio** will be ignored. Similarly, if **Twilio** is successful, **Duo** will be ignored.
+   - If you select **Duo**, it will trigger the Duo 2FA process.
+   - If you select **Twilio**, it will send an SMS and/or voice call with a verification code, and you will be prompted to enter it.
+
+3. **Grant Access**:
+
+   Once either authentication method is successfully completed, you will be granted access to the SSH session. If both fail, access will be denied.
 
 ---
 
@@ -9559,11 +9557,11 @@ If you want to apply 2FA only to specific users or groups, you can modify `/etc/
 Example for user `sshusers`:
 
 ```bash
-auth required pam_exec.so /usr/local/bin/ssh_2fa_wrapper.sh
+auth required pam_exec.so /usr/local/bin/ssh_2fa_select.sh
 ```
 
 ---
 
 ### Conclusion
 
-This configuration now triggers both **Duo Security** and **Twilio** 2FA simultaneously during an SSH login attempt. Once either **Duo** or **Twilio** is successfully authenticated, the user is granted shell access, and the second factor is skipped. This ensures a seamless 2FA experience while maintaining security.
+This updated solution now prompts the user to select between **Duo** and **Twilio** for 2FA during an SSH login attempt. The user can select their preferred authentication method, and once it's successfully completed, access is granted. This ensures flexibility in the 2FA process while maintaining security.
