@@ -9293,8 +9293,9 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-.
-To implement **Two-Factor Authentication (2FA)** for SSH login on an Ubuntu server with the ability to choose between **Duo Authentication** and **Twilio Authentication (via SMS or Voice Call)** during the login process, follow the steps below:
+To modify the previous solution so that both **Twilio** and **Duo** are triggered at the same time, and once one of them is successfully authenticated, the user gains access without the need to complete the second authentication, you can adjust the flow to check for either authentication success before granting access.
+
+The following is the updated solution with this functionality:
 
 ---
 
@@ -9398,15 +9399,13 @@ To implement **Two-Factor Authentication (2FA)** for SSH login on an Ubuntu serv
    auth required /lib64/security/pam_duo.so
    ```
 
-   Adjust the path for 32-bit systems or if you're using non-standard paths.
-
 2. **Save and Exit**.
 
 ---
 
 #### 4. **Twilio Integration for SMS and Voice Authentication**
 
-We'll create a script that allows users to choose between **Duo** or **Twilio** for 2FA, triggered during SSH login.
+We will modify the system to trigger **Duo** and **Twilio** simultaneously when an SSH login is attempted. The flow will ensure that if either **Duo** or **Twilio** is successfully authenticated, the user is granted access without needing to complete the other.
 
 1. **Create a Shell Script for Twilio Authentication**:
 
@@ -9428,45 +9427,19 @@ We'll create a script that allows users to choose between **Duo** or **Twilio** 
    # Generate a random 6-digit code
    VERIFICATION_CODE=$(shuf -i 100000-999999 -n 1)
 
-   # Ask user for the authentication method
-   echo "Please select an authentication method:"
-   echo "1: Duo Authentication"
-   echo "2: Twilio Authentication"
-   read -p "Enter 1 for Duo or 2 for Twilio: " AUTH_METHOD
+   # Send SMS using Twilio API
+   curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json \
+       --data-urlencode "Body=Your 2FA code is $VERIFICATION_CODE" \
+       --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+       --data-urlencode "To=$USER_PHONE_NUMBER" \
+       -u $ACCOUNT_SID:$AUTH_TOKEN
 
-   if [ "$AUTH_METHOD" == "1" ]; then
-       # Trigger Duo Authentication (push or passcode)
-       echo "You chose Duo Authentication. Please follow the Duo prompt on your device."
-       exit 0
-   elif [ "$AUTH_METHOD" == "2" ]; then
-       # Ask for SMS or Voice call option
-       echo "Please select an authentication method:"
-       echo "1: Receive SMS"
-       echo "2: Receive Voice Call"
-       read -p "Enter 1 or 2: " TWILIO_AUTH_METHOD
-
-       if [ "$TWILIO_AUTH_METHOD" == "1" ]; then
-           # Send SMS using Twilio API
-           curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json \
-               --data-urlencode "Body=Your 2FA code is $VERIFICATION_CODE" \
-               --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-               --data-urlencode "To=$USER_PHONE_NUMBER" \
-               -u $ACCOUNT_SID:$AUTH_TOKEN
-       elif [ "$TWILIO_AUTH_METHOD" == "2" ]; then
-           # Place a voice call using Twilio API
-           curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json \
-               --data-urlencode "To=$USER_PHONE_NUMBER" \
-               --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-               --data-urlencode "Url=http://demo.twilio.com/docs/voice.xml?code=$VERIFICATION_CODE" \
-               -u $ACCOUNT_SID:$AUTH_TOKEN
-       else
-           echo "Invalid selection. Please select either 1 or 2."
-           exit 1
-       fi
-   else
-       echo "Invalid selection. Please select either 1 (Duo) or 2 (Twilio)."
-       exit 1
-   fi
+   # Place a voice call using Twilio API
+   curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json \
+       --data-urlencode "To=$USER_PHONE_NUMBER" \
+       --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+       --data-urlencode "Url=http://demo.twilio.com/docs/voice.xml?code=$VERIFICATION_CODE" \
+       -u $ACCOUNT_SID:$AUTH_TOKEN
 
    # Optionally print the code for debugging (remove in production)
    echo "Sent 2FA code: $VERIFICATION_CODE"
@@ -9478,25 +9451,89 @@ We'll create a script that allows users to choose between **Duo** or **Twilio** 
    sudo chmod +x /usr/local/bin/twilio_2fa.sh
    ```
 
-3. **Modify PAM to Use the Twilio Script**:
+---
 
-   After configuring Duo in PAM, we will call the Twilio script after the Duo check. Modify `/etc/pam.d/sshd`:
+#### 5. **Configure PAM to Trigger Both Duo and Twilio Simultaneously**
+
+To trigger both **Duo** and **Twilio** in parallel, and grant access once one of them is successfully authenticated, we will use a wrapper script that runs both the Duo PAM module and the Twilio 2FA script at the same time. If either one succeeds, the user will be granted access.
+
+1. **Create a Wrapper Script to Run Duo and Twilio Simultaneously**:
+
+   Create a new script to call both Duo and Twilio:
+
+   ```bash
+   sudo nano /usr/local/bin/ssh_2fa_wrapper.sh
+   ```
+
+   Add the following content:
+
+   ```bash
+   #!/bin/bash
+
+   # Function to check if Duo succeeded
+   function check_duo_success {
+       # Assuming Duo sends an exit status of 0 on success
+       if [ $? -eq 0 ]; then
+           echo "Duo authentication successful."
+           return 0
+       else
+           return 1
+       fi
+   }
+
+   # Function to check if Twilio succeeded
+   function check_twilio_success {
+       # Assuming Twilio sends an exit status of 0 on success
+       if [ $? -eq 0 ]; then
+           echo "Twilio authentication successful."
+           return 0
+       else
+           return 1
+       fi
+   }
+
+   # Trigger Duo authentication in background
+   /lib64/security/pam_duo.so &
+
+   # Trigger Twilio 2FA in background
+   /usr/local/bin/twilio_2fa.sh $PAM_USER &
+
+   # Wait for either Duo or Twilio to succeed
+   wait -n
+
+   # Check if Duo or Twilio succeeded
+   if check_duo_success || check_twilio_success; then
+       exit 0  # Grant access if any authentication succeeds
+   else
+       exit 1  # Deny access if both fail
+   fi
+   ```
+
+2. **Make the Wrapper Script Executable**:
+
+   ```bash
+   sudo chmod +x /usr/local/bin/ssh_2fa_wrapper.sh
+   ```
+
+3. **Modify `/etc/pam.d/sshd` to Call the Wrapper Script**:
+
+   Edit the SSH PAM configuration to use the new wrapper script:
 
    ```bash
    sudo nano /etc/pam.d/sshd
    ```
 
-   Add the following line after the Duo authentication line:
+   Replace the Duo line with the wrapper script:
 
    ```bash
-   auth [success=1 default=ignore] pam_exec.so /usr/local/bin/twilio_2fa.sh %PAM_USER
+   auth required pam_exec.so /usr/local/bin/ssh_2fa_wrapper.sh
    ```
 
-   This allows the user to choose between Duo and Twilio for the second factor of authentication.
+4. **Save and Exit**.
 
 ---
 
-#### 5. **Test the SSH Login and 2FA Flow**
+#### 6. **Test the SSH Login and 2FA Flow**
 
 1. **Test SSH Login**:
 
@@ -9506,11 +9543,12 @@ We'll create a script that allows users to choose between **Duo** or **Twilio** 
    ssh user@your_server_ip
    ```
 
-   After entering your SSH key passphrase (if applicable), Duo will trigger the 2FA push or passcode request. Then, the Twilio script will prompt the user to select the authentication method (either SMS or voice call).
+   - After entering your SSH key passphrase (if applicable), **Duo** will trigger a 2FA push or passcode request.
+   - **Twilio** will simultaneously trigger, sending both an **SMS** and a **Voice Call** with the verification code.
 
 2. **Enter the Verification Code**:
 
-   After receiving the SMS or voice call from Twilio, enter the verification code as prompted.
+   After receiving the **SMS** or **Voice Call** from Twilio, enter the verification code when prompted. If **Duo** is successfully authenticated first, the user will gain access, and **Twilio** will be ignored. Similarly, if **Twilio** is successful, **Duo** will be ignored.
 
 ---
 
@@ -9521,11 +9559,11 @@ If you want to apply 2FA only to specific users or groups, you can modify `/etc/
 Example for user `sshusers`:
 
 ```bash
-auth required pam_duo.so group=sshusers
+auth required pam_exec.so /usr/local/bin/ssh_2fa_wrapper.sh
 ```
 
 ---
 
 ### Conclusion
 
-This setup integrates both **Duo Security** and **Twilio SMS/Voice Call** for SSH-based **Two-Factor Authentication (2FA)**. Users can select their preferred authentication method when prompted during SSH login, offering flexibility and security.
+This configuration now triggers both **Duo Security** and **Twilio** 2FA simultaneously during an SSH login attempt. Once either **Duo** or **Twilio** is successfully authenticated, the user is granted shell access, and the second factor is skipped. This ensures a seamless 2FA experience while maintaining security.
