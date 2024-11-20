@@ -9294,11 +9294,9 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 .
-:Here’s the updated version of your script, now including the steps for setting up a **TwiML Bin URL** in **Twilio Studio** to handle the voice OTP functionality.
+.### Updated Comprehensive Guide: Implementing Multi-Option 2FA for SSH with Duo Security and Twilio
 
-### Updated Comprehensive Guide: Implementing Multi-Option 2FA for SSH with Duo Security and Twilio
-
-This updated guide includes handling OTP verification via SMS and Voice Call, with the Twilio API used to send the OTPs. Additionally, a TwiML Bin URL is used to trigger the voice OTP call via Twilio Studio.
+This guide includes handling OTP verification via SMS and Voice Call using the Twilio API without requiring a **TwiML Bin URL** for the voice OTP functionality.
 
 ---
 
@@ -9364,7 +9362,7 @@ sudo apt install build-essential libpam-dev libssl-dev libtool wget curl jq
    sudo nano /usr/local/bin/twilio_auth.sh
    ```
 
-2. Add the following updated script to prompt users for their chosen authentication method (Duo or Twilio), generate an OTP for Twilio, and verify it. The voice OTP is now handled through a **TwiML Bin** URL hosted by Twilio Studio.
+2. Add the following updated script to prompt users for their chosen authentication method (Duo or Twilio), generate an OTP for Twilio, and verify it. Voice OTP delivery is handled using the **Say** TwiML directly embedded in the API request.
 
    ```bash
    #!/bin/bash
@@ -9374,7 +9372,6 @@ sudo apt install build-essential libpam-dev libssl-dev libtool wget curl jq
    AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
    TWILIO_PHONE="YOUR_TWILIO_PHONE_NUMBER"
    USER_PHONE="USER_PHONE_NUMBER"
-   TWIML_BIN_URL="https://handler.twilio.com/twiml/YOUR_TWIML_BIN_URL"
 
    # Prompt user to choose authentication method
    echo "Choose your authentication method:"
@@ -9411,7 +9408,7 @@ sudo apt install build-essential libpam-dev libssl-dev libtool wget curl jq
          curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json" \
          --data-urlencode "To=$USER_PHONE" \
          --data-urlencode "From=$TWILIO_PHONE" \
-         --data-urlencode "Url=$TWIML_BIN_URL?otp=$OTP" \
+         --data-urlencode "Twiml=<Response><Say>Your SSH login one-time password is $OTP. Please enter it to proceed.</Say></Response>" \
          -u "$ACCOUNT_SID:$AUTH_TOKEN"
          ;;
        *)
@@ -9499,22 +9496,7 @@ sudo apt install build-essential libpam-dev libssl-dev libtool wget curl jq
 
 ---
 
-### Step 6: Create TwiML Bin URL for Voice OTP (Twilio Studio)
-
-1. **Log in to Twilio Console** and navigate to **Twilio Studio**.
-2. Create a new **Flow** in Twilio Studio.
-3. In your Flow, use a **Gather** widget to capture the OTP input from the user. You will use the `{{otp}}` parameter to include the OTP generated in the script.
-4. Publish the Flow, and **copy the URL** that Twilio generates for your Flow. It should look like:
-
-   ```plaintext
-   https://handler.twilio.com/twiml/YOUR_TWIML_BIN_URL?otp=123456
-   ```
-
-5. Replace `YOUR_TWIML_BIN_URL` in your script with the actual URL generated from Twilio Studio.
-
----
-
-### Step 7: Test SSH Login
+### Step 6: Test SSH Login
 
 1. Attempt to SSH into the server:
 
@@ -9553,14 +9535,6 @@ Replace `sshusers` with the desired group name.
 ### Conclusion
 
 With this setup, SSH access is secured with **Duo 2FA** and **Twilio OTP**, and users are prompted to choose their preferred authentication method, offering flexibility while maintaining strong security.
-
----
-
-This guide now includes all necessary steps, including **setting up a TwiML Bin URL** in **Twilio Studio** to handle voice-based OTP delivery.
-
-`https://handler.twilio.com/twiml/YOUR_TWIML_BIN_URL?otp=123456`
-
-This TwiML URL will respond to the call with a spoken message that reads out the OTP to the user.
 
 
 
