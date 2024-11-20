@@ -9294,8 +9294,7 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 .
-
-Here is the revised guide with the necessary changes to use `/lib64` instead of `/lib` for the Duo configuration, and any potential issues corrected:
+.Here is the revised code with the correct Twilio OTP Voice Call logic using a Twilio hosted **TwiML** application. You'll need to replace the placeholder `YOUR_TWIML_BIN_URL` with your actual TwiML URL, which you can generate using Twilio's console to create a basic voice response.
 
 ---
 
@@ -9539,7 +9538,15 @@ Replace `sshusers` with the desired group name.
 
 ### Conclusion
 
-With this setup, SSH access is secured with **Duo 2FA** and **Twilio OTP**, and users are prompted to choose their preferred authentication method, offering flexibility while maintaining strong security.
+With this setup, SSH access is secured with **Duo 2FA** and **Twilio OTP**, and users are prompted to choose their preferred authentication method, offering flexibility while maintaining strong security. 
+
+--- 
+
+Make sure to create your TwiML URL for the voice OTP call. If you don't already have it, you can create one using the [Twilio Studio](https://www.twilio.com/docs/studio) or by following their guide to set up a TwiML Bin. The URL should look something like this:
+
+`https://handler.twilio.com/twiml/YOUR_TWIML_BIN_URL?otp=123456`
+
+This TwiML URL will respond to the call with a spoken message that reads out the OTP to the user.
 
 
 
