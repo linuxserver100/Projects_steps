@@ -9293,15 +9293,13 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-...
-
-Here's the updated code with Duo Security PAM integration and Twilio-based OTP, ensuring SSH triggers Duo or Twilio options without fallback to password authentication:
+.Here's the rewritten guide with proper `/etc/ssh/sshd_config` configuration included:
 
 ---
 
-### Updated Comprehensive Guide: Implementing Multi-Option 2FA for SSH with Duo Security and Twilio  
+### Comprehensive Guide: Implementing Multi-Option 2FA for SSH with Duo Security and Twilio
 
-This guide ensures a seamless OTP-based 2FA setup, avoiding the **"keyboard-interactive authentication prompts from server | password"** prompt.
+This guide demonstrates how to implement multi-option two-factor authentication (2FA) for SSH using Duo Security and the Twilio API, enabling OTP verification via SMS or voice call without requiring a **TwiML Bin URL**.
 
 ---
 
@@ -9316,6 +9314,8 @@ This guide ensures a seamless OTP-based 2FA setup, avoiding the **"keyboard-inte
 ---
 
 ### Step 1: Install Required Dependencies
+
+Install the necessary packages:
 
 ```bash
 sudo apt update
@@ -9358,22 +9358,24 @@ sudo apt install build-essential libpam-dev libssl-dev libtool wget curl jq
 
 ### Step 3: Create Twilio Authentication Script
 
-1. **Create the Twilio OTP script**:
+1. **Create a script for handling Twilio SMS and Voice Calls**:
 
    ```bash
    sudo nano /usr/local/bin/twilio_auth.sh
    ```
 
-2. Add the updated script:
+2. Add the following script:
 
    ```bash
    #!/bin/bash
 
+   # Twilio credentials
    ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
    AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
    TWILIO_PHONE="YOUR_TWILIO_PHONE_NUMBER"
    USER_PHONE="USER_PHONE_NUMBER"
 
+   # Prompt user to choose authentication method
    echo "Choose your authentication method:"
    echo "1) Duo Push Notification"
    echo "2) Twilio OTP (SMS or Voice Call)"
@@ -9381,58 +9383,57 @@ sudo apt install build-essential libpam-dev libssl-dev libtool wget curl jq
 
    if [[ "$METHOD" == "1" ]]; then
      echo "Initiating Duo Push..."
-     exit 0
+     exit 0  # Duo handled by PAM directly
    elif [[ "$METHOD" == "2" ]]; then
      OTP=$(shuf -i 100000-999999 -n 1)
-     echo "Choose your Twilio authentication method:"
+
+     # Prompt user to choose OTP delivery method
+     echo "Choose Twilio OTP method:"
      echo "1) SMS"
      echo "2) Voice Call"
      read -p "Enter your choice: " TWILIO_METHOD
 
-     case $TWILIO_METHOD in
-       1)
-         echo "Sending OTP via SMS..."
-         curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json" \
+     if [[ "$TWILIO_METHOD" == "1" ]]; then
+       echo "Sending OTP via SMS..."
+       curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json" \
          --data-urlencode "To=$USER_PHONE" \
          --data-urlencode "From=$TWILIO_PHONE" \
          --data-urlencode "Body=Your SSH login OTP is: $OTP" \
          -u "$ACCOUNT_SID:$AUTH_TOKEN"
-         ;;
-       2)
-         echo "Making a voice call with OTP..."
-         curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json" \
+     elif [[ "$TWILIO_METHOD" == "2" ]]; then
+       echo "Making a voice call with OTP..."
+       curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json" \
          --data-urlencode "To=$USER_PHONE" \
          --data-urlencode "From=$TWILIO_PHONE" \
          --data-urlencode "Twiml=<Response><Say>Your SSH login one-time password is $OTP. Please enter it to proceed.</Say></Response>" \
          -u "$ACCOUNT_SID:$AUTH_TOKEN"
-         ;;
-       *)
-         echo "Invalid choice."
-         exit 1
-         ;;
-     esac
+     else
+       echo "Invalid choice. Authentication failed."
+       exit 1
+     fi
 
+     # OTP verification loop
      for attempt in {1..3}; do
-       echo "Please enter the OTP:"
+       echo "Enter the OTP sent to your phone:"
        read -s ENTERED_OTP
 
        if [[ "$ENTERED_OTP" == "$OTP" ]]; then
-         echo "OTP verified."
+         echo "OTP verified successfully."
          exit 0
        else
-         echo "Invalid OTP."
+         echo "Invalid OTP. Attempts remaining: $((3 - attempt))"
        fi
      done
 
-     echo "Authentication failed."
+     echo "Authentication failed after 3 attempts."
      exit 1
    else
-     echo "Invalid choice."
+     echo "Invalid choice. Authentication failed."
      exit 1
    fi
    ```
 
-3. Make the script executable:
+3. **Make the script executable**:
 
    ```bash
    sudo chmod +x /usr/local/bin/twilio_auth.sh
@@ -9440,47 +9441,51 @@ sudo apt install build-essential libpam-dev libssl-dev libtool wget curl jq
 
 ---
 
-### Step 4: Configure PAM for SSH  
+### Step 4: Configure PAM for SSH
 
-1. Edit the PAM SSH configuration:  
+1. **Edit PAM Configuration for SSH**:
 
    ```bash
    sudo nano /etc/pam.d/sshd
    ```
 
-2. Update the configuration to include Duo and Twilio as options:
+2. Add the following lines at the beginning:
 
    ```plaintext
-   # Allow Duo PAM integration first
-   auth requisite pam_duo.so
-   # Use Twilio script for OTP-based 2FA
+   # Trigger authentication method prompt
    auth requisite pam_exec.so expose_authtok /usr/local/bin/twilio_auth.sh
-   # Deny all fallback password attempts
-   auth required pam_deny.so
+
+   # Enable Duo Security for Push Authentication
+   auth required pam_duo.so
    ```
 
 ---
 
-### Step 5: Update SSH Configuration  
+### Step 5: Update SSH Configuration
 
-1. Edit the SSH configuration file:  
+1. Edit the SSH configuration file:
 
    ```bash
    sudo nano /etc/ssh/sshd_config
    ```
 
-2. Update or add the following lines:
+2. Ensure the following configuration is present and correct:
 
    ```plaintext
    PubkeyAuthentication yes
    PasswordAuthentication no
-   AuthenticationMethods publickey
-   ChallengeResponseAuthentication no
+   ChallengeResponseAuthentication yes
    UsePAM yes
-   UseDNS no
+   AuthenticationMethods publickey,keyboard-interactive
    ```
 
-3. Save and restart SSH:  
+   - `PubkeyAuthentication yes`: Enables SSH key-based authentication.
+   - `PasswordAuthentication no`: Disables password-based authentication.
+   - `ChallengeResponseAuthentication yes`: Enables additional prompts for interactive authentication.
+   - `UsePAM yes`: Ensures PAM is used for authentication.
+   - `AuthenticationMethods publickey,keyboard-interactive`: Enforces both public key and 2FA (via keyboard-interactive) for authentication.
+
+3. Save and restart the SSH service:
 
    ```bash
    sudo systemctl restart sshd
@@ -9488,18 +9493,20 @@ sudo apt install build-essential libpam-dev libssl-dev libtool wget curl jq
 
 ---
 
-### Step 6: Test SSH Login  
+### Step 6: Test SSH Login
 
-1. SSH into the server:  
+1. SSH into the server:
 
    ```bash
    ssh user@your_server_ip
    ```
 
-2. Follow the prompts to choose between Duo Push or Twilio OTP for authentication.
+2. Follow the prompts to:
+   - Choose Duo Push or Twilio OTP.
+   - For Twilio, select SMS or Voice Call, enter the OTP, and access the shell.
 
 ---
 
-### Conclusion  
+### Conclusion
 
-This guide ensures no fallback to password authentication, integrates Duo and Twilio as 2FA options, and provides a seamless SSH login experience.
+This updated guide integrates Duo Security and Twilio, ensuring OTP delivery, verification, and seamless authentication. Let me know if you encounter any issues during implementation!
