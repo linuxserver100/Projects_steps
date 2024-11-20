@@ -9294,84 +9294,153 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
-The guide you provided appears mostly correct for configuring SSH with Two-Factor Authentication (2FA) using Duo Security and Twilio on an Ubuntu 24.04 LTS AWS server. However, I'll make a few clarifications and adjustments to ensure everything works smoothly. 
-
-### **Revised Guide for SSH Login with 2FA on Ubuntu 24.04 LTS AWS Server:**
+Here’s the revised guide with official installation steps for `pam_unix` incorporated and the rest of the guide retained. The changes include obtaining and setting up `pam_unix` securely from official sources while preserving the same structure.
 
 ---
 
-## **Configuring SSH Login with Two-Factor Authentication (2FA) Using Duo Security and Twilio**
+### **Revised Guide for SSH 2FA with Duo and Twilio**
 
-This guide enables SSH login with **Two-Factor Authentication (2FA)** via **Duo Security** (Push or SMS) and **Twilio** (SMS or Call), using PAM modules and shell scripts with minimal dependencies.
-
----
-
-### **1. Prerequisites**
-1. A Linux server with SSH enabled.
-2. **Duo Security API credentials**: Integration Key (ikey), Secret Key (skey), and API Hostname.
-3. **Twilio account credentials**: Account SID, Auth Token, and Twilio phone number.
-4. SSH key-based authentication configured as a fallback.
-5. Installed `pam_exec` PAM module (included with `libpam-modules` on Debian/Ubuntu).
-6. Ensure **`pam_unix`** is installed for standard authentication handling.
+This guide ensures proper integration of SSH 2FA using Duo Security and Twilio, including the secure installation and setup of `pam_unix`.
 
 ---
 
-### **2. Install Dependencies**
+#### **1. Install Required Packages**
 
-1. Update the package list and install the necessary packages:
+1. **Install Dependencies for PAM and Duo:**
    ```bash
    sudo apt update
-   sudo apt install build-essential libpam-dev libssl-dev curl wget libpam-modules
+   sudo apt install curl build-essential libpam0g-dev -y
    ```
 
-2. Verify that **`pam_unix`** is installed:
-   ```bash
-   sudo apt install libpam-modules
-   ```
+2. **Secure Installation of `pam_unix`:**
 
-3. Download and install the Duo PAM module:
+   - **Download the official PAM source package:**
+     Visit the official Linux PAM repository or your Linux distribution's source package archives. For example:
+     ```bash
+     sudo apt source libpam-modules
+     ```
+
+   - **Navigate to the PAM source directory and build:**
+     ```bash
+     cd libpam-modules-*
+     ./configure
+     make
+     sudo make install
+     ```
+
+   - **Verify installation:**
+     Check if the `pam_unix.so` module is present:
+     ```bash
+     ls /lib/security | grep pam_unix
+     ```
+
+3. **Install Duo and Twilio (optional for testing):**
+
+   - Duo's PAM library:
+     ```bash
+     sudo apt install libpam-duo -y
+     ```
+
+   - Twilio CLI (if manual testing is required):
+     ```bash
+     curl -fsSL https://twil.io/install | bash
+     ```
+
+---
+
+#### **2. Configure Duo Security**
+
+1. **Download and Configure Duo’s PAM Module:**
+   - Retrieve the `IKEY`, `SKEY`, and `API_HOSTNAME` from the Duo admin console.
+
+   - Create the configuration file:
+     ```bash
+     sudo nano /etc/duo/pam_duo.conf
+     ```
+
+   - Add the following content:
+     ```plaintext
+     [duo]
+     ikey=YOUR_DUO_IKEY
+     skey=YOUR_DUO_SKEY
+     host=YOUR_DUO_HOSTNAME
+
+     # Optional settings
+     failmode=safe
+     pushinfo=yes
+     ```
+
+2. **Test Duo Authentication:**
    ```bash
-   wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
-   tar zxf duo_unix-latest.tar.gz
-   cd duo_unix-*
-   ./configure --with-pam --prefix=/usr
-   sudo make install
+   /usr/local/sbin/login_duo
    ```
 
 ---
 
-### **3. Configure Duo Security**
+#### **3. Configure Twilio SMS and Calls**
 
-1. Create the Duo configuration directory and file:
-   ```bash
-   sudo mkdir /etc/duo
-   sudo nano /etc/duo/pam_duo.conf
-   ```
+1. **Obtain Twilio Credentials:**
+   - Log in to your Twilio account and gather **Account SID**, **Auth Token**, and a valid Twilio phone number.
 
-2. Add the following content (replace placeholders with your Duo API credentials):
-   ```plaintext
-   [duo]
-   ikey = YOUR_INTEGRATION_KEY
-   skey = YOUR_SECRET_KEY
-   host = YOUR_API_HOSTNAME
-   pushinfo = yes
-   autopush = no
-   failmode = safe
-   ```
+2. **Update the Twilio Script:**
+   The details are provided in Section 5.
 
 ---
 
-### **4. Create Scripts for Twilio 2FA and PAM Integration**
+#### **4. Configure PAM and SSH**
 
-#### a. Unified Script: `/usr/local/bin/ssh_2fa.sh`
+1. **Update PAM Configuration:**
+   - Edit the PAM configuration for SSH:
+     ```bash
+     sudo nano /etc/pam.d/sshd
+     ```
 
-Create a single script to handle 2FA methods (Duo, Twilio SMS, Twilio Call).  
-Save the file as `/usr/local/bin/ssh_2fa.sh`:
+   - Update the file:
+     ```plaintext
+     # Standard Unix authentication (from pam_unix)
+     auth    required    pam_unix.so
+
+     # Duo authentication
+     auth    [success=1 default=ignore] pam_duo.so
+
+     # Twilio-based OTP
+     auth    required    pam_exec.so seteuid /usr/local/bin/ssh_2fa.sh
+
+     # Account and session modules
+     @include common-auth
+     @include common-account
+     @include common-session
+     @include common-password
+     ```
+
+2. **Update the SSH Server Configuration:**
+   - Edit the SSH configuration file:
+     ```bash
+     sudo nano /etc/ssh/sshd_config
+     ```
+
+   - Ensure these settings are present:
+     ```plaintext
+     UsePAM yes
+     ChallengeResponseAuthentication yes
+     PasswordAuthentication no
+     ```
+
+   - Restart SSH:
+     ```bash
+     sudo systemctl restart sshd
+     ```
+
+---
+
+#### **5. Refined 2FA Script**
+
+Create the script at `/usr/local/bin/ssh_2fa.sh`:
 
 ```bash
 #!/bin/bash
 
-# Duo Security and Twilio Credentials
+# Duo and Twilio credentials
 DUO_IKEY="YOUR_DUO_IKEY"
 DUO_SKEY="YOUR_DUO_SKEY"
 DUO_HOST="YOUR_DUO_HOSTNAME"
@@ -9380,16 +9449,16 @@ TWILIO_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
 TWILIO_PHONE="+YOUR_TWILIO_PHONE"
 USER_PHONE="+USER_PHONE"
 
-# Temporary OTP Storage
-OTP_FILE="/tmp/twilio_otp_store"
+# Temporary OTP storage
+OTP_FILE="/var/run/ssh_otp_store"
 
-# Generate Random OTP
+# Generate and store an OTP
 generate_otp() {
     shuf -i 100000-999999 -n 1 > "$OTP_FILE"
     chmod 600 "$OTP_FILE"
 }
 
-# Send Twilio SMS
+# Send OTP via Twilio SMS
 send_sms() {
     OTP=$(cat "$OTP_FILE")
     curl -s -X POST https://api.twilio.com/2010-04-01/Accounts/"$TWILIO_SID"/Messages.json \
@@ -9399,7 +9468,7 @@ send_sms() {
         -u "$TWILIO_SID:$TWILIO_TOKEN"
 }
 
-# Make Twilio Call
+# Make a Twilio call with OTP
 make_call() {
     OTP=$(cat "$OTP_FILE")
     curl -s -X POST https://api.twilio.com/2010-04-01/Accounts/"$TWILIO_SID"/Calls.json \
@@ -9409,12 +9478,11 @@ make_call() {
         -u "$TWILIO_SID:$TWILIO_TOKEN"
 }
 
-# Validate Twilio OTP
+# Validate entered OTP
 validate_otp() {
     read -p "Enter the OTP sent to your phone: " entered_otp
     stored_otp=$(cat "$OTP_FILE")
     if [ "$entered_otp" == "$stored_otp" ]; then
-        echo "OTP validated successfully."
         rm -f "$OTP_FILE"
         exit 0
     else
@@ -9423,10 +9491,10 @@ validate_otp() {
     fi
 }
 
-# Duo Authentication
+# Duo authentication
 duo_auth() {
-    echo "Please approve the Duo authentication request on your phone..."
-    /usr/local/bin/duo_unix -p -f /etc/duo/pam_duo.conf
+    echo "Approve the Duo authentication request..."
+    /usr/local/sbin/login_duo
     if [ $? -eq 0 ]; then
         echo "Duo authentication successful."
         exit 0
@@ -9436,9 +9504,10 @@ duo_auth() {
     fi
 }
 
-# Prompt User for 2FA Method
-echo "Choose 2FA method: (1) Duo, (2) Twilio SMS, (3) Twilio Call"
-read choice
+# Select 2FA method
+echo "Choose 2FA method: (1) Duo Push, (2) Twilio SMS, (3) Twilio Call"
+read -r choice
+
 case "$choice" in
     1)
         duo_auth
@@ -9460,111 +9529,36 @@ case "$choice" in
 esac
 ```
 
-Make the script executable:
+**Set Permissions:**
 ```bash
-sudo chmod +x /usr/local/bin/ssh_2fa.sh
+sudo chmod 700 /usr/local/bin/ssh_2fa.sh
+sudo chown root:root /usr/local/bin/ssh_2fa.sh
 ```
 
 ---
 
-### **5. Configure PAM for SSH**
+#### **6. Testing the Setup**
 
-1. Edit the PAM configuration for SSH:
-   ```bash
-   sudo nano /etc/pam.d/sshd
-   ```
-
-2. Ensure **`pam_unix.so`** is properly referenced for password authentication and add the Duo 2FA PAM script:
-   ```plaintext
-   # Standard Un*x authentication.
-   auth    required    pam_unix.so
-
-   # SSH 2FA script
-   auth required pam_exec.so /usr/local/bin/ssh_2fa.sh
-   ```
-
----
-
-### **6. Configure SSH**
-
-1. Edit the SSH configuration file:
-   ```bash
-   sudo nano /etc/ssh/sshd_config
-   ```
-
-2. Ensure the following options are enabled:
-   ```plaintext
-   UsePAM yes
-   ChallengeResponseAuthentication yes
-   PasswordAuthentication no
-   ```
-
-3. Restart the SSH service:
-   ```bash
-   sudo systemctl restart sshd
-   ```
-
----
-
-### **7. Test SSH Login**
-
-1. Connect to the server via SSH:
+1. Test SSH login:
    ```bash
    ssh user@your_server_ip
    ```
 
-2. You will be prompted to select a 2FA method:
-   - **Option 1**: Duo push notification or SMS.
-   - **Option 2**: Twilio SMS OTP.
-   - **Option 3**: Twilio Call OTP.
-
-3. Complete authentication based on your choice.
-
----
-
-### **8. Notes**
-- Secure the `/tmp/twilio_otp_store` file with restricted permissions or use a secure alternative.
-- Test all 2FA options to ensure reliability.
-- Adjust user-specific settings (e.g., phone numbers) for personalized configurations.
-
----
-
-### **Fixing the Duo Authentication Error (`duo_auth` function)**
-
-The error you're encountering in the `duo_auth` function happens because the **Duo Unix PAM module** might not be in the expected path or is not properly installed.
-
-To ensure Duo works correctly, the **Duo Unix PAM module** path should be correctly specified. If you encounter issues with the `duo_unix` binary not being found, check the following:
-
-1. **Verify Duo Unix PAM module path**:
-   The Duo PAM module is typically installed in `/usr/local/bin/duo_unix` or `/usr/bin/duo_unix`. You can confirm its location by running:
-   ```bash
-   which duo_unix
+2. Choose a 2FA method during login:
+   ```plaintext
+   Choose 2FA method: (1) Duo Push, (2) Twilio SMS, (3) Twilio Call
    ```
 
-2. **Update the `duo_auth` function** to use the correct path if needed:
-   For example:
-   ```bash
-   duo_auth() {
-       echo "Please approve the Duo authentication request on your phone..."
-       /usr/bin/duo_unix -p -f /etc/duo/pam_duo.conf  # Adjust this path if necessary
-       if [ $? -eq 0 ]; then
-           echo "Duo authentication successful."
-           exit 0
-       else
-           echo "Duo authentication failed. Access denied."
-           exit 1
-       fi
-   }
-   ```
+---
 
-Ensure that you update the path to the **`duo_unix`** binary correctly if the default location (`/usr/local/bin/duo_unix`) doesn't match your system's installation.
+#### **7. Additional Security Notes**
+- **Secure OTP Storage:** Use `/var/run/` for temporary OTPs.
+- **Logs:** Monitor `/var/log/auth.log` for debugging.
+- **Backups:** Always back up configuration files before modifications.
 
 ---
 
-### **Final Remarks**
-
-This guide should work perfectly with **Ubuntu 24.04 LTS** and AWS servers. The key modifications are to make sure Duo's installation path is correct and that all configurations are aligned. Please also test the Duo and
-
+This updated guide secures the installation of `pam_unix` from official sources while maintaining integration with Duo and Twilio for SSH 2FA.
 
 
 
