@@ -9292,13 +9292,14 @@ done
 
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
-🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-.
-.  To modify the existing code and SSH configuration to allow **forced keyboard input prompts** for the script while blocking password-based interactive login, follow these steps. This configuration ensures that keyboard input prompts are allowed **only** for the script while maintaining security.
+🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
+
+
+To modify the provided SSH and script setup so that **keyboard-interactive authentication is blocked** globally while allowing **forced keyboard input prompts** only for the script, we must tweak the configuration carefully. Below is the rewritten implementation:
 
 ---
 
-### Updated Guide for SSH 2FA with Twilio (SMS/Call OTP) and Duo Authentication
+### Updated Guide for SSH 2FA with Twilio (SMS/Call OTP) and Duo Authentication (Blocking Global Keyboard-Interactive Authentication)
 
 ---
 
@@ -9306,7 +9307,7 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 
 #### Step 1: Prerequisites
 
-Same as before, ensure:
+Ensure:
 - **Ubuntu server** with SSH and SSH keys configured.
 - **Twilio and Duo accounts** with credentials ready.
 - **Firewall** permits SSH connections.
@@ -9331,7 +9332,7 @@ sudo apt install curl libpam-dev build-essential
    nano 2fa_otp.sh
    ```
 
-2. **Script Content:** (Updated to handle forced keyboard input)
+2. **Script Content:** (Forcing keyboard input via `/dev/tty`)
 
 ```bash
 #!/bin/bash
@@ -9463,13 +9464,13 @@ Make the following changes:
 ```bash
 PubkeyAuthentication yes
 PasswordAuthentication no
-ChallengeResponseAuthentication yes
-AuthenticationMethods publickey,keyboard-interactive
+ChallengeResponseAuthentication no
+AuthenticationMethods publickey
 UsePAM yes
 UseDNS no
 ```
 
-This setup blocks password-based interactive login but allows the script to request input via `/dev/tty`.
+This configuration disables `ChallengeResponseAuthentication` globally while allowing **public key authentication**. The script leverages `pam_exec` to enforce input when required.
 
 ---
 
@@ -9493,12 +9494,11 @@ sudo systemctl restart sshd
 ---
 
 ### Key Considerations
-- **Forced Input via `/dev/tty`**: Ensures only the script can request input securely.
-- **Non-interactive Login Security**: Regular password logins are disabled.
-- **TwiML URL**: Replace placeholders with your endpoint.
 
-Let me know if further customization is needed!
-.
+- **Blocked Global Keyboard-Interactive Authentication**: Ensures no other method can use keyboard-interactive prompts.
+- **Forced Input via `/dev/tty`**: Script bypasses the restriction and securely requests input via `/dev/tty`.
+- **Non-interactive Login Security**: Regular password logins remain disabled.
+
 
 
 
