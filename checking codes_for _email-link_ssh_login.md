@@ -9295,9 +9295,7 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
 
-
-
-Certainly! Below is the updated guide, incorporating **Twilio's SMS OTP verification** alongside **Twilio's voice OTP** and **Duo Security** for SSH-based two-factor authentication (2FA).
+.Certainly! Below is the updated version of the guide with modifications for the **`/etc/pam.d/sshd`** configuration to handle the script using the **ForceCommand** directive. This ensures that the **Twilio OTP** and **Duo 2FA** scripts are executed during the SSH login process.
 
 ---
 
@@ -9407,6 +9405,13 @@ auth required /lib64/security/pam_duo.so
 
 # Call Twilio for OTP SMS/Voice
 auth requisite pam_exec.so /usr/local/bin/twilio_otp.sh
+```
+
+3. Add the `ForceCommand` directive to ensure that the custom script runs on login:
+
+```bash
+# Force the custom script to run during SSH login
+ForceCommand /usr/local/bin/twilio_otp.sh
 ```
 
 ### Step 6: Set Up Twilio OTP Verification via Voice and SMS
@@ -9532,6 +9537,8 @@ By following these steps, you have successfully implemented **Two-Factor Authent
 - Ensure that your **Twilio API credentials** are correct and that you have sufficient balance to make voice calls or send SMS.
 - If Duo push notifications or SMS passcodes are not triggering correctly, verify that the Duo configuration file is set up properly.
 - You can test your configuration by logging into the server from another machine and verifying that both Duo and Twilio prompts appear.
+
+
 
 
 
