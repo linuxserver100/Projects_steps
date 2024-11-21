@@ -9294,7 +9294,208 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
+Here's the updated guide, tailored for AWS Ubuntu 24.04 LTS, where PAM modules are typically located in `/lib64/security`. This version retains the functionality and ensures compatibility with your environment.
 
+---
+
+### Unified Guide for SSH 2FA with Twilio OTP and Duo Security
+
+This guide configures **2FA for SSH logins**, allowing users to select between **Twilio OTP** (via SMS or call) and **Duo Security** (Push, Approve, or Call) in a **parallel prompt setup**.
+
+---
+
+### Prerequisites
+
+- **AWS Ubuntu 24.04 LTS** with SSH configured.
+- Accounts and credentials for:
+  - **Twilio** (Account SID, Auth Token, Twilio Phone Number).
+  - **Duo Security** (Integration Key, Secret Key, API hostname).
+- **SSH key-based authentication** enabled.
+- Tools: `curl`, `jq`, `ntp`, `pam_duo`.
+
+Install dependencies:
+
+```bash
+sudo apt update
+sudo apt install curl jq ntp build-essential libpam-dev libssl-dev libtool wget
+```
+
+---
+
+### Step 1: Install `pam_duo`
+
+Install Duo's PAM module:
+
+```bash
+wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
+tar xzvf duo_unix-latest.tar.gz
+cd duo_unix-*
+./configure --with-pam --libdir=/lib64/security --prefix=/usr
+make
+sudo make install
+```
+
+---
+
+### Step 2: Configure Duo PAM (`/etc/security/pam_duo.conf`)
+
+Create the Duo configuration file:
+
+```bash
+sudo nano /etc/security/pam_duo.conf
+```
+
+Add:
+
+```ini
+[duo]
+ikey = your_duo_integration_key
+skey = your_duo_secret_key
+host = your_duo_api_hostname
+pushinfo = yes
+autopush = yes
+failmode = secure
+```
+
+Replace placeholders (`your_duo_*`) with your Duo Security credentials.
+
+---
+
+### Step 3: Create the Twilio 2FA Script
+
+1. Create the Twilio script:
+
+   ```bash
+   sudo nano /usr/local/bin/twilio_2fa.sh
+   ```
+
+2. Add this code:
+
+   ```bash
+   #!/bin/bash
+   # Twilio 2FA Script for SSH Login
+
+   TWILIO_ACCOUNT_SID="your_account_sid"
+   TWILIO_AUTH_TOKEN="your_auth_token"
+   TWILIO_PHONE="+your_twilio_phone_number"
+   USER_PHONE="+user_phone_number"  # Replace or dynamically retrieve user's phone number
+   OTP_FILE="/tmp/ssh_otp_$USER"
+
+   # Generate and send OTP
+   send_twilio_otp() {
+       OTP=$((RANDOM % 900000 + 100000))  # Generate 6-digit OTP
+       echo "$OTP" > "$OTP_FILE"
+
+       # Send SMS
+       curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json" \
+           --data-urlencode "To=$USER_PHONE" \
+           --data-urlencode "From=$TWILIO_PHONE" \
+           --data-urlencode "Body=Your SSH login OTP is: $OTP" \
+           -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" > /dev/null
+
+       # Make a voice call
+       curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Calls.json" \
+           --data-urlencode "To=$USER_PHONE" \
+           --data-urlencode "From=$TWILIO_PHONE" \
+           --data-urlencode "Twiml=<Response><Say>Your SSH login OTP is $OTP</Say></Response>" \
+           -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" > /dev/null
+   }
+
+   # Verify OTP
+   verify_twilio_otp() {
+       read -p "Enter the OTP sent to your phone: " ENTERED_OTP
+       if [[ -f "$OTP_FILE" ]]; then
+           SAVED_OTP=$(cat "$OTP_FILE")
+           if [[ "$ENTERED_OTP" == "$SAVED_OTP" ]]; then
+               rm -f "$OTP_FILE"
+               return 0  # Valid OTP
+           fi
+           rm -f "$OTP_FILE"
+       fi
+       return 1  # Invalid OTP
+   }
+
+   # Authentication Logic
+   echo "Choose 2FA Method:"
+   echo "1. Twilio OTP (SMS/Call)"
+   echo "2. Duo Security (Push/Approve/Call)"
+   read -p "Enter your choice (1 or 2): " CHOICE
+
+   if [[ "$CHOICE" == "1" ]]; then
+       send_twilio_otp
+       if verify_twilio_otp; then
+           exit 0  # Authentication successful
+       else
+           echo "Invalid OTP. Access denied."
+           exit 1
+       fi
+   elif [[ "$CHOICE" == "2" ]]; then
+       exit 2  # Pass control to Duo PAM
+   else
+       echo "Invalid choice. Access denied."
+       exit 1
+   fi
+   ```
+
+3. Make the script executable:
+
+   ```bash
+   sudo chmod +x /usr/local/bin/twilio_2fa.sh
+   ```
+
+---
+
+### Step 4: Configure PAM for SSH
+
+1. Open the PAM SSH configuration file:
+
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+2. Add the following lines at the top:
+
+   ```bash
+   auth required pam_exec.so expose_authtok /usr/local/bin/twilio_2fa.sh
+   auth [success=1 default=ignore] pam_exec.so /usr/local/bin/twilio_2fa.sh
+   auth requisite /lib64/security/pam_duo.so
+   ```
+
+   Explanation:
+   - Twilio script runs first.
+   - If Duo is chosen (`exit 2`), control moves to `pam_duo`.
+
+---
+
+### Step 5: Restart SSH Service
+
+Restart SSH:
+
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
+### Step 6: Test the Configuration
+
+1. Attempt SSH login:
+
+   ```bash
+   ssh user@your_server_ip
+   ```
+
+2. During login:
+   - Choose between **Twilio OTP** or **Duo Security**.
+   - Follow the respective prompts to complete authentication.
+
+---
+
+### Notes
+- For security, store credentials in environment variables or secure files.
+- Logs can be added for debugging (`echo` statements or system logs). 
+
+This configuration ensures compatibility with `/lib64/security` for AWS Ubuntu 24.04 LTS.
 .
 
 
