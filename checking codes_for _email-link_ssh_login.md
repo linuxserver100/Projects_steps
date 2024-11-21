@@ -9293,13 +9293,13 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-.Here's the updated solution with the correct path for **`pam_duo`** in the `choose_2fa_method.sh` script:
+.
+
+Here is the updated script with the requested modifications:
 
 ---
 
-### Step 1: Install Required Dependencies
-
-Ensure that the necessary dependencies are installed:
+### Step 1: Install Required Dependencies  
 
 ```bash
 sudo apt update
@@ -9308,9 +9308,7 @@ sudo apt install build-essential libpam-dev libssl-dev libtool wget curl
 
 ---
 
-### Step 2: Install Duo Unix Package
-
-Install **Duo Unix** as follows:
+### Step 2: Install Duo Unix Package  
 
 ```bash
 wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
@@ -9322,54 +9320,45 @@ sudo make install
 
 ---
 
-### Step 3: Configure `duo_pam.conf`
+### Step 3: Configure `duo_pam.conf`  
 
-Create the Duo PAM configuration file:
+Create and configure the Duo PAM file:  
 
 ```bash
 sudo nano /etc/duo/pam_duo.conf
-```
+```  
 
-Add the following configuration:
+Add the following configuration:  
 
 ```ini
 [duo]
-; Duo Integration Key
 ikey = YOUR_DUO_INTEGRATION_KEY
-
-; Duo Secret Key
 skey = YOUR_DUO_SECRET_KEY
-
-; Duo API Hostname
 host = YOUR_DUO_API_HOSTNAME
-
-; Fail open if the Duo service is unreachable
 failmode = secure
-
-; Push, SMS, or phone call
 autopush = yes
 prompts = 3
-```
+```  
 
-Replace `YOUR_DUO_INTEGRATION_KEY`, `YOUR_DUO_SECRET_KEY`, and `YOUR_DUO_API_HOSTNAME` with your Duo account credentials.
+Replace placeholders with your Duo credentials.  
 
 ---
 
-### Step 4: Install Twilio Dependencies
+### Step 4: Install Twilio Dependencies  
 
-Install **Twilio** dependencies and create a script for OTP generation via **Voice Call** or **SMS**:
+Install Twilio dependencies and create the Twilio OTP script:  
 
 ```bash
 sudo apt install curl
-```
+```  
 
-Now, create a script for sending OTPs with **Twilio**:
+Create the Twilio OTP script:  
 
 ```bash
 sudo nano /usr/local/bin/twilio_otp.sh
-```
+```  
 
-Here’s the script:
+Here’s the updated script:  
 
 ```bash
 #!/bin/bash
@@ -9409,16 +9398,17 @@ verify_otp() {
   read user_otp
   if [ "$user_otp" == "$otp" ]; then
     echo "OTP verified successfully!"
-    return 0
+    exit 0  # Grant SSH access
   else
     echo "Invalid OTP. Access denied."
-    return 1
+    exit 1  # Deny SSH access
   fi
 }
 
 # Main logic
 if [ "$1" == "call" ]; then
   send_voice
+  verify_otp
 elif [ "$1" == "sms" ]; then
   send_sms
   verify_otp
@@ -9426,25 +9416,25 @@ else
   echo "Invalid action. Use 'call' or 'sms'."
   exit 1
 fi
-```
+```  
 
-Make the script executable:
+Make the script executable:  
 
 ```bash
 sudo chmod +x /usr/local/bin/twilio_otp.sh
-```
+```  
 
 ---
 
-### Step 5: Configure SSH for Duo and Twilio OTP
+### Step 5: Configure SSH for Duo and Twilio OTP  
 
-Update the SSH configuration:
+Update the SSH configuration:  
 
 ```bash
 sudo nano /etc/ssh/sshd_config
-```
+```  
 
-Add or modify the following settings:
+Add the following settings:  
 
 ```bash
 PubkeyAuthentication yes
@@ -9453,37 +9443,37 @@ AuthenticationMethods publickey,keyboard-interactive
 ChallengeResponseAuthentication yes
 UsePAM yes
 UseDNS no
-```
+```  
 
-Restart SSH:
+Restart SSH:  
 
 ```bash
 sudo systemctl restart sshd
-```
+```  
 
 ---
 
-### Step 6: Modify PAM for Interactive 2FA Method Selection
+### Step 6: Modify PAM for Interactive 2FA Method Selection  
 
-1. Edit the SSH PAM configuration file:
+1. Edit the SSH PAM configuration file:  
 
 ```bash
 sudo nano /etc/pam.d/sshd
-```
+```  
 
-2. Add the following line to invoke a script for choosing a 2FA method:
+2. Add the following line:  
 
 ```bash
 auth required pam_exec.so /usr/local/bin/choose_2fa_method.sh
-```
+```  
 
-3. Create the `choose_2fa_method.sh` script:
+3. Create the `choose_2fa_method.sh` script:  
 
 ```bash
 sudo nano /usr/local/bin/choose_2fa_method.sh
-```
+```  
 
-4. Use this updated script content:
+4. Updated script content:  
 
 ```bash
 #!/bin/bash
@@ -9496,7 +9486,7 @@ read -p "Enter 1 or 2: " choice
 # Perform Duo Authentication if chosen
 if [ "$choice" -eq 1 ]; then
     echo "You chose Duo authentication."
-    /tmp/sbin/pam_duo
+    /tmp/bin/pam_duo
 elif [ "$choice" -eq 2 ]; then
     echo "You chose Twilio authentication."
     echo "1. Send OTP via SMS"
@@ -9516,42 +9506,37 @@ else
     echo "Invalid selection. Access denied."
     exit 1
 fi
-```
+```  
 
-Make the script executable:
+Make the script executable:  
 
 ```bash
 sudo chmod +x /usr/local/bin/choose_2fa_method.sh
-```
+```  
 
 ---
 
-### Step 7: Test Two-Factor Authentication
+### Step 7: Test Two-Factor Authentication  
 
-1. Try to SSH into the server:
+1. Try SSH into the server:  
 
 ```bash
 ssh user@your_server_ip
-```
+```  
 
-2. You’ll be prompted to choose **Duo** or **Twilio** as your 2FA method:
-   - **Duo**: Initiates Duo authentication using `/tmp/sbin/pam_duo`.
-   - **Twilio**: Prompts you to select **SMS OTP** or **Voice Call OTP**. The OTP will be sent to the predefined phone number, and the user must enter the correct OTP to authenticate.
-
----
-
-### Optional Configuration for Specific Users
-
-To apply Duo and Twilio 2FA only for specific users, modify the PAM configuration like this:
-
-```bash
-auth required pam_duo.so group=sshusers
-auth requisite pam_exec.so /usr/local/bin/choose_2fa_method.sh group=sshusers
-```
+2. You’ll be prompted to choose **Duo** or **Twilio** as your 2FA method:  
+   - **Duo**: Uses `/tmp/bin/pam_duo`.
+   - **Twilio**: Sends OTP via SMS or Voice Call and verifies the OTP before granting access.  
 
 ---
 
-### Final Notes
-- Ensure Twilio credentials (`account_sid`, `auth_token`, and `twilio_number`) are correctly set.
-- The `pam_duo` PAM module is now invoked directly from the `/tmp/sbin/pam_duo` path.
+### Notes  
+
+- Ensure your Twilio credentials and Duo configuration are correct.
+- The `pam_duo` PAM module path is updated to `/tmp/bin/pam_duo`.  
+
+
+
+
+.
 
