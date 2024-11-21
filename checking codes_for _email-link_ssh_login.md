@@ -9294,12 +9294,9 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
-
-To modify the provided SSH and script setup so that **keyboard-interactive authentication is blocked** globally while allowing **forced keyboard input prompts** only for the script, we must tweak the configuration carefully. Below is the rewritten implementation:
-
----
-
-### Updated Guide for SSH 2FA with Twilio (SMS/Call OTP) and Duo Authentication (Blocking Global Keyboard-Interactive Authentication)
+.
+### Updated Guide for SSH 2FA with Twilio (SMS/Call OTP) and Duo Authentication  
+**(Including `pam_unix` installation via HTTPS and Configuration of `pam_duo.conf`)**
 
 ---
 
@@ -9314,12 +9311,23 @@ Ensure:
 
 ---
 
-#### Step 2: Install Dependencies
-Run:
-```bash
-sudo apt update
-sudo apt install curl libpam-dev build-essential
-```
+#### Step 2: Install Dependencies and `pam_unix`  
+1. **Update and install required packages:**
+   ```bash
+   sudo apt update
+   sudo apt install curl libpam-dev build-essential
+   ```
+
+2. **Download and install `pam_unix`:**
+   ```bash
+   cd /tmp
+   curl -O https://example.com/path/to/pam_unix.tar.gz
+   tar -xzf pam_unix.tar.gz
+   cd pam_unix
+   make && sudo make install
+   ```
+
+   > Replace `https://example.com/path/to/pam_unix.tar.gz` with the actual URL of the `pam_unix` package.
 
 ---
 
@@ -9334,103 +9342,130 @@ sudo apt install curl libpam-dev build-essential
 
 2. **Script Content:** (Forcing keyboard input via `/dev/tty`)
 
-```bash
-#!/bin/bash
+   ```bash
+   #!/bin/bash
 
-# Twilio credentials
-TWILIO_ACCOUNT_SID="your_account_sid"
-TWILIO_AUTH_TOKEN="your_auth_token"
-TWILIO_PHONE_NUMBER="your_twilio_phone_number"
+   # Twilio credentials
+   TWILIO_ACCOUNT_SID="your_account_sid"
+   TWILIO_AUTH_TOKEN="your_auth_token"
+   TWILIO_PHONE_NUMBER="your_twilio_phone_number"
 
-# Duo credentials
-DUO_INTEGRATION_KEY="your_duo_integration_key"
-DUO_SECRET_KEY="your_duo_secret_key"
-DUO_API_HOSTNAME="api-XXXX.duosecurity.com"
+   # Duo credentials
+   DUO_INTEGRATION_KEY="your_duo_integration_key"
+   DUO_SECRET_KEY="your_duo_secret_key"
+   DUO_API_HOSTNAME="api-XXXX.duosecurity.com"
 
-# User details
-USER_PHONE_NUMBER="predefined_user_phone_number"
-USER_EMAIL="predefined_user_email"
+   # User details
+   USER_PHONE_NUMBER="predefined_user_phone_number"
+   USER_EMAIL="predefined_user_email"
 
-# Generate a random 6-digit OTP
-OTP=$(shuf -i 100000-999999 -n 1)
+   # Generate a random 6-digit OTP
+   OTP=$(shuf -i 100000-999999 -n 1)
 
-# Send SMS OTP
-send_sms_otp() {
-  curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json \
-    --data-urlencode "Body=Your OTP code is: $OTP" \
-    --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-    --data-urlencode "To=$USER_PHONE_NUMBER" \
-    -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN \
-    -s > /dev/null
-}
+   # Send SMS OTP
+   send_sms_otp() {
+     curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json \
+       --data-urlencode "Body=Your OTP code is: $OTP" \
+       --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+       --data-urlencode "To=$USER_PHONE_NUMBER" \
+       -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN \
+       -s > /dev/null
+   }
 
-# Send Call OTP
-send_call_otp() {
-  curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Calls.json \
-    --data-urlencode "To=$USER_PHONE_NUMBER" \
-    --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-    --data-urlencode "Url=https://handler.twilio.com/twiml/EHXXXXXXXXXXXXXXXXXX?OTP=$OTP" \
-    -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN \
-    -s > /dev/null
-}
+   # Send Call OTP
+   send_call_otp() {
+     curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Calls.json \
+       --data-urlencode "To=$USER_PHONE_NUMBER" \
+       --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+       --data-urlencode "Url=https://handler.twilio.com/twiml/EHXXXXXXXXXXXXXXXXXX?OTP=$OTP" \
+       -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN \
+       -s > /dev/null
+   }
 
-# Dynamic TwiML for call
-generate_call_twiml() {
-  echo "<?xml version='1.0' encoding='UTF-8'?>
-<Response>
-  <Say>Your one-time password is $OTP. Please enter this code to complete your login.</Say>
-</Response>" > ~/2fa-ssh/twiml_response.xml
-}
+   # Generate dynamic TwiML for call
+   generate_call_twiml() {
+     echo "<?xml version='1.0' encoding='UTF-8'?>
+   <Response>
+     <Say>Your one-time password is $OTP. Please enter this code to complete your login.</Say>
+   </Response>" > ~/2fa-ssh/twiml_response.xml
+   }
 
-# Verify OTP
-verify_otp() {
-  echo -n "Enter the OTP received: " > /dev/tty
-  read user_input < /dev/tty
-  if [[ "$user_input" == "$OTP" ]]; then
-    return 0
-  else
-    return 1
-  fi
-}
+   # Verify OTP
+   verify_otp() {
+     echo -n "Enter the OTP received: " > /dev/tty
+     read user_input < /dev/tty
+     if [[ "$user_input" == "$OTP" ]]; then
+       return 0
+     else
+       return 1
+     fi
+   }
 
-# Duo Authentication
-duo_authenticate() {
-  response=$(curl -X POST -u "$DUO_INTEGRATION_KEY:$DUO_SECRET_KEY" \
-    -d "username=$USER_EMAIL" \
-    -d "factor=push" \
-    -d "device=auto" \
-    "https://$DUO_API_HOSTNAME/auth/v2/auth" -s)
+   # Duo SMS Authentication
+   duo_sms_authenticate() {
+     response=$(curl -X POST -u "$DUO_INTEGRATION_KEY:$DUO_SECRET_KEY" \
+       -d "username=$USER_EMAIL" \
+       -d "factor=sms" \
+       "https://$DUO_API_HOSTNAME/auth/v2/auth" -s)
 
-  echo "$response" | grep -q '"result":"allow"'
-}
+     echo "$response" | grep -q '"result":"allow"'
+   }
 
-# Main authentication method
-choose_2fa_method() {
-  echo -n "Choose authentication method (SMS/Call/Duo): " > /dev/tty
-  read choice < /dev/tty
-  case $choice in
-    sms)
-      send_sms_otp
-      verify_otp && return 0 || return 1
-      ;;
-    call)
-      generate_call_twiml
-      send_call_otp
-      verify_otp && return 0 || return 1
-      ;;
-    duo)
-      duo_authenticate && return 0 || return 1
-      ;;
-    *)
-      echo "Invalid choice." > /dev/tty
-      return 1
-      ;;
-  esac
-}
+   # Duo Push Authentication
+   duo_push_authenticate() {
+     response=$(curl -X POST -u "$DUO_INTEGRATION_KEY:$DUO_SECRET_KEY" \
+       -d "username=$USER_EMAIL" \
+       -d "factor=push" \
+       -d "device=auto" \
+       "https://$DUO_API_HOSTNAME/auth/v2/auth" -s)
 
-# Trigger authentication
-choose_2fa_method || { echo "Authentication failed." > /dev/tty; exit 1; }
-```
+     echo "$response" | grep -q '"result":"allow"'
+   }
+
+   # Duo Call Authentication
+   duo_call_authenticate() {
+     response=$(curl -X POST -u "$DUO_INTEGRATION_KEY:$DUO_SECRET_KEY" \
+       -d "username=$USER_EMAIL" \
+       -d "factor=phone" \
+       -d "device=auto" \
+       "https://$DUO_API_HOSTNAME/auth/v2/auth" -s)
+
+     echo "$response" | grep -q '"result":"allow"'
+   }
+
+   # Main authentication method
+   choose_2fa_method() {
+     echo -n "Choose authentication method (SMS/Call/Duo Push/Duo SMS/Duo Call): " > /dev/tty
+     read choice < /dev/tty
+     case $choice in
+       sms)
+         send_sms_otp
+         verify_otp && return 0 || return 1
+         ;;
+       call)
+         generate_call_twiml
+         send_call_otp
+         verify_otp && return 0 || return 1
+         ;;
+       duo_push)
+         duo_push_authenticate && return 0 || return 1
+         ;;
+       duo_sms)
+         duo_sms_authenticate && return 0 || return 1
+         ;;
+       duo_call)
+         duo_call_authenticate && return 0 || return 1
+         ;;
+       *)
+         echo "Invalid choice." > /dev/tty
+         return 1
+         ;;
+     esac
+   }
+
+   # Trigger authentication
+   choose_2fa_method || { echo "Authentication failed." > /dev/tty; exit 1; }
+   ```
 
 3. **Make it executable:**
    ```bash
@@ -9453,7 +9488,38 @@ auth required pam_exec.so /bin/bash /home/username/2fa-ssh/2fa_otp.sh
 
 ---
 
-#### Step 5: Adjust SSH Configuration
+#### Step 5: Configure `pam_duo`
+
+1. **Install Duo PAM module:**
+   ```bash
+   sudo apt install libpam-duo
+   ```
+
+2. **Edit the `pam_duo` configuration file:**
+   ```bash
+   sudo nano /etc/security/pam_duo.conf
+   ```
+
+   Add the following:
+   ```ini
+   [duo]
+   ikey = your_duo_integration_key
+   skey = your_duo_secret_key
+   host = api-XXXX.duosecurity.com
+   failmode = safe
+   pushinfo = yes
+   autopush = yes
+   prompts = 1
+   ```
+
+3. Save the file and ensure proper permissions:
+   ```bash
+   sudo chmod 600 /etc/security/pam_duo.conf
+   ```
+
+---
+
+#### Step 6: Adjust SSH Configuration
 
 Edit the SSH configuration file:
 ```bash
@@ -9470,11 +9536,9 @@ UsePAM yes
 UseDNS no
 ```
 
-This configuration disables `ChallengeResponseAuthentication` globally while allowing **public key authentication**. The script leverages `pam_exec` to enforce input when required.
-
 ---
 
-#### Step 6: Restart SSH Service
+#### Step 7: Restart SSH Service
 ```bash
 sudo systemctl restart sshd
 ```
@@ -9488,7 +9552,7 @@ sudo systemctl restart sshd
    ssh user@your_server_ip
    ```
 
-2. The script will prompt you to choose **SMS**, **Call**, or **Duo** for authentication.
+2. The script will prompt you to choose **SMS**, **Call**, **Duo Push**, **Duo SMS**, or **Duo Call** for authentication.
 3. Complete the respective process to log in.
 
 ---
@@ -9497,8 +9561,7 @@ sudo systemctl restart sshd
 
 - **Blocked Global Keyboard-Interactive Authentication**: Ensures no other method can use keyboard-interactive prompts.
 - **Forced Input via `/dev/tty`**: Script bypasses the restriction and securely requests input via `/dev/tty`.
-- **Non-interactive Login Security**: Regular password logins remain disabled.
-
+- **Multiple Duo Methods**: Includes Duo Push, SMS, and Call options.
 
 
 
