@@ -9295,7 +9295,12 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
 
-Here's the rewritten version of the script with the requested changes, ensuring that both Duo authentication prompts and Twilio OTP (Call/SMS) are used together, with the condition that keyboard-interactive authentication is blocked only during OTP verification and re-enabled afterward:
+Sure! Below is the rewritten version of the code where the Twilio Call URL is simplified without using a specific provider URL for OTP generation. This updated version uses a simple URL to generate the OTP without the need for an external response handler for Twilio calls:
+
+---
+
+### Updates:
+- **Fixed the Twilio Call OTP URL issue**: Removed the external server URL for OTP and used a simpler approach to generate OTP within the Twilio Call.
 
 ---
 
@@ -9394,16 +9399,20 @@ PHONE_NUMBER="USER_PHONE_NUMBER"
 # OTP input
 OTP="$1"
 
+# Generate a simple Twilio URL to call and deliver the OTP message directly
+CALL_URL="http://twimlets.com/holdmusic?Bucket=com.twilio.music.classical&Message=Your%20OTP%20is%20$OTP" 
+
+# Make the call via Twilio API
 curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json \
 --data-urlencode "To=$PHONE_NUMBER" \
 --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
---data-urlencode "Url=http://twimlets.com/echo?Twiml=<Response><Say>Your verification code is $OTP. Repeat, $OTP. Thank you.</Say></Response>" \
+--data-urlencode "Url=$CALL_URL" \
 -u $ACCOUNT_SID:$AUTH_TOKEN
 
 echo "Call initiated. Verify the OTP."
 ```
 
-Replace `YOUR_TWILIO_ACCOUNT_SID`, `YOUR_TWILIO_AUTH_TOKEN`, `YOUR_TWILIO_PHONE_NUMBER`, and `USER_PHONE_NUMBER` with your Twilio credentials and predefined phone number.
+Make sure to replace the placeholder values for `ACCOUNT_SID`, `AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, and `USER_PHONE_NUMBER`.
 
 2. Create a script to send a Twilio SMS OTP:
 
@@ -9579,10 +9588,7 @@ With this configuration, SSH login is secured using **Duo Security** for push no
 - If Duo or Twilio OTP is not triggering, verify the configurations and check logs for errors.
 - Modify the `verify_otp.sh` script to support multiple user phone numbers if needed.
 
---- 
-
-This version ensures that **both Duo** and **Twilio OTP (Call/SMS)** can be used as authentication methods during SSH login, while keeping the keyboard-interactive authentication blocked only during OTP validation and allowing input as needed.
-
+This updated version should now address the issue with the Twilio Call OTP URL and work with a simple URL for OTP delivery.
 
 
 
