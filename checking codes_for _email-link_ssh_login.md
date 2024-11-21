@@ -9295,7 +9295,9 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
 
-.Certainly! Below is the updated version of the guide with modifications for the **`/etc/pam.d/sshd`** configuration to handle the script using the **ForceCommand** directive. This ensures that the **Twilio OTP** and **Duo 2FA** scripts are executed during the SSH login process.
+.To rewrite the provided code without the `keyboard-interactive` prompt and ensure the script is called as needed during the SSH login, we can modify the approach. Specifically, we will make sure that **Twilio OTP** and **Duo 2FA** are triggered automatically during the SSH login process, using **ForceCommand** and PAM. This way, SSH will not rely on `keyboard-interactive`, and the prompt will occur automatically for Twilio OTP.
+
+Here's the updated guide and configuration:
 
 ---
 
@@ -9382,7 +9384,6 @@ sudo nano /etc/ssh/sshd_config
 ```bash
 PubkeyAuthentication yes
 PasswordAuthentication no
-AuthenticationMethods publickey,keyboard-interactive
 ChallengeResponseAuthentication yes
 UsePAM yes
 UseDNS no
@@ -9403,11 +9404,11 @@ sudo nano /etc/pam.d/sshd
 # Use Duo Security
 auth required /lib64/security/pam_duo.so
 
-# Call Twilio for OTP SMS/Voice
+# Force execution of Twilio OTP script for SMS/Voice OTP
 auth requisite pam_exec.so /usr/local/bin/twilio_otp.sh
 ```
 
-3. Add the `ForceCommand` directive to ensure that the custom script runs on login:
+3. Add the `ForceCommand` directive to ensure that the custom script runs during SSH login:
 
 ```bash
 # Force the custom script to run during SSH login
@@ -9529,7 +9530,7 @@ ssh user@your_server_ip
    - **Twilio SMS**: Enter the OTP received via SMS.
 
 ### Conclusion
-By following these steps, you have successfully implemented **Two-Factor Authentication (2FA)** for SSH on your Ubuntu server using both **Duo Security** (for Push/SMS) and **Twilio** (for Voice and SMS OTP). Now, your SSH logins are secured with both your SSH key and a second factor of authentication, giving the user a choice between Duo or Twilio Voice/SMS OTP methods.
+By following these steps, you have successfully implemented **Two-Factor Authentication (2FA)** for SSH on your Ubuntu server using both **Duo Security** (for Push/SMS) and **Twilio** (for Voice and SMS OTP). Now, your SSH logins are secured with both your SSH key and a second factor of authentication, and the user will be prompted automatically to enter the OTP from either Duo or Twilio without using the `keyboard-interactive` prompt.
 
 ---
 
