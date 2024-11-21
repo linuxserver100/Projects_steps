@@ -9294,67 +9294,66 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 .
-.  
-Here is the updated code with the requested changes, ensuring that Twilio’s phone call feature no longer uses TwiML and a predefined user and phone number are used for the OTP verification process:
+.  To modify the existing code and SSH configuration to allow **forced keyboard input prompts** for the script while blocking password-based interactive login, follow these steps. This configuration ensures that keyboard input prompts are allowed **only** for the script while maintaining security.
 
-### Updated Guide for Implementing SSH 2FA with Twilio (SMS and Call OTP Verification) and Duo Authentication
+---
 
-This guide helps you implement **Twilio SMS and Call OTP verification** along with **Duo Authentication** for SSH logins using shell scripting.
+### Updated Guide for SSH 2FA with Twilio (SMS/Call OTP) and Duo Authentication
 
-### Prerequisites
-- **Ubuntu server** with **SSH** configured.
-- **Twilio account** and **API credentials** (Account SID, Auth Token, and a Twilio phone number).
-- **Duo account** and **Duo API credentials** (Integration Key, Secret Key, and API hostname).
-- **SSH key-based authentication** already set up.
-- **Firewall settings** allowing SSH connections.
+---
 
-### Step 1: Install Dependencies
+### Implementation Steps:
 
-Install the required packages for the shell script and `curl` to interact with Twilio's and Duo's APIs.
+#### Step 1: Prerequisites
 
+Same as before, ensure:
+- **Ubuntu server** with SSH and SSH keys configured.
+- **Twilio and Duo accounts** with credentials ready.
+- **Firewall** permits SSH connections.
+
+---
+
+#### Step 2: Install Dependencies
+Run:
 ```bash
 sudo apt update
 sudo apt install curl libpam-dev build-essential
 ```
 
-### Step 2: Create a Shell Script for OTP and Duo Verification
+---
 
-1. Create a new directory to store the script:
+#### Step 3: Updated 2FA Script for Forced Keyboard Input
 
-```bash
-mkdir ~/2fa-ssh
-cd ~/2fa-ssh
-```
+1. **Create the directory and script:**
+   ```bash
+   mkdir ~/2fa-ssh
+   cd ~/2fa-ssh
+   nano 2fa_otp.sh
+   ```
 
-2. Create a shell script (`2fa_otp.sh`) to handle OTP generation (via Twilio) and Duo verification.
-
-```bash
-nano 2fa_otp.sh
-```
-
-Add the following content to the shell script:
+2. **Script Content:** (Updated to handle forced keyboard input)
 
 ```bash
 #!/bin/bash
 
-# Twilio credentials (replace with your Twilio credentials)
+# Twilio credentials
 TWILIO_ACCOUNT_SID="your_account_sid"
 TWILIO_AUTH_TOKEN="your_auth_token"
 TWILIO_PHONE_NUMBER="your_twilio_phone_number"
 
-# Duo credentials (replace with your Duo credentials)
+# Duo credentials
 DUO_INTEGRATION_KEY="your_duo_integration_key"
 DUO_SECRET_KEY="your_duo_secret_key"
 DUO_API_HOSTNAME="api-XXXX.duosecurity.com"
 
-# Predefined user phone number and email
+# User details
 USER_PHONE_NUMBER="predefined_user_phone_number"
 USER_EMAIL="predefined_user_email"
 
 # Generate a random 6-digit OTP
 OTP=$(shuf -i 100000-999999 -n 1)
 
-# Send OTP via SMS using Twilio API
+# Send SMS OTP
 send_sms_otp() {
   curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json \
     --data-urlencode "Body=Your OTP code is: $OTP" \
@@ -9362,174 +9361,144 @@ send_sms_otp() {
     --data-urlencode "To=$USER_PHONE_NUMBER" \
     -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN \
     -s > /dev/null
-  echo "SMS OTP sent to $USER_PHONE_NUMBER"
 }
 
-# Send OTP via call using Twilio API (without TwiML)
+# Send Call OTP
 send_call_otp() {
-  # Directly passing OTP in the URL parameter without using TwiML
   curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Calls.json \
     --data-urlencode "To=$USER_PHONE_NUMBER" \
     --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-    --data-urlencode "Url=https://example.com/otp_call_handler?OTP=$OTP" \
+    --data-urlencode "Url=https://handler.twilio.com/twiml/EHXXXXXXXXXXXXXXXXXX?OTP=$OTP" \
     -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN \
     -s > /dev/null
-  echo "Call OTP sent to $USER_PHONE_NUMBER"
 }
 
-# Verify the OTP input by the user
+# Dynamic TwiML for call
+generate_call_twiml() {
+  echo "<?xml version='1.0' encoding='UTF-8'?>
+<Response>
+  <Say>Your one-time password is $OTP. Please enter this code to complete your login.</Say>
+</Response>" > ~/2fa-ssh/twiml_response.xml
+}
+
+# Verify OTP
 verify_otp() {
-  read -p "Enter the OTP received: " user_input
+  echo -n "Enter the OTP received: " > /dev/tty
+  read user_input < /dev/tty
   if [[ "$user_input" == "$OTP" ]]; then
-    echo "OTP Verified Successfully"
     return 0
   else
-    echo "Incorrect OTP, access denied."
     return 1
   fi
 }
 
 # Duo Authentication
 duo_authenticate() {
-  # Create the Duo authentication request payload
   response=$(curl -X POST -u "$DUO_INTEGRATION_KEY:$DUO_SECRET_KEY" \
     -d "username=$USER_EMAIL" \
     -d "factor=push" \
     -d "device=auto" \
     "https://$DUO_API_HOSTNAME/auth/v2/auth" -s)
 
-  # Check if the Duo authentication was successful
-  if echo "$response" | grep -q '"result":"allow"'; then
-    echo "Duo Authentication Successful"
-    return 0
-  else
-    echo "Duo Authentication Failed"
-    return 1
-  fi
+  echo "$response" | grep -q '"result":"allow"'
 }
 
-# Main function to choose OTP or Duo Authentication
-main() {
-  read -p "Choose authentication method (SMS/Call/Duo): " choice
-
-  if [[ "$choice" == "sms" ]]; then
-    send_sms_otp
-    verify_otp
-  elif [[ "$choice" == "call" ]]; then
-    send_call_otp
-    verify_otp
-  elif [[ "$choice" == "duo" ]]; then
-    duo_authenticate
-  else
-    echo "Invalid choice. Please choose either SMS, Call, or Duo."
-    return 1
-  fi
+# Main authentication method
+choose_2fa_method() {
+  echo -n "Choose authentication method (SMS/Call/Duo): " > /dev/tty
+  read choice < /dev/tty
+  case $choice in
+    sms)
+      send_sms_otp
+      verify_otp && return 0 || return 1
+      ;;
+    call)
+      generate_call_twiml
+      send_call_otp
+      verify_otp && return 0 || return 1
+      ;;
+    duo)
+      duo_authenticate && return 0 || return 1
+      ;;
+    *)
+      echo "Invalid choice." > /dev/tty
+      return 1
+      ;;
+  esac
 }
 
-main
+# Trigger authentication
+choose_2fa_method || { echo "Authentication failed." > /dev/tty; exit 1; }
 ```
 
-### Explanation of the script:
-- **Twilio Integration**: Sends an OTP via SMS or call. For the call, the URL is directly invoked with the OTP passed as a URL parameter. This method does not use TwiML.
-- **Duo Integration**: Uses Duo’s API to perform push-based authentication.
-- **OTP Verification**: Prompts the user for OTP input and verifies it.
-- **Authentication Options**: Users can choose SMS, Call, or Duo for verification.
+3. **Make it executable:**
+   ```bash
+   chmod +x ~/2fa-ssh/2fa_otp.sh
+   ```
 
-### Step 3: Integrate 2FA Script with SSH PAM
+---
 
-1. Open the PAM configuration for SSH:
+#### Step 4: Configure PAM for SSH
 
+Edit the PAM configuration file:
 ```bash
 sudo nano /etc/pam.d/sshd
 ```
 
-2. Add the following line to call the OTP or Duo authentication script:
-
+Add this line at the top:
 ```bash
 auth required pam_exec.so /bin/bash /home/username/2fa-ssh/2fa_otp.sh
 ```
 
-- Replace `/home/username/2fa-ssh/2fa_otp.sh` with the correct path to the shell script.
+---
 
-Here’s an example of what the updated `sshd` PAM file should look like:
+#### Step 5: Adjust SSH Configuration
 
-```bash
-auth required pam_exec.so /bin/bash /home/username/2fa-ssh/2fa_otp.sh
-auth requisite pam_deny.so
-auth required pam_permit.so
-```
-
-### Step 4: Modify SSH Configuration for Key Authentication
-
-1. Open the SSH configuration file:
-
+Edit the SSH configuration file:
 ```bash
 sudo nano /etc/ssh/sshd_config
 ```
 
-2. Ensure the following settings are configured:
-
+Make the following changes:
 ```bash
 PubkeyAuthentication yes
 PasswordAuthentication no
-AuthenticationMethods publickey,keyboard-interactive
 ChallengeResponseAuthentication yes
+AuthenticationMethods publickey,keyboard-interactive
 UsePAM yes
 UseDNS no
 ```
 
-3. Save and close the file.
+This setup blocks password-based interactive login but allows the script to request input via `/dev/tty`.
 
-### Step 5: Restart SSH Service
+---
 
-To apply the changes, restart the SSH service:
-
+#### Step 6: Restart SSH Service
 ```bash
 sudo systemctl restart sshd
 ```
 
-### Step 6: Set Up SSH Key Authentication (if not done)
+---
 
-If you have not already set up SSH keys, generate an SSH key pair:
-
-```bash
-ssh-keygen -t rsa
-```
-
-Then copy the public key to the server:
-
-```bash
-ssh-copy-id user@your_server_ip
-```
-
-### Step 7: Test the OTP-Based 2FA Login
+### Testing SSH Login
 
 1. SSH into the server:
+   ```bash
+   ssh user@your_server_ip
+   ```
 
-```bash
-ssh user@your_server_ip
-```
+2. The script will prompt you to choose **SMS**, **Call**, or **Duo** for authentication.
+3. Complete the respective process to log in.
 
-2. When prompted, select either **SMS**, **Call**, or **Duo** as your authentication method.
+---
 
-3. For **SMS/Call**, you’ll receive the OTP via SMS or call. Enter the OTP to authenticate.
-4. For **Duo**, you’ll receive a push notification. Approve it to authenticate.
+### Key Considerations
+- **Forced Input via `/dev/tty`**: Ensures only the script can request input securely.
+- **Non-interactive Login Security**: Regular password logins are disabled.
+- **TwiML URL**: Replace placeholders with your endpoint.
 
-### Step 8: Optional Configuration for Specific Users
-
-To apply the 2FA verification to only specific users, modify the `/etc/pam.d/sshd` file to check for group membership or specific usernames. For example, to apply it only to users in the `sshusers` group:
-
-```bash
-auth required pam_exec.so /bin/bash /home/username/2fa-ssh/2fa_otp.sh group=sshusers
-```
-
-### Conclusion
-
-By following these steps, you've integrated **Twilio SMS and Call OTP** along with **Duo Authentication** for SSH login verification using shell scripting. SSH logins are now secured by two factors: the SSH key and OTP verification (SMS, Call, or Duo).
-
-### Notes:
-- Ensure you correctly configure your **Twilio** and **Duo** credentials in the shell script.
-- This solution uses **Twilio's SMS and Call API** and **Duo Authentication** for 2FA; ensure you have sufficient credit on your Twilio account and Duo API access.
+Let me know if further customization is needed!
+.
 
 
 
