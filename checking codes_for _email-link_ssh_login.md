@@ -9294,10 +9294,7 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 .
-
-
-
-Certainly! Below is the updated script for handling **Twilio** and **Duo authentication** during an SSH login prompt. When the user triggers an SSH login, the system will ask the user to choose between **Duo** or **Twilio** for the second-factor authentication. If the user selects **Twilio**, the system will then prompt for an option between **SMS OTP** or **Call OTP**, and will validate the OTP accordingly. Once authentication is successful, SSH access will be allowed.
+Certainly! Below is the updated version of the script which includes the requested **Call**, **Push**, and **OTP** methods for both **Duo** and **Twilio** authentication, along with the **curl** command you specified.
 
 ---
 
@@ -9445,20 +9442,63 @@ echo "2. Twilio"
 read -p "Enter your choice (1 or 2): " AUTH_METHOD
 
 if [ "$AUTH_METHOD" == "1" ]; then
-    # Initiate Duo 2FA (Push notification)
-    echo "Initiating Duo authentication for user $USER..."
-    RESPONSE=$(curl -s -X POST "https://${DUO_HOST}/auth/v2/auth" \
-      -u "${DUO_IKEY}:${DUO_SKEY}" \
-      -d "username=${USER}" \
-      -d "factor=push" \
-      -d "device=auto" \
-      -d "type=ssh")
+    # Initiate Duo 2FA (Push notification, Call or OTP)
+    echo "Choose Duo authentication method:"
+    echo "1. Push"
+    echo "2. Call"
+    echo "3. OTP"
+    read -p "Enter your choice (1, 2 or 3): " DUO_METHOD
 
-    # Check if Duo allows access
-    if echo "$RESPONSE" | grep -q "allow"; then
-        echo "Duo authentication successful."
+    if [ "$DUO_METHOD" == "1" ]; then
+        # Push Authentication
+        echo "Initiating Duo push authentication for user $USER..."
+        RESPONSE=$(curl -s -X POST "https://${DUO_HOST}/auth/v2/auth" \
+          -u "${DUO_IKEY}:${DUO_SKEY}" \
+          -d "username=${USER}" \
+          -d "factor=push" \
+          -d "device=auto" \
+          -d "type=ssh")
+
+        if echo "$RESPONSE" | grep -q "allow"; then
+            echo "Duo push authentication successful."
+        else
+            echo "Duo push authentication failed."
+            exit 1
+        fi
+    elif [ "$DUO_METHOD" == "2" ]; then
+        # Call Authentication
+        echo "Initiating Duo call authentication for user $USER..."
+        RESPONSE=$(curl -s -X POST "https://${DUO_HOST}/auth/v2/auth" \
+          -u "${DUO_IKEY}:${DUO_SKEY}" \
+          -d "username=${USER}" \
+          -d "factor=phone" \
+          -d "device=auto" \
+          -d "type=ssh")
+
+        if echo "$RESPONSE" | grep -q "allow"; then
+            echo "Duo call authentication successful."
+        else
+            echo "Duo call authentication failed."
+            exit 1
+        fi
+    elif [ "$DUO_METHOD" == "3" ]; then
+        # OTP Authentication
+        echo "Initiating Duo OTP authentication for user $USER..."
+        RESPONSE=$(curl -s -X POST "https://${DUO_HOST}/auth/v2/auth" \
+          -u "${DUO_IKEY}:${DUO_SKEY}" \
+          -d "username=${USER}" \
+          -d "factor=passcode" \
+          -d "passcode=${OTP}" \
+          -d "type=ssh")
+
+        if echo "$RESPONSE" | grep -q "allow"; then
+            echo "Duo OTP authentication successful."
+        else
+            echo "Duo OTP authentication failed."
+            exit 1
+        fi
     else
-        echo "Duo authentication failed."
+        echo "Invalid Duo authentication method."
         exit 1
     fi
 elif [ "$AUTH_METHOD" == "2" ]; then
@@ -9529,7 +9569,9 @@ Add the following line:
 ForceCommand /usr/local/bin/duo_twilio_ssh.sh
 ```
 
-Save and close the file.
+Save and close the file
+
+.
 
 ### Step 8: **Restart the SSH Service**
 
@@ -9543,12 +9585,12 @@ sudo systemctl restart sshd
 
 SSH into your server to test the 2FA mechanism. After entering your SSH password or key, the system will prompt you for either **Duo** or **Twilio** authentication, depending on your selection.
 
-- If you select **Duo**, it will initiate a push notification for 2FA.
+- If you select **Duo**, it will initiate a **Push**, **Call**, or **OTP** authentication for 2FA.
 - If you select **Twilio**, you will choose between **SMS OTP** or **Call OTP**, and after verifying the OTP, you will gain SSH access.
 
----
+--- 
 
-This updated approach ensures that you have an interactive process for SSH login, with an option to select either **Duo** for push authentication or **Twilio** for OTP via SMS or Call.
+This version of the script includes all the requested features for **Duo** and **Twilio** authentication via **Push**, **Call**, or **OTP** methods.
 
 
 
