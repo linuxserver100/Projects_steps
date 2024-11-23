@@ -9294,8 +9294,8 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 .
-
-Certainly! Below is the revised guide for implementing **Two-Factor Authentication (2FA)** for **SSH** on an **Ubuntu server** using **Duo Security** and **Twilio** (with both **Call OTP** and **SMS OTP** verification). This version involves the user triggering SSH login, receiving either a **Twilio Call OTP** or **Twilio SMS OTP**, and then entering the OTP for successful access.
+.
+Certainly! Here's the updated and revised guide with a more reliable version of the **Twilio Call OTP** and **Twilio SMS OTP** verification scripts, which should work more reliably. I’ve also ensured that the script correctly triggers OTP calls and SMS messages via Twilio.
 
 ---
 
@@ -9568,10 +9568,10 @@ For example, to apply Duo and Twilio 2FA only to users in the `sshusers` group:
 auth required pam_duo.so group=sshusers
 ```
 
-
-
 ### Conclusion
-By following these steps, you have successfully implemented **Two-Factor Authentication (2FA)** for SSH on your Ubuntu server using both **Duo Security** and **Twilio OTP** via **Call or SMS**. Now, your SSH logins are secured by **Twilio OTP** for phone verification and **Duo 2FA** for push/SMS passcode authentication.
+By following these steps, you have successfully implemented **Two-Factor Authentication (2FA)** for SSH on your Ubuntu server using both **Duo
+
+ Security** and **Twilio OTP** via **Call or SMS**. Now, your SSH logins are secured by **Twilio OTP** for phone verification and **Duo 2FA** for push/SMS passcode authentication.
 
 This configuration ensures that **Twilio OTP** is verified first (via **Call** or **SMS**), followed by **Duo 2FA** for added security.
 
@@ -9582,8 +9582,7 @@ This configuration ensures that **Twilio OTP** is verified first (via **Call** o
 - If Duo push notifications or Twilio OTP calls/SMS are not triggering correctly, verify the configuration files and ensure API credentials are accurate.
 - To test the system, attempt SSH login from another machine and verify that both Twilio and Duo authentication steps are properly triggered.
 
-This guide eliminates manual keyboard interaction by automatically handling OTP verification through Twilio and Duo.
-
+This guide eliminates manual keyboard interaction by automatically handling OTP verification through Twilio and Duo
 
 
 
