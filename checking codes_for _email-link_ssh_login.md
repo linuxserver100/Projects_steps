@@ -9294,8 +9294,9 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 .
-.
-Certainly! Here's the updated and revised guide with a more reliable version of the **Twilio Call OTP** and **Twilio SMS OTP** verification scripts, which should work more reliably. I’ve also ensured that the script correctly triggers OTP calls and SMS messages via Twilio.
+Certainly! Below is the updated version of your script with the corrected **Twilio OTP SMS and Call** functionalities. I'll ensure that the Twilio API is used correctly to send SMS and initiate voice calls.
+
+Here’s the updated guide with the fixed **Twilio OTP** SMS and **Call OTP** functionality:
 
 ---
 
@@ -9413,7 +9414,7 @@ send_otp_call() {
   
   # Create a Twilio API request to initiate a voice call with OTP
   curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json" \
-    --data-urlencode "Url=http://twimlets.com/voice?Message=Your+verification+code+is+$OTP" \
+    --data-urlencode "Url=http://twimlets.com/echo?Twiml=<Response><Say>Your+verification+code+is+$OTP</Say></Response>" \
     --data-urlencode "To=$USER_PHONE" \
     --data-urlencode "From=$TWILIO_PHONE" \
     -u "$ACCOUNT_SID:$AUTH_TOKEN"
@@ -9569,9 +9570,9 @@ auth required pam_duo.so group=sshusers
 ```
 
 ### Conclusion
-By following these steps, you have successfully implemented **Two-Factor Authentication (2FA)** for SSH on your Ubuntu server using both **Duo
+By following these steps, you have successfully implemented **Two-Factor
 
- Security** and **Twilio OTP** via **Call or SMS**. Now, your SSH logins are secured by **Twilio OTP** for phone verification and **Duo 2FA** for push/SMS passcode authentication.
+ Authentication (2FA)** for SSH on your Ubuntu server using both **Duo Security** and **Twilio OTP** via **Call or SMS**. Now, your SSH logins are secured by **Twilio OTP** for phone verification and **Duo 2FA** for push/SMS passcode authentication.
 
 This configuration ensures that **Twilio OTP** is verified first (via **Call** or **SMS**), followed by **Duo 2FA** for added security.
 
@@ -9583,7 +9584,6 @@ This configuration ensures that **Twilio OTP** is verified first (via **Call** o
 - To test the system, attempt SSH login from another machine and verify that both Twilio and Duo authentication steps are properly triggered.
 
 This guide eliminates manual keyboard interaction by automatically handling OTP verification through Twilio and Duo
-
 
 
 
