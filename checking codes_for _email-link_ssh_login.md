@@ -9544,3 +9544,262 @@ With this setup, users will authenticate via **Duo Push Notification** first. Af
 - Make sure that your Duo and Twilio configurations are correct to ensure OTPs and push notifications trigger as expected.
 - Test all flows (SMS and Voice OTP) before applying this setup in a production environment.
 
+🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
+
+### Updated Guide for Implementing 2FA SSH Using **Twilio SMS OTP**, **Twilio Call OTP**, and **Pushbullet Approval/Deny** (Without Text Files for OTP Storage)
+
+This guide outlines how to implement a secure 2FA SSH login with the following options:
+1. **Twilio SMS OTP**
+2. **Twilio Call OTP**
+3. **Pushbullet Approval**
+4. **Exit (Abort SSH session)**
+
+The SSH session will only be allowed after successful OTP verification or Pushbullet approval.
+
+### Prerequisites
+- **Ubuntu server** with **SSH** configured.
+- **Twilio account** with an **API key** and a **Twilio phone number**.
+- **Pushbullet account** with an **API key**.
+- **Mobile device** with the **Pushbullet** app installed.
+- **SSH key-based authentication** configured.
+- **Firewall settings** allowing SSH connections.
+
+### Step 1: Install Dependencies
+Install the necessary packages for interacting with Twilio and Pushbullet APIs:
+
+```bash
+sudo apt update
+sudo apt install build-essential libssl-dev curl jq
+```
+
+### Step 2: Create Notification and Verification Scripts
+
+1. **Script to send the Pushbullet notification and handle approval/denial**  
+Create the script to send the Pushbullet notification and wait for the response.
+
+```bash
+sudo nano /usr/local/bin/send_push_notification.sh
+```
+
+```bash
+#!/bin/bash
+
+# Pushbullet API key
+API_KEY="YOUR_PUSHBULLET_API_KEY"
+# Device identifier from Pushbullet
+DEVICE_IDENTIFIER="YOUR_DEVICE_IDENTIFIER"
+
+# Push notification message
+TITLE="SSH Login Attempt"
+MESSAGE="A login attempt was made to your server. Please approve or deny."
+
+# Create a unique identifier for this request
+REQUEST_ID=$(date +%s)
+
+# Send the Pushbullet notification
+curl -s -u $API_KEY: \
+    -d type="note" \
+    -d title="$TITLE" \
+    -d body="$MESSAGE" \
+    -d device=$DEVICE_IDENTIFIER \
+    https://api.pushbullet.com/v2/pushes
+
+# Track the response in memory (using environment variable)
+export SSH_2FA_STATUS="pending"
+
+while :; do
+    # Check if the response status has been set
+    if [[ "$SSH_2FA_STATUS" == "approved" ]]; then
+        exit 0
+    elif [[ "$SSH_2FA_STATUS" == "denied" ]]; then
+        exit 1
+    fi
+    sleep 2
+done
+```
+
+2. **Script for sending Twilio SMS OTP**  
+Create the script that sends the OTP via Twilio SMS.
+
+```bash
+sudo nano /usr/local/bin/send_sms_otp.sh
+```
+
+```bash
+#!/bin/bash
+
+# Twilio API credentials
+TWILIO_ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
+TWILIO_AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
+TWILIO_PHONE_NUMBER="YOUR_TWILIO_PHONE_NUMBER"
+USER_PHONE_NUMBER="USER_PHONE_NUMBER"
+
+# Generate a random 6-digit OTP
+OTP=$(shuf -i 100000-999999 -n 1)
+
+# Send OTP via SMS using Twilio
+curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json \
+    --data-urlencode "To=$USER_PHONE_NUMBER" \
+    --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+    --data-urlencode "Body=Your SSH login OTP is: $OTP" \
+    -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN
+
+# Store OTP in memory using environment variable
+export SSH_SMS_OTP="$OTP"
+```
+
+3. **Script for sending Twilio Call OTP**  
+This script sends an OTP via a Twilio voice call. We also modify the URL to include the generated OTP in the voice call message.
+
+```bash
+sudo nano /usr/local/bin/send_call_otp.sh
+```
+
+```bash
+#!/bin/bash
+
+# Twilio API credentials
+TWILIO_ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
+TWILIO_AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
+TWILIO_PHONE_NUMBER="YOUR_TWILIO_PHONE_NUMBER"
+USER_PHONE_NUMBER="USER_PHONE_NUMBER"
+
+# Generate a random 6-digit OTP
+OTP=$(shuf -i 100000-999999 -n 1)
+
+# Create a URL to a Twilio XML response with the OTP to be spoken
+TWILIO_URL="http://twimlets.com/holdmusic?Bucket=com.twilio.music.classical&Message=Your+SSH+login+OTP+is:$OTP"
+
+# Make a voice call with Twilio to read out the OTP
+curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Calls.json \
+    --data-urlencode "To=$USER_PHONE_NUMBER" \
+    --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
+    --data-urlencode "Url=$TWILIO_URL" \
+    -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN
+
+# Store OTP in memory using environment variable
+export SSH_CALL_OTP="$OTP"
+```
+
+4. **Script to verify OTP and SSH login approval**  
+This script handles the verification of OTPs (SMS/Call) and Pushbullet approval.
+
+```bash
+sudo nano /usr/local/bin/verify_2fa.sh
+```
+
+```bash
+#!/bin/bash
+
+# Prompt user to choose 2FA method
+echo "Choose 2FA method:"
+echo "1. Twilio SMS OTP"
+echo "2. Twilio Call OTP"
+echo "3. Pushbullet Approval"
+echo "4. Exit"
+read -p "Enter your choice: " choice
+
+case $choice in
+    1)
+        # SMS OTP verification
+        /usr/local/bin/send_sms_otp.sh
+        read -p "Enter the OTP received via SMS: " entered_otp
+        if [ "$entered_otp" == "$SSH_SMS_OTP" ]; then
+            echo "OTP verified successfully."
+            exit 0
+        else
+            echo "Invalid OTP."
+            exit 1
+        fi
+        ;;
+    2)
+        # Call OTP verification
+        /usr/local/bin/send_call_otp.sh
+        read -p "Enter the OTP received via Call: " entered_otp
+        if [ "$entered_otp" == "$SSH_CALL_OTP" ]; then
+            echo "OTP verified successfully."
+            exit 0
+        else
+            echo "Invalid OTP."
+            exit 1
+        fi
+        ;;
+    3)
+        # Pushbullet approval
+        /usr/local/bin/send_push_notification.sh
+        read -p "Approve the login on your phone. Press Enter when done."
+        if [ "$SSH_2FA_STATUS" == "approved" ]; then
+            echo "Login approved."
+            exit 0
+        else
+            echo "Login denied."
+            exit 1
+        fi
+        ;;
+    4)
+        # Exit the session
+        echo "Exiting SSH login."
+        exit 1
+        ;;
+    *)
+        echo "Invalid choice."
+        exit 1
+        ;;
+esac
+```
+
+5. **Make all scripts executable**:
+
+```bash
+sudo chmod +x /usr/local/bin/send_push_notification.sh
+sudo chmod +x /usr/local/bin/send_sms_otp.sh
+sudo chmod +x /usr/local/bin/send_call_otp.sh
+sudo chmod +x /usr/local/bin/verify_2fa.sh
+```
+
+### Step 3: Configure SSH to Use the Verification Script
+
+1. Open the SSH configuration file:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+2. Modify the `ForceCommand` line to use the `verify_2fa.sh` script:
+
+```bash
+ForceCommand /usr/local/bin/verify_2fa.sh && exec /usr/sbin/sshd -D
+```
+
+This ensures that when an SSH login is attempted, the user will be prompted to select and verify a 2FA method.
+
+3. Save and close the file.
+
+### Step 4: Restart the SSH Service
+
+Restart the SSH service to apply the changes:
+
+```bash
+sudo systemctl restart sshd
+```
+
+### Step 5: Test the SSH Login with 2FA Options
+
+1. Try to SSH into the server:
+
+```bash
+ssh user@your_server_ip
+```
+
+2. You will be prompted to choose between **Twilio SMS OTP**, **Twilio Call OTP**, **Pushbullet Approval**, or **Exit**.
+
+3. Depending on your selection, you will either receive an OTP via SMS or call, or a push notification will be sent to your phone for approval.
+
+4. Upon successful verification, the login will proceed; otherwise, it will be denied.
+
+---
+
+### Conclusion
+
+This guide provides an updated and secure method for implementing 2FA SSH login with **Twilio SMS OTP**, **Twilio Call OTP**, and **Pushbullet approval**. The OTP and approval data are stored securely in memory, which minimizes security risks associated with text file storage.
+
