@@ -9294,70 +9294,140 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
-Certainly! Below is the revised version of the guide, which includes the necessary update for the **Twilio OTP Call** and **SMS OTP** functionality. The updated script will now handle cases where the Twilio OTP verification process could return an error (such as an "application error" on the Call OTP) or incorrectly report an invalid OTP even when the correct one is entered.
+Certainly! Below is the updated version of the **Twilio Voice and SMS OTP** script, with the changes you requested. In this version, the user will first authenticate via **Duo Push Notification**, and once the Duo authentication is successful, the user will be prompted to choose between **Twilio Voice Call OTP** or **Twilio SMS OTP**. After verifying the OTP, the user will be granted SSH access.
 
----
+### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Duo & Twilio (SMS/Voice OTP)
 
-### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Duo and Twilio (Call & SMS OTP Verification)
+### Prerequisites:
+As mentioned before, the following are prerequisites for this solution:
+- **Duo Security** (Push Notification) for 2FA.
+- **Twilio** for SMS/Voice OTP.
+- Ubuntu server with SSH enabled and configured.
 
-This guide will help you implement **Two-Factor Authentication (2FA)** for **SSH** on an **Ubuntu server** using **Duo Security** and **Twilio** for **OTP verification via Call or SMS**. With this setup, SSH users will be prompted to receive a **Twilio OTP** (either via **Call** or **SMS**) and then verify the OTP before Duo 2FA triggers.
-
-### Prerequisites
-- **Ubuntu server** with **SSH** configured.
-- **Duo account** with integration keys (Integration Key, Secret Key, and API hostname), available from the **Duo Admin Panel**.
-- **Twilio account** with a verified phone number and API credentials (Account SID, Auth Token, and phone number for OTP).
-- **SSH key-based authentication** already set up.
-- **Mobile device** for receiving Twilio OTP (Call or SMS) and Duo push notifications.
-- **Firewall settings** allowing SSH connections.
+### Step-by-Step Process:
 
 ### Step 1: Install Dependencies
-First, install the necessary packages:
+Ensure all necessary dependencies are installed:
 
 ```bash
 sudo apt update
 sudo apt install build-essential libpam-dev libssl-dev libtool wget curl
 ```
 
-### Step 2: Install Twilio CLI and Dependencies for OTP Generation
-We'll use **curl** to interact with the Twilio API to send either a **call** or an **SMS** for OTP verification.
-
-1. **Install Twilio's CLI** (for easy integration):
-
-```bash
-sudo apt install twilio-cli
-```
-
-2. **Authenticate with Twilio**:
-
-```bash
-twilio login
-```
-
-Follow the prompts to enter your **Account SID** and **Auth Token** from your Twilio console.
-
-### Step 3: Download and Install Duo Unix Package
-1. Download the latest Duo Unix package from Duo Security:
+### Step 2: Install Duo Unix Package
+Download and install the Duo Unix package:
 
 ```bash
 wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
-```
-
-2. Extract the downloaded package:
-
-```bash
 tar zxf duo_unix-latest.tar.gz
 cd duo_unix-*
-```
-
-3. Configure and compile the Duo Unix PAM module:
-
-```bash
 ./configure --with-pam --prefix=/tmp
 sudo make install
 ```
 
-### Step 4: Configure Duo with Your API Credentials
-1. Create a configuration directory for Duo if it does not exist:
+### Step 3: Set Up Twilio for SMS/Voice OTP
+1. Ensure `curl` is installed if it’s not already:
+
+```bash
+sudo apt install curl
+```
+
+2. Create a script for sending OTP via Twilio: `/usr/local/bin/send_twilio_otp.sh`.
+
+```bash
+sudo nano /usr/local/bin/send_twilio_otp.sh
+```
+
+3. Replace the content with the following script. This script will first send the OTP via SMS or Voice Call, depending on the user’s choice:
+
+```bash
+#!/bin/bash
+
+# Twilio API credentials
+ACCOUNT_SID="your_twilio_account_sid"
+AUTH_TOKEN="your_twilio_auth_token"
+FROM_PHONE="your_twilio_phone_number"
+USER_PHONE="user_phone_number"  # Predefined user's phone number
+
+# Generate a random 6-digit OTP
+OTP=$(printf "%06d" $((RANDOM%1000000)))
+
+# Log the OTP for debugging purposes (in a real environment, you may want to store this securely)
+echo "Generated OTP: $OTP"
+
+# Function to send SMS OTP
+send_sms() {
+  curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json \
+    --data-urlencode "To=$USER_PHONE" \
+    --data-urlencode "From=$FROM_PHONE" \
+    --data-urlencode "Body=Your OTP for SSH login is: $OTP" \
+    -u $ACCOUNT_SID:$AUTH_TOKEN
+  echo "SMS sent with OTP: $OTP"
+}
+
+# Function to make a voice call with OTP
+send_voice_call() {
+  # Simple TwiML response to speak the OTP
+  TWIML="<Response><Say>Your OTP for SSH login is $OTP</Say></Response>"
+  
+  curl -X POST https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json \
+    --data-urlencode "To=$USER_PHONE" \
+    --data-urlencode "From=$FROM_PHONE" \
+    --data-urlencode "Twiml=$TWIML" \
+    -u $ACCOUNT_SID:$AUTH_TOKEN
+  echo "Voice call initiated with OTP: $OTP"
+}
+
+# Function to verify OTP
+verify_otp() {
+  read -p "Enter the OTP received: " ENTERED_OTP
+  if [ "$ENTERED_OTP" == "$OTP" ]; then
+    echo "OTP verified successfully!"
+    return 0  # Success
+  else
+    echo "Invalid OTP. Access denied."
+    return 1  # Failure
+  fi
+}
+
+# Prompt user to choose between SMS or Voice OTP
+echo "Please select the OTP method:"
+echo "1. Receive OTP via SMS"
+echo "2. Receive OTP via Voice Call"
+read -p "Enter 1 or 2: " OTP_METHOD
+
+if [ "$OTP_METHOD" -eq 1 ]; then
+  send_sms
+elif [ "$OTP_METHOD" -eq 2 ]; then
+  send_voice_call
+else
+  echo "Invalid selection. Exiting."
+  exit 1
+fi
+
+# Now verify OTP
+verify_otp
+
+# If OTP is verified, grant access (return success code)
+if [ $? -eq 0 ]; then
+  echo "Access granted. Proceeding to SSH shell..."
+  exit 0  # Grant access
+else
+  echo "Access denied. Please check your OTP and try again."
+  exit 1  # Deny access
+fi
+```
+
+4. Replace `your_twilio_account_sid`, `your_twilio_auth_token`, `your_twilio_phone_number`, and `user_phone_number` with your actual Twilio credentials and the **predefined phone number** for the user.
+
+5. Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/send_twilio_otp.sh
+```
+
+### Step 4: Configure Duo for Push Notification Authentication
+1. Create a directory for Duo configuration:
 
 ```bash
 sudo mkdir /etc/duo
@@ -9369,120 +9439,18 @@ sudo mkdir /etc/duo
 sudo nano /etc/duo/pam_duo.conf
 ```
 
-3. Add the following configuration to the file, replacing the placeholders with your actual **Duo API keys**:
+3. Add the following configuration with your **Duo API credentials**:
 
-```text
+```bash
 [duo]
-ikey = <Duo-Initiation-Key>
-skey = <Duo-Secret-Key>
-host = <Duo-API-Host>
+ikey = your_integration_key
+skey = your_secret_key
+host = your_api_hostname
 ```
 
 4. Save and close the file.
 
-### Step 5: Create Shell Script for Twilio Call/SMS OTP Verification
-1. Create the shell script to handle Twilio OTP verification (for both **Call** and **SMS**):
-
-```bash
-sudo nano /usr/local/bin/twilio_otp_verification.sh
-```
-
-2. Add the following shell script content to interact with the Twilio API, initiate a call or SMS with OTP, and verify the OTP:
-
-```bash
-#!/bin/bash
-
-# Twilio credentials
-ACCOUNT_SID="your_account_sid"
-AUTH_TOKEN="your_auth_token"
-TWILIO_PHONE="your_twilio_phone_number"
-
-# Predefined user phone number for OTP call/SMS
-USER_PHONE="+1234567890"  # Modify with the desired phone number
-
-# Function to generate OTP
-generate_otp() {
-  OTP=$(date +%s | sha256sum | base64 | head -c 6) # Generate a simple OTP
-  echo $OTP
-}
-
-# Send OTP via Twilio Call
-send_otp_call() {
-  OTP=$(generate_otp)
-  
-  # Create a Twilio API request to initiate a voice call with OTP
-  RESPONSE=$(curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Calls.json" \
-    --data-urlencode "Url=http://twimlets.com/echo?Twiml=<Response><Say>Your+verification+code+is+$OTP</Say></Response>" \
-    --data-urlencode "To=$USER_PHONE" \
-    --data-urlencode "From=$TWILIO_PHONE" \
-    -u "$ACCOUNT_SID:$AUTH_TOKEN")
-  
-  # Check for application errors in response
-  if echo $RESPONSE | grep -q "error"; then
-    echo "Application error occurred while placing the call. Please try again."
-    exit 1
-  fi
-  
-  echo $OTP
-}
-
-# Send OTP via Twilio SMS
-send_otp_sms() {
-  OTP=$(generate_otp)
-  
-  # Create a Twilio API request to send OTP via SMS
-  RESPONSE=$(curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$ACCOUNT_SID/Messages.json" \
-    --data-urlencode "Body=Your verification code is: $OTP" \
-    --data-urlencode "To=$USER_PHONE" \
-    --data-urlencode "From=$TWILIO_PHONE" \
-    -u "$ACCOUNT_SID:$AUTH_TOKEN")
-  
-  # Check for errors in response
-  if echo $RESPONSE | grep -q "error"; then
-    echo "An error occurred while sending the SMS. Please check your Twilio settings."
-    exit 1
-  fi
-  
-  echo $OTP
-}
-
-# Ask user for OTP method (call or SMS)
-echo "Choose OTP method: Call or SMS"
-read OTP_METHOD
-
-if [ "$OTP_METHOD" == "Call" ]; then
-  SENT_OTP=$(send_otp_call)
-elif [ "$OTP_METHOD" == "SMS" ]; then
-  SENT_OTP=$(send_otp_sms)
-else
-  echo "Invalid OTP method"
-  exit 1
-fi
-
-# Store OTP in a file to check against user input
-echo "$SENT_OTP" > /tmp/sent_otp.txt
-
-# Wait for user to enter OTP
-echo "Please enter the OTP received:"
-read USER_OTP
-
-# Validate OTP
-if [ "$USER_OTP" == "$SENT_OTP" ]; then
-  echo "OTP verification successful!"
-  exit 0
-else
-  echo "Incorrect OTP. Even if the OTP was correct, there may be a verification issue."
-  exit 1
-fi
-```
-
-3. Make the script executable:
-
-```bash
-sudo chmod +x /usr/local/bin/twilio_otp_verification.sh
-```
-
-### Step 6: Configure SSH for Public Key Authentication
+### Step 5: Configure SSH for Public Key Authentication
 1. Open the SSH configuration file:
 
 ```bash
@@ -9502,44 +9470,33 @@ UseDNS no
 
 3. Save and close the file.
 
-### Step 7: Configure PAM for Duo and Twilio Authentication
+### Step 6: Configure PAM for Duo and Twilio Authentication
 1. Open the PAM configuration for SSH:
 
 ```bash
 sudo nano /etc/pam.d/sshd
 ```
 
-2. Add the following lines at the top of the file to ensure the Twilio OTP script and Duo PAM module are invoked for authentication:
+2. Add the following lines to configure both **Duo Push** and **Twilio OTP** for authentication:
 
 ```bash
-auth required /usr/local/bin/twilio_otp_verification.sh
-auth required /lib64/security/pam_duo.so
-```
-
-If you’re on a 32-bit system or the module is located in /lib/security, adjust accordingly.
-
-Here’s an example of what the SSH PAM file should look like:
-
-```bash
-# @include common-auth
-auth required /usr/local/bin/twilio_otp_verification.sh
-auth required /lib64/security/pam_duo.so
-auth [success=1 default=ignore] /lib64/security/pam_duo.so
+auth required /lib/security/pam_duo.so
+auth required pam_exec.so /usr/local/bin/send_twilio_otp.sh ${user} ${otp} sms
 auth requisite pam_deny.so
 auth required pam_permit.so
 ```
 
 3. Save and close the file.
 
-### Step 8: Restart SSH Service
-To apply the changes, restart the SSH service:
+### Step 7: Restart SSH Service
+Restart the SSH service to apply the changes:
 
 ```bash
 sudo systemctl restart sshd
 ```
 
-### Step 9: Set Up SSH Key Authentication (if not done)
-1. If you have not already set up SSH keys, generate an SSH key pair:
+### Step 8: Set Up SSH Key Authentication
+1. If you haven't already set up SSH key authentication:
 
 ```bash
 ssh-keygen -t rsa
@@ -9551,49 +9508,39 @@ ssh-keygen -t rsa
 ssh-copy-id user@your_server_ip
 ```
 
-### Step 10: Enroll a Device with Duo for Push Authentication
+### Step 9: Enroll a Device with Duo for Push Authentication
 1. SSH into your server for the first time after enabling Duo 2FA:
 
 ```bash
 ssh user@your_server_ip
 ```
 
-2. During your first login attempt, Duo will prompt you to enroll your device. Follow the instructions to enroll your device for push notification authentication.
+2. Follow the prompts to enroll your device with Duo. You can choose between **push notification** or **SMS passcode** as the second factor.
 
-### Step 11: Test the 2FA Login
-1. After enrolling a device in Duo, attempt to SSH into the server again:
+### Step 10: Test the 2FA Login with Twilio and Duo
+1. After enrolling your device, attempt to SSH into the server:
 
 ```bash
 ssh user@your_server_ip
 ```
 
-2. On login, the system will first prompt you to choose **Twilio OTP** method (Call or SMS). After
+2. Duo will prompt you for the **push notification** or **SMS passcode**. After Duo verification, the system will prompt you for the OTP via **Twilio SMS** or **Voice Call**.
 
- the OTP is verified, Duo will prompt for **push notification** or **SMS passcode**.
+3. Enter the OTP received via SMS or Voice Call. If verified, you will be granted access.
 
-3. If both steps are successfully completed, you will be granted SSH access.
+### Step 11: Optional Configuration for Duo User Group (for Specific Users)
+To apply Duo 2FA only to specific users or groups, modify the `/etc/pam.d/sshd` file.
 
-### Step 12: Optional Configuration for Specific Users or Groups
-To apply Duo 2FA and Twilio OTP only to specific users or groups, you can modify the `/etc/pam.d/sshd` file.
-
-For example, to apply Duo and Twilio 2FA only to users in the `sshusers` group:
+For example, to apply Duo 2FA only to users in the `sshusers` group:
 
 ```bash
 auth required pam_duo.so group=sshusers
 ```
 
 ### Conclusion
-By following these steps, you have successfully implemented **Two-Factor Authentication (2FA)** for SSH on your Ubuntu server using both **Duo Security** and **Twilio OTP** via **Call or SMS**. Now, your SSH logins are secured by **Twilio OTP** for phone verification and **Duo 2FA** for push/SMS passcode authentication.
-
-This configuration ensures that **Twilio OTP** is verified first (via **Call** or **SMS**), followed by **Duo 2FA** for added security.
-
----
+With this setup, users will authenticate via **Duo Push Notification** first. After successfully verifying via Duo, they will be prompted to choose between **Twilio SMS** or **Voice Call** OTP. Upon entering the correct OTP, they will be granted access to the SSH shell.
 
 ### Notes:
-- Ensure you’re using the correct path (`/lib64/security` or `/lib/security`) depending on your system architecture.
-- If Duo push notifications or Twilio OTP calls/SMS are not triggering correctly, verify the configuration files and ensure API credentials are accurate.
-- To test the system, attempt SSH login from another machine and verify that both Twilio and Duo authentication steps are properly triggered.
-
-This guide eliminates manual keyboard interaction by automatically handling OTP verification through Twilio and Duo.
-
+- Make sure that your Duo and Twilio configurations are correct to ensure OTPs and push notifications trigger as expected.
+- Test all flows (SMS and Voice OTP) before applying this setup in a production environment.
 
