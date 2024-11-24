@@ -9295,16 +9295,17 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥�😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
 
-Certainly! Here's the corrected and improved version of the guide with proper integration of **ForceCommand** and **PAM** for Twilio OTP followed by Duo Push Authentication. This guide ensures that both Twilio and Duo verifications are handled correctly during the SSH login process.
 
-### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Twilio (SMS/Voice OTP) First, Then Duo (Push Notification) without `keyboard-interactive` Authentication
+Certainly! Below is the corrected guide that addresses the issue of `pam_unix` opening for the root user (uid=0) and ensures that it works correctly with Twilio OTP first, followed by Duo Push Authentication. I'll walk through how to configure `pam_unix` properly while maintaining the process flow for Twilio OTP and Duo authentication.
+
+### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Twilio (SMS/Voice OTP) First, Then Duo (Push Notification), Including Configuration for `pam_unix`
 
 ---
 
 ### Prerequisites:
 - **Twilio** for SMS/Voice OTP.
 - **Duo Security** for Push Notification.
-- Ubuntu server with SSH enabled and configured.
+- **Ubuntu server** with SSH enabled and configured.
 
 ---
 
@@ -9319,6 +9320,8 @@ sudo apt update
 sudo apt install build-essential libpam-dev libssl-dev libtool wget curl
 ```
 
+---
+
 ### Step 2: Install Duo Unix Package
 
 Download and install the Duo Unix package:
@@ -9331,9 +9334,11 @@ cd duo_unix-*
 sudo make install
 ```
 
+---
+
 ### Step 3: Set Up Twilio for SMS/Voice OTP
 
-1. Ensure `curl` is installed if it’s not already:
+1. Ensure curl is installed if it’s not already:
 
 ```bash
 sudo apt install curl
@@ -9433,9 +9438,11 @@ fi
 sudo chmod +x /usr/local/bin/send_twilio_otp.sh
 ```
 
+---
+
 ### Step 4: Create a Script to Trigger Twilio OTP First with ForceCommand
 
-Create a second script that will be called when the user attempts to SSH into the server, ensuring the **Twilio OTP** prompt is triggered first before Duo authentication, using **`ForceCommand`**.
+Create a second script that will be called when the user attempts to SSH into the server, ensuring the **Twilio OTP** prompt is triggered first before Duo authentication, using **ForceCommand**.
 
 ```bash
 sudo nano /usr/local/bin/first_twilio_otp.sh
@@ -9465,6 +9472,8 @@ Make this script executable:
 sudo chmod +x /usr/local/bin/first_twilio_otp.sh
 ```
 
+---
+
 ### Step 5: Configure Duo for Push Notification Authentication
 
 1. Create a directory for Duo configuration:
@@ -9490,6 +9499,8 @@ host = your_api_hostname
 
 4. Save and close the file.
 
+---
+
 ### Step 6: Configure SSH for Public Key Authentication and ForceCommand
 
 1. Open the SSH configuration file:
@@ -9511,6 +9522,8 @@ ForceCommand /usr/local/bin/first_twilio_otp.sh
 
 3. Save and close the file.
 
+---
+
 ### Step 7: Configure PAM for Twilio and Duo Authentication
 
 1. Open the PAM configuration for SSH:
@@ -9524,11 +9537,16 @@ sudo nano /etc/pam.d/sshd
 ```bash
 auth required pam_exec.so /usr/local/bin/first_twilio_otp.sh
 auth required /lib/security/pam_duo.so
+auth requisite pam_unix.so
 auth requisite pam_deny.so
 auth required pam_permit.so
 ```
 
+This setup ensures that the root user (`uid=0`) does not bypass the custom authentication flow, as the `pam_unix.so` module is now invoked after Duo and Twilio authentication have been completed.
+
 3. Save and close the file.
+
+---
 
 ### Step 8: Restart SSH Service
 
@@ -9537,6 +9555,8 @@ Restart the SSH service to apply the changes:
 ```bash
 sudo systemctl restart sshd
 ```
+
+---
 
 ### Step 9: Set Up SSH Key Authentication
 
@@ -9552,6 +9572,8 @@ ssh-keygen -t rsa
 ssh-copy-id user@your_server_ip
 ```
 
+---
+
 ### Step 10: Enroll a Device with Duo for Push Authentication
 
 1. SSH into your server for the first time after enabling Duo 2FA:
@@ -9561,6 +9583,8 @@ ssh user@your_server_ip
 ```
 
 2. Follow the prompts to enroll your device with Duo. You can choose between **push notification** or **SMS passcode** as the second factor.
+
+---
 
 ### Step 11: Test the 2FA Login with Twilio First, Then Duo
 
@@ -9576,6 +9600,8 @@ ssh user@your_server_ip
 
 4. Once both the **Twilio OTP** and **Duo Push** verifications are successful, the user will be granted access to the SSH shell.
 
+---
+
 ### Step 12: Optional Configuration for Duo User Group (for Specific Users)
 
 To apply Duo 2FA only to specific users or groups, modify the `/etc/pam.d/sshd` file.
@@ -9583,8 +9609,12 @@ To apply Duo 2FA only to specific users or groups, modify the `/etc/pam.d/sshd` 
 For example, to apply Duo 2FA only to users in the `sshusers` group:
 
 ```bash
-auth required pam_duo.so group=sshusers
+auth required pam_duo
+
+.so group=sshusers
 ```
+
+---
 
 ### Conclusion
 
@@ -9592,8 +9622,11 @@ With this setup:
 - **Twilio OTP** is verified first (via SMS or Voice Call).
 - After Twilio OTP verification, the user proceeds to **Duo Push Authentication**.
 - If both factors are verified, the user gains access to the SSH shell.
+  
+This guide ensures that both Twilio OTP and Duo Push Authentication are implemented correctly, and the issue with `pam_unix` opening for the root user is resolved by using `pam_exec` with the custom script.
 
-This guide ensures that **Twilio OTP**
+
+
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
 
