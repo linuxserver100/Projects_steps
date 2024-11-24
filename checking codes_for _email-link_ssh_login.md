@@ -9294,9 +9294,10 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥�😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
-.Certainly! Here's the revised version of the guide with the **Twilio OTP prompt** called first, followed by **Duo Authentication** for SSH login. The structure and content of the code remain the same, with the sequence adjusted to ensure **Twilio OTP** is triggered before the **Duo Push Authentication**.
 
-### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Twilio (SMS/Voice OTP) First, Then Duo (Push Notification)
+Certainly! Below is the updated guide where we remove the `keyboard-interactive` authentication method and instead make the **Twilio OTP** and **Duo Push Authentication** work with **`ForceCommand`** and **PAM (Pluggable Authentication Module)** in a manner that **forces** the authentication sequence every time it is required.
+
+### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Twilio (SMS/Voice OTP) First, Then Duo (Push Notification) without `keyboard-interactive` Authentication
 
 ### Prerequisites:
 - **Twilio** for SMS/Voice OTP.
@@ -9425,8 +9426,8 @@ fi
 sudo chmod +x /usr/local/bin/send_twilio_otp.sh
 ```
 
-### Step 4: Create a Script to Trigger Twilio OTP First
-Create a second script that will be called when the user attempts to SSH into the server, ensuring the **Twilio OTP** prompt is triggered before the Duo authentication.
+### Step 4: Create a Script to Trigger Twilio OTP First with ForceCommand
+Create a second script that will be called when the user attempts to SSH into the server, ensuring the **Twilio OTP** prompt is triggered first before Duo authentication, using **`ForceCommand`**.
 
 ```bash
 sudo nano /usr/local/bin/first_twilio_otp.sh
@@ -9480,7 +9481,7 @@ host = your_api_hostname
 
 4. Save and close the file.
 
-### Step 6: Configure SSH for Public Key Authentication
+### Step 6: Configure SSH for Public Key Authentication and ForceCommand
 1. Open the SSH configuration file:
 
 ```bash
@@ -9492,10 +9493,10 @@ sudo nano /etc/ssh/sshd_config
 ```bash
 PubkeyAuthentication yes
 PasswordAuthentication no
-AuthenticationMethods publickey,keyboard-interactive
 ChallengeResponseAuthentication yes
 UsePAM yes
 UseDNS no
+ForceCommand /usr/local/bin/first_twilio_otp.sh
 ```
 
 3. Save and close the file.
@@ -9573,11 +9574,8 @@ auth required pam_duo.so group=sshusers
 With this setup:
 - **Twilio OTP** is verified first (via SMS or Voice Call).
 - After Twilio OTP verification, the user proceeds to **Duo Push Authentication**.
-- If both factors are verified, the user gains access to the SSH shell.
+- If both factors are verified, the user gains access to the SSH shell
 
-### Notes:
-- Ensure that your **Twilio** and **Duo** configurations are correct to trigger OTPs and push notifications as expected.
-- Test
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
 
