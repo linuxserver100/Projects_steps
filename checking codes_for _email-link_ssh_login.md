@@ -9288,18 +9288,19 @@ done
 
 ---
 
-### **Conclusion**
+### **Conclusion*
 
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
-🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥😊☺️😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-.Certainly! Below is your updated version of the guide, with an additional script to prompt for **Twilio OTP** after Duo Push Authentication. The structure remains the same, but I have added a second script to handle the Twilio OTP prompt after successful Duo authentication.
+🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥�😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
-### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Duo & Twilio (SMS/Voice OTP)
+.Certainly! Here's the revised version of the guide with the **Twilio OTP prompt** called first, followed by **Duo Authentication** for SSH login. The structure and content of the code remain the same, with the sequence adjusted to ensure **Twilio OTP** is triggered before the **Duo Push Authentication**.
+
+### Updated Guide for Implementing Two-Factor Authentication (2FA) for SSH Using Twilio (SMS/Voice OTP) First, Then Duo (Push Notification)
 
 ### Prerequisites:
-- **Duo Security** (Push Notification) for 2FA.
 - **Twilio** for SMS/Voice OTP.
+- **Duo Security** for Push Notification.
 - Ubuntu server with SSH enabled and configured.
 
 ### Step-by-Step Process:
@@ -9406,10 +9407,10 @@ fi
 # Now verify OTP
 verify_otp
 
-# If OTP is verified, grant access (return success code)
+# If OTP is verified, proceed to Duo authentication
 if [ $? -eq 0 ]; then
-  echo "Access granted. Proceeding to SSH shell..."
-  exit 0  # Grant access
+  echo "OTP verified. Proceeding to Duo authentication..."
+  exit 0  # Continue with Duo authentication
 else
   echo "Access denied. Please check your OTP and try again."
   exit 1  # Deny access
@@ -9424,11 +9425,11 @@ fi
 sudo chmod +x /usr/local/bin/send_twilio_otp.sh
 ```
 
-### Step 4: Create a Second Script for Twilio OTP After Duo Authentication
-Create a second script that will be called after Duo Push authentication. This will prompt for **Twilio OTP**:
+### Step 4: Create a Script to Trigger Twilio OTP First
+Create a second script that will be called when the user attempts to SSH into the server, ensuring the **Twilio OTP** prompt is triggered before the Duo authentication.
 
 ```bash
-sudo nano /usr/local/bin/second_twilio_otp.sh
+sudo nano /usr/local/bin/first_twilio_otp.sh
 ```
 
 Add the following content:
@@ -9436,14 +9437,23 @@ Add the following content:
 ```bash
 #!/bin/bash
 
-# Call the first script for Twilio OTP after Duo authentication
+# Call the Twilio OTP script first
 /usr/local/bin/send_twilio_otp.sh
+
+# If OTP is verified successfully, proceed to Duo Push authentication
+if [ $? -eq 0 ]; then
+  # Proceed to Duo Authentication (This will be triggered after successful Twilio OTP)
+  exit 0  # Continue to Duo authentication
+else
+  echo "Access denied after Twilio OTP verification."
+  exit 1  # Deny access
+fi
 ```
 
 Make this script executable:
 
 ```bash
-sudo chmod +x /usr/local/bin/second_twilio_otp.sh
+sudo chmod +x /usr/local/bin/first_twilio_otp.sh
 ```
 
 ### Step 5: Configure Duo for Push Notification Authentication
@@ -9490,18 +9500,18 @@ UseDNS no
 
 3. Save and close the file.
 
-### Step 7: Configure PAM for Duo and Twilio Authentication
+### Step 7: Configure PAM for Twilio and Duo Authentication
 1. Open the PAM configuration for SSH:
 
 ```bash
 sudo nano /etc/pam.d/sshd
 ```
 
-2. Add the following lines to configure both **Duo Push** and **Twilio OTP** for authentication:
+2. Add the following lines to configure both **Twilio OTP** first, then **Duo Push** for authentication:
 
 ```bash
+auth required pam_exec.so /usr/local/bin/first_twilio_otp.sh
 auth required /lib/security/pam_duo.so
-auth required pam_exec.so /usr/local/bin/second_twilio_otp.sh
 auth requisite pam_deny.so
 auth required pam_permit.so
 ```
@@ -9537,16 +9547,18 @@ ssh user@your_server_ip
 
 2. Follow the prompts to enroll your device with Duo. You can choose between **push notification** or **SMS passcode** as the second factor.
 
-### Step 11: Test the 2FA Login with Twilio and Duo
+### Step 11: Test the 2FA Login with Twilio First, Then Duo
 1. After enrolling your device, attempt to SSH into the server:
 
 ```bash
 ssh user@your_server_ip
 ```
 
-2. Duo will prompt you for the **push notification**. After Duo verification, the system will invoke the **Twilio OTP script**, prompting the user to select **SMS** or **Voice Call** for OTP.
+2. The system will first trigger the **Twilio OTP** script, asking the user to choose between **SMS** or **Voice Call** for OTP.
 
-3. Enter the OTP received via SMS or Voice Call. If both Duo and Twilio OTP are successfully verified, you will be granted access to the SSH shell.
+3. After successfully verifying the OTP, the system will proceed to the **Duo Push Authentication** prompt.
+
+4. Once both the **Twilio OTP** and **Duo Push** verifications are successful, the user will be granted access to the SSH shell.
 
 ### Step 12: Optional Configuration for Duo User Group (for Specific Users)
 To apply Duo 2FA only to specific users or groups, modify the `/etc/pam.d/sshd` file.
@@ -9559,15 +9571,13 @@ auth required pam_duo.so group=sshusers
 
 ### Conclusion
 With this setup:
-- Users authenticate via **Duo Push Notification** first.
-- After successfully verifying via Duo, they are prompted to choose between **Twilio SMS** or **Voice Call** OTP.
-- Upon entering the correct OTP, they are granted access to the SSH shell.
+- **Twilio OTP** is verified first (via SMS or Voice Call).
+- After Twilio OTP verification, the user proceeds to **Duo Push Authentication**.
+- If both factors are verified, the user gains access to the SSH shell.
 
 ### Notes:
-- Make sure that your Duo and Twilio configurations are correct to ensure OTPs and push notifications trigger as expected.
-- Test all flows (SMS and Voice OTP) before applying this setup in a production environment.
-
-By following these steps, the user experience is seamless: Duo verifies the user, then Twilio verifies the OTP, and SSH access is granted if both factors are valid.
+- Ensure that your **Twilio** and **Duo** configurations are correct to trigger OTPs and push notifications as expected.
+- Test
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
 
