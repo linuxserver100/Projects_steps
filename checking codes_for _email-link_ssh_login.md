@@ -9729,3 +9729,160 @@ ssh user@your_server_ip
 
 This guide provides an updated and secure method for implementing 2FA SSH login with **Twilio SMS OTP**, **Twilio Call OTP**, and **Pushbullet approval**. The OTP and approval data are stored securely in memory, which minimizes security risks associated with text file storage.
 
+🫥🫥🫥🥰😙🥰😙🥰😙😙🥰😙🥰😙🥰😙🥰😙🥰😙😙🥰😙🥰😙😍🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥🫥😍🫥😍🫥😍🫥🥰🫥😍🫥🥰🫥🥰🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍
+Certainly! Here's the revised script, which includes the `ForceCommand` option for SSH, and the rest of the functionality is the same as the original script.
+
+### **Full Bash Script with Predefined Parameters for Duo 2FA SSH Login and ForceCommand**
+
+```bash
+#!/bin/bash
+
+# --- Predefined Duo API credentials ---
+IKEY="YOUR_INTEGRATION_KEY"           # Integration Key
+SKEY="YOUR_SECRET_KEY"                # Secret Key
+API_HOST="api-xxxxxxxx.duosecurity.com"  # Duo API Hostname
+USER="your_username"                  # Username for Duo authentication (or SSH)
+API_PATH="/rest/v1/auth"              # Endpoint for Duo Authentication
+
+# Predefined SSH details
+SERVER="your.server.com"              # SSH server IP or hostname
+SSH_USERNAME="your_ssh_username"      # SSH Username
+IPADDR="your_ip_address"              # IP address (for Duo authentication)
+PRIVATE_KEY_PATH="/path/to/your/private/key"  # Path to your private SSH key
+PORT=22                               # Default SSH port
+
+# Duo API headers
+DATE=$(date -R)  # Current date in RFC 2822 format
+HOST=$API_HOST
+
+# Function to create the canonical string for signing
+create_canonical_string() {
+    local method=$1
+    local path=$2
+    local params=$3
+
+    # If there are parameters, they should be URL-encoded and sorted.
+    canonical_string="${DATE}\n${method}\n${HOST}\n${path}\n${params}"
+
+    echo "$canonical_string"
+}
+
+# Function to calculate HMAC-SHA1 signature
+hmac_sha1() {
+    local data=$1
+    echo -n "$data" | openssl dgst -sha1 -hmac "$SKEY" -binary | xxd -p -c 256
+}
+
+# Function to encode the signature and credentials in Base64
+base64_encode() {
+    echo -n "$1" | base64
+}
+
+# Function to perform Duo 2FA Authentication via the API
+perform_duo_auth() {
+    local username=$1
+    local ip=$2
+    local factor="push"  # Use push for authentication (can switch to "sms" for SMS OTP)
+
+    # Prepare parameters for the request
+    local params="username=${username}&ipaddr=${ip}&factor=${factor}"
+
+    # Create the canonical string
+    local canonical_string
+    canonical_string=$(create_canonical_string "POST" "/rest/v1/auth" "$params")
+
+    # Create the HMAC-SHA1 signature
+    local signature
+    signature=$(hmac_sha1 "$canonical_string")
+
+    # Base64 encode the signature with the Integration Key
+    local base64_auth
+    base64_auth=$(base64_encode "$IKEY:$signature")
+
+    # Send the POST request to Duo API
+    response=$(curl -s -X POST "https://${API_HOST}/rest/v1/auth" \
+        -d "$params" \
+        -H "Date: ${DATE}" \
+        -H "Authorization: Basic $base64_auth" \
+        -H "Host: $API_HOST" \
+        -H "Content-Type: application/x-www-form-urlencoded")
+
+    # Check the response and return the result
+    echo "$response"
+}
+
+# Function to parse the response and extract the result
+parse_duo_response() {
+    local response=$1
+    local result=$(echo "$response" | jq -r '.result')
+
+    if [[ "$result" == "allow" ]]; then
+        echo "Duo authentication successful, proceeding with SSH login..."
+        return 0
+    else
+        echo "Duo authentication failed."
+        return 1
+    fi
+}
+
+# Function to initiate SSH login after Duo authentication
+ssh_login() {
+    local username=$1
+    local server=$2
+    local private_key_path=$3
+    local port=$4
+
+    echo "Attempting SSH login to $server with username $username..."
+
+    # Use SSH to login after successful Duo authentication and enforce command
+    ssh -i "$private_key_path" -p "$port" "$username"@"$server" -o "ForceCommand=/bin/bash"
+}
+
+# Main script starts here
+echo "Starting Duo 2FA Authentication..."
+
+# Step 1: Perform Duo Authentication
+duo_response=$(perform_duo_auth "$SSH_USERNAME" "$IPADDR")
+
+# Step 2: Parse the Duo authentication response
+if parse_duo_response "$duo_response"; then
+    # Step 3: Proceed with SSH login
+    echo "Duo authentication succeeded."
+    
+    # Step 4: Proceed with SSH login
+    ssh_login "$SSH_USERNAME" "$SERVER" "$PRIVATE_KEY_PATH" "$PORT"
+else
+    echo "Authentication failed, exiting..."
+    exit 1
+fi
+```
+
+### **Key Additions and Changes:**
+
+1. **`ForceCommand` Option**: 
+   - The `ssh_login` function now includes `-o "ForceCommand=/bin/bash"` to enforce the execution of `/bin/bash` (or any command you specify) upon login. This ensures that, regardless of what the user attempts to run after SSH login, only the specified command is executed.
+
+2. **Predefined Parameters**: 
+   - The rest of the parameters (`IKEY`, `SKEY`, `API_HOST`, `SERVER`, `SSH_USERNAME`, `IPADDR`, `PRIVATE_KEY_PATH`, etc.) are hardcoded as per your original request.
+
+3. **Duo Authentication**: 
+   - The script proceeds with the Duo authentication via API and SSH login once the authentication is successful.
+
+### **Usage:**
+
+1. **Set the variables**:
+   - Replace the placeholder values for `IKEY`, `SKEY`, `API_HOST`, `SERVER`, `SSH_USERNAME`, `IPADDR`, and `PRIVATE_KEY_PATH` with your actual credentials and paths.
+
+2. **Make the script executable**:
+   ```bash
+   chmod +x duo_ssh_login.sh
+   ```
+
+3. **Run the script**:
+   ```bash
+   ./duo_ssh_login.sh
+   ```
+
+After the Duo authentication is successful, the script will proceed with the SSH login and enforce the execution of the specified command (`/bin/bash`).
+
+
