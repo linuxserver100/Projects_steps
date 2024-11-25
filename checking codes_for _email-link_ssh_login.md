@@ -9293,181 +9293,172 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥�😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-.
 
-Certainly! Here's the revised script that includes **Push Notification** and **SMS OTP Verification** for Duo 2FA authentication during SSH login, maintaining the same structure and functionality while ensuring the 2FA verification process is properly integrated.
+To implement Duo's 2FA (Two-Factor Authentication) for SSH login without using Python, we can use a shell script with `curl` for API interaction, and `openssl` for generating the necessary HMAC-SHA1 signature. This script will authenticate the SSH user via Duo's API and handle the authentication flow. Below is a detailed explanation and shell script to guide you through setting this up.
 
----
+### Pre-Requisites:
+1. **Duo API Credentials**:
+   - Integration Key (`ikey`)
+   - Secret Key (`skey`)
+   - API Hostname (`hostname`)
 
-### Full Guide for Duo 2FA with `ForcedCommand` (Predefined Parameters with Push and SMS OTP Verification)
+2. **Install Required Tools**:
+   - `curl` (for making HTTP requests)
+   - `openssl` (for generating HMAC-SHA1 signatures)
 
-This guide integrates Duo 2FA into SSH login using `ForcedCommand` and a Bash script with predefined parameters. It supports both **Push** and **SMS OTP Verification** for Duo authentication, ensuring secure handling of OTP verification.
+3. **Duo API Setup**:
+   - You should have your Duo account and SSH application configured on Duo.
 
----
+### Shell Script Overview
 
-### 1. **Set Up Duo Integration**
+The script will:
+1. Send a `/preauth` request to Duo to check if the user can authenticate.
+2. Based on the factors available, prompt the user to select a factor (e.g., push, passcode).
+3. Send an `/auth` request to Duo to perform the second factor authentication.
+4. Poll the `/status` endpoint to check if the authentication succeeded or failed.
 
-Ensure you have the following Duo details:
-- **Integration Key (ikey)**: `DIWJ8X6AEYOR5OMC6TQ1`
-- **Secret Key (skey)**: `Zh5eGmUq9zpfQnyUIu5OL9iWoMMv5ZNmk3zLJ4Ep`
-- **API Hostname**: `api-xxxxxxxx.duosecurity.com`
-
-These values are hardcoded into the script for simplicity.
-
----
-
-### 2. **Create the Duo 2FA Bash Script**
-
-#### **Bash Script (`duo_authenticate.sh`)**
+### Shell Script for Duo 2FA SSH Authentication
 
 ```bash
 #!/bin/bash
 
-# Predefined Duo API keys and Hostname
-ikey="DIWJ8X6AEYOR5OMC6TQ1"      # Integration Key
-skey="Zh5eGmUq9zpfQnyUIu5OL9iWoMMv5ZNmk3zLJ4Ep"  # Secret Key
-api_host="api-xxxxxxxx.duosecurity.com"  # Duo API hostname
+# Duo API Credentials - replace with your actual credentials
+IKKEY="YOUR_INTEGRATION_KEY"
+SKEY="YOUR_SECRET_KEY"
+HOSTNAME="api-XXXXXXXX.duosecurity.com"
+API_PATH="/rest/v1/preauth"
 
-# Username attempting SSH login (set by PAM)
-username="$PAM_USER"
+# Read the SSH username (usually passed by the SSH service)
+USER=$1
+if [ -z "$USER" ]; then
+    echo "Usage: $0 <ssh_username>"
+    exit 1
+fi
 
-# Function to generate the Duo signature
-generate_duo_signature() {
-    local method=$1
-    local path=$2
-    local params=$3
-    local date=$(date -R)
+# Get the current date in RFC 2822 format
+DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
 
-    # Create the canonical string for HMAC-SHA1
-    canon="${date}\n${method}\n${api_host}\n${path}\n${params}"
+# Generate the signature string for the request
+METHOD="POST"
+PATH="/rest/v1/preauth"
+PARAMS="user=${USER}"
 
-    # Sign the string with HMAC-SHA1 and return signature
-    sig=$(echo -n "$canon" | openssl dgst -sha1 -hmac "$skey" | sed 's/^.* //')
+# Create canonical string for HMAC-SHA1
+CANONICAL_STRING="${DATE}\n${METHOD}\n${HOSTNAME}\n${PATH}\n${PARAMS}"
 
-    # Return the Authorization header
-    auth_header="Basic $(echo -n "$ikey:$sig" | base64)"
-    echo "$auth_header"
-}
+# Generate HMAC-SHA1 signature
+SIGNATURE=$(echo -n "$CANONICAL_STRING" | openssl dgst -sha1 -hmac "$SKEY" -binary | xxd -p -c 256)
 
-# Function to authenticate with Duo API (Push or SMS)
-duo_authenticate() {
-    local method="POST"
-    local path="/auth/v2/auth"
-    local factor_choice=$1  # 'push' or 'sms'
-    
-    # Prepare the parameters for the chosen factor
-    if [ "$factor_choice" == "push" ]; then
-        params="username=${username}&factor=push&device=auto"  # Push Notification
-    elif [ "$factor_choice" == "sms" ]; then
-        params="username=${username}&factor=sms"  # SMS OTP
-    else
-        echo "Invalid factor choice. Choose either 'push' or 'sms'."
-        return 1
-    fi
+# Create the Authorization header using the integration key and signature
+AUTH_HEADER="Basic $(echo -n "${IKKEY}:${SIGNATURE}" | base64)"
 
-    # Generate signature and prepare HTTP request
-    auth_header=$(generate_duo_signature "$method" "$path" "$params")
-    
-    # Send authentication request to Duo
-    response=$(curl -s -X POST "https://$api_host$path" -d "$params" -H "Authorization: $auth_header" -H "Date: $(date -R)")
+# Make the /preauth API request to Duo
+RESPONSE=$(curl -s -X POST "https://${HOSTNAME}${PATH}" \
+    -H "Date: ${DATE}" \
+    -H "Authorization: ${AUTH_HEADER}" \
+    -d "user=${USER}")
 
-    # Check the result of the authentication request
-    result=$(echo "$response" | jq -r '.result')
-    if [ "$result" == "allow" ]; then
-        echo "Authentication succeeded. SSH login allowed."
-        return 0  # Authentication success
-    else
-        echo "Authentication failed. SSH login denied."
-        return 1  # Authentication failed
-    fi
-}
+# Extract the result from the response
+RESULT=$(echo "$RESPONSE" | jq -r '.response.result')
 
-# Prompt user for factor choice (Push or SMS)
-read -p "Choose Duo factor (push or sms): " factor_choice
+# Handle different authentication results
+case "$RESULT" in
+    "auth")
+        echo "Authentication required. Proceeding with Duo authentication..."
 
-# Run Duo Authentication with chosen factor
-duo_authenticate "$factor_choice"
+        # Get the available factors
+        FACTORS=$(echo "$RESPONSE" | jq -r '.response.factors')
+        echo "Available factors: $FACTORS"
+
+        # You can further process this to prompt the user for a specific factor selection
+        # For simplicity, we'll proceed with a default factor (push1)
+        FACTOR="push1"
+
+        # Send the authentication request
+        API_PATH="/rest/v1/auth"
+        PARAMS="user=${USER}&factor=${FACTOR}"
+
+        # Create the canonical string for /auth
+        CANONICAL_STRING="${DATE}\n${METHOD}\n${HOSTNAME}\n${API_PATH}\n${PARAMS}"
+
+        # Generate the HMAC-SHA1 signature for /auth
+        SIGNATURE=$(echo -n "$CANONICAL_STRING" | openssl dgst -sha1 -hmac "$SKEY" -binary | xxd -p -c 256)
+
+        # Make the /auth API request to Duo
+        RESPONSE=$(curl -s -X POST "https://${HOSTNAME}${API_PATH}" \
+            -H "Date: ${DATE}" \
+            -H "Authorization: ${AUTH_HEADER}" \
+            -d "user=${USER}&factor=${FACTOR}")
+
+        # Check the result of the authentication
+        AUTH_RESULT=$(echo "$RESPONSE" | jq -r '.response.result')
+
+        if [ "$AUTH_RESULT" == "allow" ]; then
+            echo "Authentication successful. Allowing SSH access."
+            exit 0
+        else
+            echo "Authentication failed: $(echo "$RESPONSE" | jq -r '.response.status')"
+            exit 1
+        fi
+        ;;
+    "allow")
+        echo "No 2FA required. Allowing SSH access."
+        exit 0
+        ;;
+    "deny")
+        echo "Access denied. User is not authorized."
+        exit 1
+        ;;
+    "enroll")
+        echo "User needs to enroll in Duo. Please complete enrollment first."
+        exit 1
+        ;;
+    *)
+        echo "Unexpected result: $RESULT"
+        exit 1
+        ;;
+esac
 ```
 
-#### **Script Explanation:**
-- **`generate_duo_signature()`**: This function generates a valid authorization header for the Duo API using HMAC-SHA1 to securely sign requests.
-- **`duo_authenticate()`**: Sends a Duo authentication request using `curl` and verifies the result. The request can either be a **Push Notification** or **SMS OTP** depending on the user’s choice.
-- **Predefined Duo API credentials** such as `ikey`, `skey`, and `api_host` are embedded directly in the script for simplicity.
-- The script prompts the user to choose between **Push** and **SMS OTP** for authentication during the SSH login.
+### Explanation:
 
----
+1. **Pre-authentication (`/preauth`)**:
+   - The script checks if the user exists and whether they are allowed to authenticate.
+   - If the result is `"auth"`, the user is prompted for the second factor.
 
-### 3. **Configure SSH with ForcedCommand**
+2. **Authentication (`/auth`)**:
+   - Based on the factors available (e.g., `push1`, `phone1`), a factor is chosen (in this case, `push1`).
+   - The script sends a second authentication request using that factor.
 
-To ensure Duo 2FA is triggered during SSH login, configure the SSH server to invoke the Duo authentication script via `ForcedCommand`.
+3. **Polling for status (`/status`)**:
+   - If asynchronous polling is enabled, you can query the `/status` endpoint to check if the authentication has completed.
 
-#### **Steps:**
+4. **Error Handling**:
+   - Handles common cases like `"deny"`, `"allow"`, `"enroll"`, and unexpected results.
 
-1. **Place the Bash Script in a Secure Location:**
+### Notes:
 
-   Make the Duo authentication script executable and place it in a secure directory, e.g., `/usr/local/bin/duo_authenticate.sh`.
+- This script is intended to be executed on an SSH server before granting access to the user.
+- The script uses `curl` for the API request and `openssl` to generate the HMAC-SHA1 signature.
+- You'll need to install `jq` for JSON parsing. If `jq` is not available, you can modify the script to use basic text manipulation tools like `grep` and `awk`.
+- This script does not handle the asynchronous `/auth` flow. For a real-world implementation, you'll likely need to poll the `/status` endpoint if `async=1` is set.
 
-   ```bash
-   sudo cp duo_authenticate.sh /usr/local/bin/
-   sudo chmod +x /usr/local/bin/duo_authenticate.sh
-   ```
+### Setting Up Duo SSH Integration:
 
-2. **Modify the `sshd_config` File:**
+1. Install the Duo Unix package on your server. You can follow Duo's official documentation on integrating with Unix/Linux systems.
+2. Set the `authfile` to call the above script on login. For example, modify `/etc/ssh/sshd_config` to include a custom `ForceCommand` that runs this script.
 
-   Edit the SSH server configuration file to enforce the use of the `ForcedCommand` directive.
+### Final Steps:
 
-   ```bash
-   sudo nano /etc/ssh/sshd_config
-   ```
+1. Ensure your Duo API credentials are correctly set.
+2. Test the script by attempting to log in via SSH. If you see a 40101 error, ensure that:
+   - Your API request headers are correct.
+   - The `Authorization` header is properly formed.
+   - Your system time (`Date` header) is accurate.
+   - `curl` is using HTTPS to connect to Duo's API endpoint.
 
-   Add the following lines at the end of the file to ensure the Duo 2FA script is executed for all SSH login attempts:
+This approach provides a shell-based method for implementing Duo 2FA on SSH login, without Python, using only Bash and common Unix tools like `curl` and `openssl`.
 
-   ```plaintext
-   Match User * 
-       ForcedCommand /usr/local/bin/duo_authenticate.sh
-       AllowTcpForwarding no
-   ```
-
-   This configuration ensures that the `duo_authenticate.sh` script is run during the login attempt, and TCP forwarding is disabled until successful authentication.
-
-3. **Restart the SSH Service:**
-
-   After updating the SSH configuration, restart the SSH service to apply the changes:
-
-   ```bash
-   sudo systemctl restart sshd
-   ```
-
----
-
-### 4. **Test the Duo 2FA Authentication**
-
-Now, when attempting to SSH into the server, the following sequence occurs:
-1. **SSH Login**: The user attempts to log in via SSH.
-2. **Duo Authentication**: The `ForcedCommand` triggers the `duo_authenticate.sh` script.
-3. **User Prompt**: The script prompts the user to choose **Push** or **SMS OTP** as the authentication factor.
-4. **Duo Authentication**: 
-   - If **Push** is selected, a Duo push notification will be sent to the user's device.
-   - If **SMS OTP** is selected, an OTP will be sent to the user's registered phone number.
-5. **Login Status**: If the Duo authentication is successful, the user is allowed to log in. Otherwise, the login attempt is denied.
-
----
-
-### 5. **Troubleshooting**
-
-- **SSH Logs**: If something goes wrong, check the `/var/log/auth.log` file for any errors related to SSH or Duo authentication.
-- **Script Permissions**: Ensure that the `duo_authenticate.sh` script has proper execution permissions and is stored in a secure location.
-- **Duo API Errors**: If Duo authentication fails, verify the accuracy of the `ikey`, `skey`, and `api_host` values.
-
----
-
-### 6. **Conclusion**
-
-This method provides a secure integration of **Duo 2FA** for SSH logins, ensuring that both **Push Notification** and **SMS OTP Verification** are available as authentication methods. By embedding predefined parameters, the setup becomes simple and secure, and Duo 2FA adds an extra layer of protection to your server against unauthorized access.
-
----
-
-This version retains all the functionality of the original script, integrates both Push and SMS OTP verification methods for SSH 2FA using Duo authentication, and includes a 2FA verification process for secure login handling.
 
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
