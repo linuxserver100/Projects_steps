@@ -9295,7 +9295,295 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥�😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
 
+Certainly! Below is the full code with predefined parameters as requested. I've added placeholders where necessary, such as for the Twilio and Duo credentials, and used the same logic as in the original guide.
 
+---
+
+### Updated Guide to Integrate Twilio OTP and Duo 2FA for SSH Login with User-Selectable Option
+
+---
+
+### Step 1: Install Duo Authentication Proxy on Ubuntu Server
+
+First, install the **Duo Authentication Proxy** for the second-factor authentication (2FA) with Duo.
+
+1. **Download and Install the Duo Authentication Proxy**:
+   ```bash
+   wget https://dl.duosecurity.com/duo-unix-latest.tar.gz
+   tar -xzvf duo-unix-latest.tar.gz
+   cd duo-unix-*
+   sudo make
+   sudo make install
+   ```
+
+2. **Configure Duo Proxy**:
+   In `/etc/duo/duo.conf`, add your Duo integration key, secret key, and API hostname:
+   ```bash
+   [duo]
+   ikey = YOUR_INTEGRATION_KEY
+   skey = YOUR_SECRET_KEY
+   host = api-xxxxxxxx.duosecurity.com
+   ```
+
+3. **Start the Duo Proxy Service**:
+   ```bash
+   sudo systemctl start duo-authproxy
+   sudo systemctl enable duo-authproxy
+   ```
+
+---
+
+### Step 2: Install Twilio Python SDK
+
+1. **Install Twilio Python SDK**:
+   Use `pip` to install the Twilio SDK:
+   ```bash
+   pip install twilio
+   ```
+
+---
+
+### Step 3: Modify PAM Configuration for Dual 2FA (Twilio + Duo)
+
+1. **Edit PAM Configuration for SSH**:
+   Open `/etc/pam.d/sshd` and add the following lines:
+   ```bash
+   auth required pam_duo.so
+   auth [success=1 default=ignore] pam_exec.so /usr/local/bin/twilio_otp.py
+   ```
+
+   This configuration will first handle the Duo authentication and then invoke the Twilio OTP Python script as a pre-authorization step.
+
+2. **Ensure SSH is Configured for PAM**:
+   Edit `/etc/ssh/sshd_config` to ensure the following line is present:
+   ```bash
+   ChallengeResponseAuthentication yes
+   ```
+
+3. **Restart SSH**:
+   Restart the SSH service to apply the changes:
+   ```bash
+   sudo systemctl restart sshd
+   ```
+
+---
+
+### Step 4: Modify SSH to Trigger Both OTP and Duo Authentication Simultaneously
+
+We will modify the SSH login process using `ForceCommand` to execute a script that prompts for both the Twilio OTP and Duo authentication steps, but with the user being prompted to choose which method to use.
+
+1. **Edit the SSH Configuration File**:
+   Open `/etc/ssh/sshd_config` and add or modify the `ForceCommand` directive to point to your new authentication script:
+   ```bash
+   ForceCommand /usr/local/bin/twilio_duo_auth.sh
+   ```
+
+   This ensures that when the user logs in, the server will run the `twilio_duo_auth.sh` script.
+
+2. **Modify the SSH Configuration**:
+   Ensure that `ChallengeResponseAuthentication` is enabled:
+   ```bash
+   ChallengeResponseAuthentication yes
+   ```
+
+3. **Restart SSH**:
+   Restart SSH to apply the changes:
+   ```bash
+   sudo systemctl restart sshd
+   ```
+
+---
+
+### Step 5: Create Python Script to Handle Both Twilio OTP and Duo 2FA with User Choice
+
+The script `/usr/local/bin/twilio_duo_auth.sh` will now first prompt the user to choose the authentication method (either Twilio OTP or Duo 2FA), and then proceed accordingly.
+
+```bash
+#!/bin/bash
+
+# Function to prompt user for the authentication method
+function prompt_for_method {
+    echo "Please choose the authentication method:"
+    echo "1) Twilio OTP"
+    echo "2) Duo 2FA"
+    echo "3) Both Twilio OTP and Duo 2FA"
+    read -p "Enter your choice (1/2/3): " choice
+    echo $choice
+}
+
+# Function to run Twilio OTP authentication
+function run_twilio_otp {
+    echo "Enter your phone number to receive OTP:"
+    read phone_number
+    otp=$(python3 /usr/local/bin/twilio_otp.py $phone_number)
+    echo "An OTP has been sent to your phone. Enter the OTP:"
+    read user_input
+    if [[ "$user_input" -eq "$otp" ]]; then
+        echo "OTP verified successfully!"
+    else
+        echo "Invalid OTP."
+        exit 1
+    fi
+}
+
+# Function to run Duo 2FA authentication
+function run_duo_2fa {
+    echo "Proceeding with Duo 2FA..."
+    # Replace with actual parameters for Duo 2FA
+    python3 /usr/local/bin/duo_2fa.py
+}
+
+# Main execution flow
+choice=$(prompt_for_method)
+
+case $choice in
+    1)
+        run_twilio_otp
+        ;;
+    2)
+        run_duo_2fa
+        ;;
+    3)
+        run_twilio_otp
+        run_duo_2fa
+        ;;
+    *)
+        echo "Invalid choice, exiting..."
+        exit 1
+        ;;
+esac
+
+echo "Authentication successful."
+```
+
+### Explanation of Script:
+1. **User Prompt for Authentication Method**: Upon SSH login, the user is asked to select an authentication method (Twilio OTP, Duo 2FA, or both).
+2. **Twilio OTP Verification**: If the user selects Twilio OTP, they are prompted to enter their phone number, receive an OTP, and enter it back for verification.
+3. **Duo 2FA Verification**: If the user selects Duo 2FA, the Duo 2FA verification script (`duo_2fa.py`) is called.
+4. **Both Methods**: If the user selects both, they go through the Twilio OTP process first, followed by Duo 2FA.
+
+---
+
+### Step 6: Create Python Script to Handle Twilio OTP (`twilio_otp.py`)
+
+Here’s the Python script to handle the Twilio OTP generation and sending:
+
+```python
+import random
+from twilio.rest import Client
+import sys
+
+# Twilio Configuration (Predefined)
+TWILIO_ACCOUNT_SID = 'your_account_sid'
+TWILIO_AUTH_TOKEN = 'your_auth_token'
+TWILIO_PHONE_NUMBER = 'your_twilio_phone_number'
+
+def send_twilio_otp(phone_number):
+    otp = random.randint(100000, 999999)
+    
+    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    message = client.messages.create(
+        body=f"Your OTP code is {otp}",
+        from_=TWILIO_PHONE_NUMBER,
+        to=phone_number
+    )
+    
+    return otp
+
+if __name__ == '__main__':
+    phone_number = sys.argv[1]
+    otp = send_twilio_otp(phone_number)
+    print(otp)  # Return OTP to the shell script
+```
+
+---
+
+### Step 7: Create Python Script to Handle Duo 2FA (`duo_2fa.py`)
+
+Here’s the Python script to handle the Duo 2FA:
+
+```python
+import requests
+import base64
+import hashlib
+import hmac
+import urllib.parse
+import email.utils
+
+# Duo Configuration (Predefined)
+DUO_IKEY = 'YOUR_INTEGRATION_KEY'
+DUO_SKEY = 'YOUR_SECRET_KEY'
+DUO_HOST = 'api-xxxxxxxx.duosecurity.com'
+DUO_PATH = '/auth/v2/auth'
+
+# Function to generate the HMAC-SHA1 signature for Duo
+def sign(method, host, path, params, skey, ikey):
+    now = email.utils.formatdate()
+    canon = [now, method.upper(), host.lower(), path]
+    args = []
+    for key in sorted(params.keys()):
+        val = params[key].encode("utf-8")
+        args.append('%s=%s' % (urllib.parse.quote(key, '~'), urllib.parse.quote(val, '~')))
+    canon.append('&'.join(args))
+    canon = '\n'.join(canon)
+
+    sig = hmac.new(bytes(skey, encoding='utf-8'),
+                   bytes(canon, encoding='utf-8'),
+                   hashlib.sha1)
+    auth = '%s:%s' % (ikey, sig.hexdigest())
+
+    return {'Date': now, 'Authorization': 'Basic %s' % base64.b64encode(auth.encode()).decode()}
+
+# Function to handle Duo authentication
+def duo_auth_request(ikey, skey, host, path, params):
+    headers = sign('POST', host, path, params, skey, ikey)
+    url = f'https://{host}{path}'
+    response = requests.post(url, headers=headers, data=params)
+    return response
+
+# Duo Authentication Request
+def authenticate_user():
+    duo_params = {
+        'username': 'root',  # Replace with actual username
+        'factor': 'push',    # You can choose 'push', 'sms', or 'call'
+        'device': 'auto',
+        'ipaddr': '192.168.1.10',  # Replace with actual IP address
+        'hostname': 'ubuntu-server'
+    }
+    duo_response = duo_auth_request(DUO_IKEY, DUO_SKEY, DUO_HOST, DUO_PATH, duo_params)
+    
+    if duo_response.status_code == 200:
+        print('Duo authentication successful!')
+    else:
+        print(f'Duo authentication failed! Response: {duo_response.text}')
+
+if __name__ == '__main__':
+    authenticate_user()
+
+
+```
+
+---
+
+### Step 8: Test Dual 2FA Authentication
+
+1. **SSH into the server**:
+   ```bash
+   ssh user@your_server
+   ```
+
+2. **Select an Authentication Method**:
+   - Enter `1` for Twilio OTP only.
+   - Enter `2` for Duo 2FA only.
+   - Enter `3` for both Twilio OTP and Duo 2FA.
+
+3. **Complete the Authentication Process** for the selected method.
+
+---
+
+### Notes:
+- **Security**: Ensure that all sensitive credentials (Twilio SID, Token, and Duo keys) are securely managed.
+- **Customization**: The Duo 2FA method (push, SMS, call) can be modified in the script based on your preference.
 
 
 
@@ -9561,158 +9849,7 @@ ssh user@your_server_ip
 
 This guide provides an updated and secure method for implementing 2FA SSH login with **Twilio SMS OTP**, **Twilio Call OTP**, and **Pushbullet approval**. The OTP and approval data are stored securely in memory, which minimizes security risks associated with text file storage.
 
-🫥🫥🫥🥰😙🥰😙🥰😙😙🥰😙🥰😙🥰😙🥰😙🥰😙😙🥰😙🥰😙😍🫥🥰🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥🫥😍🫥😍🫥😍🫥🥰🫥😍🫥🥰🫥🥰🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍🫥😍
-Certainly! Here's the revised script, which includes the `ForceCommand` option for SSH, and the rest of the functionality is the same as the original script.
 
-### **Full Bash Script with Predefined Parameters for Duo 2FA SSH Login and ForceCommand**
-
-```bash
-#!/bin/bash
-
-# --- Predefined Duo API credentials ---
-IKEY="YOUR_INTEGRATION_KEY"           # Integration Key
-SKEY="YOUR_SECRET_KEY"                # Secret Key
-API_HOST="api-xxxxxxxx.duosecurity.com"  # Duo API Hostname
-USER="your_username"                  # Username for Duo authentication (or SSH)
-API_PATH="/rest/v1/auth"              # Endpoint for Duo Authentication
-
-# Predefined SSH details
-SERVER="your.server.com"              # SSH server IP or hostname
-SSH_USERNAME="your_ssh_username"      # SSH Username
-IPADDR="your_ip_address"              # IP address (for Duo authentication)
-PRIVATE_KEY_PATH="/path/to/your/private/key"  # Path to your private SSH key
-PORT=22                               # Default SSH port
-
-# Duo API headers
-DATE=$(date -R)  # Current date in RFC 2822 format
-HOST=$API_HOST
-
-# Function to create the canonical string for signing
-create_canonical_string() {
-    local method=$1
-    local path=$2
-    local params=$3
-
-    # If there are parameters, they should be URL-encoded and sorted.
-    canonical_string="${DATE}\n${method}\n${HOST}\n${path}\n${params}"
-
-    echo "$canonical_string"
-}
-
-# Function to calculate HMAC-SHA1 signature
-hmac_sha1() {
-    local data=$1
-    echo -n "$data" | openssl dgst -sha1 -hmac "$SKEY" -binary | xxd -p -c 256
-}
-
-# Function to encode the signature and credentials in Base64
-base64_encode() {
-    echo -n "$1" | base64
-}
-
-# Function to perform Duo 2FA Authentication via the API
-perform_duo_auth() {
-    local username=$1
-    local ip=$2
-    local factor="push"  # Use push for authentication (can switch to "sms" for SMS OTP)
-
-    # Prepare parameters for the request
-    local params="username=${username}&ipaddr=${ip}&factor=${factor}"
-
-    # Create the canonical string
-    local canonical_string
-    canonical_string=$(create_canonical_string "POST" "/rest/v1/auth" "$params")
-
-    # Create the HMAC-SHA1 signature
-    local signature
-    signature=$(hmac_sha1 "$canonical_string")
-
-    # Base64 encode the signature with the Integration Key
-    local base64_auth
-    base64_auth=$(base64_encode "$IKEY:$signature")
-
-    # Send the POST request to Duo API
-    response=$(curl -s -X POST "https://${API_HOST}/rest/v1/auth" \
-        -d "$params" \
-        -H "Date: ${DATE}" \
-        -H "Authorization: Basic $base64_auth" \
-        -H "Host: $API_HOST" \
-        -H "Content-Type: application/x-www-form-urlencoded")
-
-    # Check the response and return the result
-    echo "$response"
-}
-
-# Function to parse the response and extract the result
-parse_duo_response() {
-    local response=$1
-    local result=$(echo "$response" | jq -r '.result')
-
-    if [[ "$result" == "allow" ]]; then
-        echo "Duo authentication successful, proceeding with SSH login..."
-        return 0
-    else
-        echo "Duo authentication failed."
-        return 1
-    fi
-}
-
-# Function to initiate SSH login after Duo authentication
-ssh_login() {
-    local username=$1
-    local server=$2
-    local private_key_path=$3
-    local port=$4
-
-    echo "Attempting SSH login to $server with username $username..."
-
-    # Use SSH to login after successful Duo authentication and enforce command
-    ssh -i "$private_key_path" -p "$port" "$username"@"$server" -o "ForceCommand=/bin/bash"
-}
-
-# Main script starts here
-echo "Starting Duo 2FA Authentication..."
-
-# Step 1: Perform Duo Authentication
-duo_response=$(perform_duo_auth "$SSH_USERNAME" "$IPADDR")
-
-# Step 2: Parse the Duo authentication response
-if parse_duo_response "$duo_response"; then
-    # Step 3: Proceed with SSH login
-    echo "Duo authentication succeeded."
-    
-    # Step 4: Proceed with SSH login
-    ssh_login "$SSH_USERNAME" "$SERVER" "$PRIVATE_KEY_PATH" "$PORT"
-else
-    echo "Authentication failed, exiting..."
-    exit 1
-fi
-```
-
-### **Key Additions and Changes:**
-
-1. **`ForceCommand` Option**: 
-   - The `ssh_login` function now includes `-o "ForceCommand=/bin/bash"` to enforce the execution of `/bin/bash` (or any command you specify) upon login. This ensures that, regardless of what the user attempts to run after SSH login, only the specified command is executed.
-
-2. **Predefined Parameters**: 
-   - The rest of the parameters (`IKEY`, `SKEY`, `API_HOST`, `SERVER`, `SSH_USERNAME`, `IPADDR`, `PRIVATE_KEY_PATH`, etc.) are hardcoded as per your original request.
-
-3. **Duo Authentication**: 
-   - The script proceeds with the Duo authentication via API and SSH login once the authentication is successful.
-
-### **Usage:**
-
-1. **Set the variables**:
-   - Replace the placeholder values for `IKEY`, `SKEY`, `API_HOST`, `SERVER`, `SSH_USERNAME`, `IPADDR`, and `PRIVATE_KEY_PATH` with your actual credentials and paths.
-
-2. **Make the script executable**:
-   ```bash
-   chmod +x duo_ssh_login.sh
-   ```
-
-3. **Run the script**:
-   ```bash
-   ./duo_ssh_login.sh
    ```
 
 After the Duo authentication is successful, the script will proceed with the SSH login and enforce the execution of the specified command (`/bin/bash`).
