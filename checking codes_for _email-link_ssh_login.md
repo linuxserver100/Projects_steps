@@ -9294,8 +9294,9 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥�😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
+.
 
-Certainly! Below is the full code with predefined parameters as requested. I've added placeholders where necessary, such as for the Twilio and Duo credentials, and used the same logic as in the original guide.
+Certainly! Here's the complete, rewritten guide with all the provided steps and code, including the Twilio OTP sent and verification logic integrated into the Twilio OTP Python script.
 
 ---
 
@@ -9396,7 +9397,7 @@ We will modify the SSH login process using `ForceCommand` to execute a script th
 
 ### Step 5: Create Python Script to Handle Both Twilio OTP and Duo 2FA with User Choice
 
-The script `/usr/local/bin/twilio_duo_auth.sh` will now first prompt the user to choose the authentication method (either Twilio OTP or Duo 2FA), and then proceed accordingly.
+The script `/usr/local/bin/twilio_duo_auth.sh` will now first prompt the user to choose the authentication method (either Twilio OTP, Duo 2FA, or both), and then proceed accordingly.
 
 ```bash
 #!/bin/bash
@@ -9490,11 +9491,21 @@ def send_twilio_otp(phone_number):
     
     return otp
 
+def verify_otp(sent_otp, user_input):
+    if sent_otp == int(user_input):
+        return True
+    else:
+        return False
+
 if __name__ == '__main__':
     phone_number = sys.argv[1]
     otp = send_twilio_otp(phone_number)
     print(otp)  # Return OTP to the shell script
 ```
+
+### Explanation:
+- **OTP Generation and Sending**: The script generates a 6-digit OTP and sends it to the phone number using the Twilio API.
+- **OTP Verification**: The `verify_otp` function checks if the OTP entered by the user matches the one sent.
 
 ---
 
@@ -9548,7 +9559,9 @@ def authenticate_user():
         'factor': 'push',    # You can choose 'push', 'sms', or 'call'
         'device': 'auto',
         'ipaddr': '192.168.1.10',  # Replace with actual IP address
-        'hostname': 'ubuntu-server'
+        '
+
+hostname': 'ubuntu-server' # Replace with actual hostname
     }
     duo_response = duo_auth_request(DUO_IKEY, DUO_SKEY, DUO_HOST, DUO_PATH, duo_params)
     
@@ -9559,8 +9572,6 @@ def authenticate_user():
 
 if __name__ == '__main__':
     authenticate_user()
-
-
 ```
 
 ---
@@ -9585,7 +9596,9 @@ if __name__ == '__main__':
 - **Security**: Ensure that all sensitive credentials (Twilio SID, Token, and Duo keys) are securely managed.
 - **Customization**: The Duo 2FA method (push, SMS, call) can be modified in the script based on your preference.
 
+---
 
+This completes the integration of Twilio OTP and Duo 2FA for SSH login with user-selectable authentication methods.
 
 
 
