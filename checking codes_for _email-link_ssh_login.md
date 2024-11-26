@@ -9295,38 +9295,47 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥�😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
 .
-
-Certainly! Here's the complete, rewritten guide with all the provided steps and code, including the Twilio OTP sent and verification logic integrated into the Twilio OTP Python script.
+.Certainly! Here's a rewritten and corrected version of the guide that integrates Twilio OTP and Duo 2FA for SSH login with a user-selectable authentication method, including the necessary installation steps and code. I'll also fix the issues with the Duo Authentication Proxy installation and ensure all the Python dependencies and script configurations are correct.
 
 ---
 
 ### Updated Guide to Integrate Twilio OTP and Duo 2FA for SSH Login with User-Selectable Option
 
----
-
 ### Step 1: Install Duo Authentication Proxy on Ubuntu Server
 
-First, install the **Duo Authentication Proxy** for the second-factor authentication (2FA) with Duo.
+1. **Install Duo Authentication Proxy**:
+   Download and install Duo's authentication proxy. Instead of using `make` directly, we'll use the newer Duo Unix installation method.
 
-1. **Download and Install the Duo Authentication Proxy**:
    ```bash
+   sudo apt update
+   sudo apt install build-essential libpam0g-dev libssl-dev libcurl4-openssl-dev libxml2-dev libpcap-dev
    wget https://dl.duosecurity.com/duo-unix-latest.tar.gz
    tar -xzvf duo-unix-latest.tar.gz
    cd duo-unix-*
+   sudo ./configure
    sudo make
    sudo make install
    ```
 
 2. **Configure Duo Proxy**:
-   In `/etc/duo/duo.conf`, add your Duo integration key, secret key, and API hostname:
+   After installing, configure Duo in `/etc/duo/duo.conf`. Replace the placeholders with your Duo API keys and hostname.
+
    ```bash
+   sudo nano /etc/duo/duo.conf
+   ```
+
+   Add the following configuration:
+
+   ```ini
    [duo]
    ikey = YOUR_INTEGRATION_KEY
    skey = YOUR_SECRET_KEY
    host = api-xxxxxxxx.duosecurity.com
    ```
 
-3. **Start the Duo Proxy Service**:
+3. **Start Duo Proxy Service**:
+   Enable and start the Duo proxy service.
+
    ```bash
    sudo systemctl start duo-authproxy
    sudo systemctl enable duo-authproxy
@@ -9336,33 +9345,48 @@ First, install the **Duo Authentication Proxy** for the second-factor authentica
 
 ### Step 2: Install Twilio Python SDK
 
-1. **Install Twilio Python SDK**:
-   Use `pip` to install the Twilio SDK:
-   ```bash
-   pip install twilio
-   ```
+Install the Twilio Python SDK using `pip`:
+
+```bash
+pip install twilio
+```
 
 ---
 
 ### Step 3: Modify PAM Configuration for Dual 2FA (Twilio + Duo)
 
 1. **Edit PAM Configuration for SSH**:
-   Open `/etc/pam.d/sshd` and add the following lines:
+   Open `/etc/pam.d/sshd` and add the following lines to ensure both Duo and Twilio OTP are handled correctly:
+
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+   Add these lines:
+
    ```bash
    auth required pam_duo.so
    auth [success=1 default=ignore] pam_exec.so /usr/local/bin/twilio_otp.py
    ```
 
-   This configuration will first handle the Duo authentication and then invoke the Twilio OTP Python script as a pre-authorization step.
+   This configures Duo to run first, followed by the Twilio OTP script if needed.
 
 2. **Ensure SSH is Configured for PAM**:
-   Edit `/etc/ssh/sshd_config` to ensure the following line is present:
+   Open `/etc/ssh/sshd_config` and make sure the following line is present:
+
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Ensure:
+
    ```bash
    ChallengeResponseAuthentication yes
    ```
 
 3. **Restart SSH**:
-   Restart the SSH service to apply the changes:
+   Restart the SSH service to apply changes:
+
    ```bash
    sudo systemctl restart sshd
    ```
@@ -9371,24 +9395,26 @@ First, install the **Duo Authentication Proxy** for the second-factor authentica
 
 ### Step 4: Modify SSH to Trigger Both OTP and Duo Authentication Simultaneously
 
-We will modify the SSH login process using `ForceCommand` to execute a script that prompts for both the Twilio OTP and Duo authentication steps, but with the user being prompted to choose which method to use.
+You need a script to allow users to select their authentication method. Modify the SSH configuration to use a custom authentication script.
 
 1. **Edit the SSH Configuration File**:
    Open `/etc/ssh/sshd_config` and add or modify the `ForceCommand` directive to point to your new authentication script:
+
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Add the following line:
+
    ```bash
    ForceCommand /usr/local/bin/twilio_duo_auth.sh
    ```
 
-   This ensures that when the user logs in, the server will run the `twilio_duo_auth.sh` script.
+   This forces the script `twilio_duo_auth.sh` to run upon SSH login.
 
-2. **Modify the SSH Configuration**:
-   Ensure that `ChallengeResponseAuthentication` is enabled:
-   ```bash
-   ChallengeResponseAuthentication yes
-   ```
+2. **Restart SSH**:
+   Restart SSH again:
 
-3. **Restart SSH**:
-   Restart SSH to apply the changes:
    ```bash
    sudo systemctl restart sshd
    ```
@@ -9397,7 +9423,7 @@ We will modify the SSH login process using `ForceCommand` to execute a script th
 
 ### Step 5: Create Python Script to Handle Both Twilio OTP and Duo 2FA with User Choice
 
-The script `/usr/local/bin/twilio_duo_auth.sh` will now first prompt the user to choose the authentication method (either Twilio OTP, Duo 2FA, or both), and then proceed accordingly.
+Create the authentication script `/usr/local/bin/twilio_duo_auth.sh` to prompt the user to select an authentication method:
 
 ```bash
 #!/bin/bash
@@ -9457,17 +9483,11 @@ esac
 echo "Authentication successful."
 ```
 
-### Explanation of Script:
-1. **User Prompt for Authentication Method**: Upon SSH login, the user is asked to select an authentication method (Twilio OTP, Duo 2FA, or both).
-2. **Twilio OTP Verification**: If the user selects Twilio OTP, they are prompted to enter their phone number, receive an OTP, and enter it back for verification.
-3. **Duo 2FA Verification**: If the user selects Duo 2FA, the Duo 2FA verification script (`duo_2fa.py`) is called.
-4. **Both Methods**: If the user selects both, they go through the Twilio OTP process first, followed by Duo 2FA.
-
 ---
 
 ### Step 6: Create Python Script to Handle Twilio OTP (`twilio_otp.py`)
 
-Here’s the Python script to handle the Twilio OTP generation and sending:
+This Python script handles OTP generation and sending via Twilio:
 
 ```python
 import random
@@ -9491,27 +9511,17 @@ def send_twilio_otp(phone_number):
     
     return otp
 
-def verify_otp(sent_otp, user_input):
-    if sent_otp == int(user_input):
-        return True
-    else:
-        return False
-
 if __name__ == '__main__':
     phone_number = sys.argv[1]
     otp = send_twilio_otp(phone_number)
     print(otp)  # Return OTP to the shell script
 ```
 
-### Explanation:
-- **OTP Generation and Sending**: The script generates a 6-digit OTP and sends it to the phone number using the Twilio API.
-- **OTP Verification**: The `verify_otp` function checks if the OTP entered by the user matches the one sent.
-
 ---
 
 ### Step 7: Create Python Script to Handle Duo 2FA (`duo_2fa.py`)
 
-Here’s the Python script to handle the Duo 2FA:
+This Python script will interact with Duo's API for 2FA. It assumes the Duo API integration key (`ikey`) and secret key (`skey`) are set up.
 
 ```python
 import requests
@@ -9537,12 +9547,12 @@ def sign(method, host, path, params, skey, ikey):
         args.append('%s=%s' % (urllib.parse.quote(key, '~'), urllib.parse.quote(val, '~')))
     canon.append('&'.join(args))
     canon = '\n'.join(canon)
-
+    
     sig = hmac.new(bytes(skey, encoding='utf-8'),
                    bytes(canon, encoding='utf-8'),
                    hashlib.sha1)
     auth = '%s:%s' % (ikey, sig.hexdigest())
-
+    
     return {'Date': now, 'Authorization': 'Basic %s' % base64.b64encode(auth.encode()).decode()}
 
 # Function to handle Duo authentication
@@ -9559,12 +9569,10 @@ def authenticate_user():
         'factor': 'push',    # You can choose 'push', 'sms', or 'call'
         'device': 'auto',
         'ipaddr': '192.168.1.10',  # Replace with actual IP address
-        '
-
-hostname': 'ubuntu-server' # Replace with actual hostname
+        'hostname': 'ubuntu-server' # Replace with actual hostname
     }
     duo_response = duo_auth_request(DUO_IKEY, DUO_SKEY, DUO_HOST, DUO_PATH, duo_params)
-    
+
     if duo_response.status_code == 200:
         print('Duo authentication successful!')
     else:
@@ -9579,8 +9587,11 @@ if __name__ == '__main__':
 ### Step 8: Test Dual 2FA Authentication
 
 1. **SSH into the server**:
+
    ```bash
-   ssh user@your_server
+   ssh user@your
+
+_server
    ```
 
 2. **Select an Authentication Method**:
@@ -9593,12 +9604,13 @@ if __name__ == '__main__':
 ---
 
 ### Notes:
-- **Security**: Ensure that all sensitive credentials (Twilio SID, Token, and Duo keys) are securely managed.
-- **Customization**: The Duo 2FA method (push, SMS, call) can be modified in the script based on your preference.
+
+- **Security**: Ensure that sensitive credentials (Twilio SID, Token, and Duo keys) are securely stored (e.g., using environment variables or a secrets management tool).
+- **Customization**: You can modify the Duo 2FA method (push, SMS, or call) as per your preference.
 
 ---
 
-This completes the integration of Twilio OTP and Duo 2FA for SSH login with user-selectable authentication methods.
+This guide completes the integration of Twilio OTP and Duo 2FA for SSH login, with the user being able to choose between different authentication methods.
 
 
 
