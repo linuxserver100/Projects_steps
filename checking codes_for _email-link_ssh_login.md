@@ -9294,217 +9294,270 @@ This solution integrates SSH login approval with MySQL, using Pushbullet for not
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥�😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
 
-.:
+Here's the revised code with detailed steps for integrating Duo and Twilio authentication, including the consideration of whether a Duo authentication proxy is required:
 
 ---
 
-### Manual Steps to Download Duo Authentication Proxy
+### Steps:
 
-1. **Visit the Duo Authentication Proxy Downloads Page:**
+#### 1. **Install Required Tools**:
+Ensure your system has `python3`, `pip`, and the required dependencies. Additionally, install the **Twilio SDK** and **requests** library for Duo integration.
 
-   - Go to the Duo website at [https://dl.duosecurity.com/](https://dl.duosecurity.com/).
-   - This page will list the available download packages, including the latest version for **Linux (Debian-based distributions)**.
+```bash
+sudo apt update
+sudo apt install python3 python3-pip build-essential libssl-dev
+```
 
-2. **Download the `.deb` Package:**
+#### 2. **Install Twilio and Requests Libraries**:
+Install the necessary libraries using `pip`:
 
-   - Click on the download link for the latest version of the **Duo Authentication Proxy** for Debian-based systems (e.g., Ubuntu).
-   - Alternatively, you can directly download it via `wget` by getting the link from the website. The download URL is typically something like:
-     
-     ```
-     https://dl.duosecurity.com/duoauthproxy-latest.deb
-     ```
+```bash
+pip3 install requests twilio
+```
 
-   - Use `wget` to download it directly to your server:
-     
-     ```bash
-     wget https://dl.duosecurity.com/duoauthproxy-latest.deb
-     ```
+#### 3. **Download and Install Duo from Source**:
+Download and install Duo Unix package:
+
+```bash
+# Download Duo Unix package (replace with actual link)
+wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
+tar -xvzf duo_unix-latest.tar.gz
+cd duo_unix-*
+./configure
+make
+sudo make install
+```
+
+#### 4. **Python Script for Duo and Twilio Authentication**:
+Here’s the complete Python script that handles **Twilio** and **Duo** authentication, allowing users to choose their authentication method.
+
+```python
+import base64
+import email.utils
+import hmac
+import hashlib
+import urllib.parse
+import requests
+import sys
+import getpass
+from twilio.rest import Client
+import random
+
+# Duo API Credentials (replace with your values)
+IKEY = "YOUR_INTEGRATION_KEY"
+SKEY = "YOUR_SECRET_KEY"
+API_HOST = "YOUR_API_HOSTNAME"
+
+# Twilio API Credentials (replace with your values)
+TWILIO_ACCOUNT_SID = "YOUR_TWILIO_ACCOUNT_SID"
+TWILIO_AUTH_TOKEN = "YOUR_TWILIO_AUTH_TOKEN"
+TWILIO_PHONE_NUMBER = "YOUR_TWILIO_PHONE_NUMBER"
+USER_PHONE_NUMBER = "USER_PHONE_NUMBER_FOR_OTP"  # User's phone number
+
+def sign_request(method, host, path, params, skey, ikey):
+    """
+    Generate HTTP headers with HMAC-SHA1 signature for Duo API.
+    """
+    now = email.utils.formatdate()
+    canonical = [now, method.upper(), host.lower(), path]
+
+    args = []
+    for key in sorted(params.keys()):
+        val = params[key]
+        args.append(f'{urllib.parse.quote(key, "~")}={urllib.parse.quote(val, "~")}')
+    canonical.append('&'.join(args))
+    canonical_string = '\n'.join(canonical)
+
+    # HMAC-SHA1 signing
+    signature = hmac.new(
+        skey.encode('utf-8'),
+        canonical_string.encode('utf-8'),
+        hashlib.sha1
+    ).hexdigest()
+
+    auth = f"{ikey}:{signature}"
+    headers = {
+        'Date': now,
+        'Authorization': f"Basic {base64.b64encode(auth.encode('utf-8')).decode('utf-8')}"
+    }
+    return headers
+
+def duo_auth(username, factor="push"):
+    """
+    Trigger Duo 2FA authentication (Push or SMS).
+    """
+    method = "POST"
+    path = "/rest/v1/auth"
+    params = {
+        "user": username,
+        "factor": factor,
+        "device": "auto"
+    }
+    headers = sign_request(method, API_HOST, path, params, SKEY, IKEY)
+    url = f"https://{API_HOST}{path}"
+    response = requests.post(url, data=params, headers=headers)
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+        sys.exit(1)
+
+def send_twilio_sms_otp():
+    """
+    Send OTP via Twilio SMS.
+    """
+    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    otp = generate_otp()
+    message = client.messages.create(
+        body=f"Your Twilio OTP code is: {otp}",
+        from_=TWILIO_PHONE_NUMBER,
+        to=USER_PHONE_NUMBER
+    )
+    return otp
+
+def send_twilio_voice_otp():
+    """
+    Send OTP via Twilio Voice Call.
+    """
+    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    otp = generate_otp()
+    call = client.calls.create(
+        to=USER_PHONE_NUMBER,
+        from_=TWILIO_PHONE_NUMBER,
+        twiml=f'<Response><Say>Your Twilio OTP code is: {otp}</Say></Response>'
+    )
+    return otp
+
+def generate_otp():
+    """
+    Generate a 6-digit OTP.
+    """
+    otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+    return otp
+
+def verify_twilio_otp(input_otp, correct_otp):
+    """
+    Verify the OTP entered by the user.
+    """
+    if input_otp == correct_otp:
+        print("Twilio OTP verification successful!")
+        return True
+    else:
+        print("Twilio OTP verification failed!")
+        return False
+
+def main():
+    """
+    Main function to handle Duo and Twilio 2FA for SSH.
+    """
+    username = getpass.getuser()  # Get the current logged-in user
+    print(f"Authenticating user {username} with Duo and Twilio...")
+
+    # Step 1: Ask the user to choose between Duo or Twilio
+    auth_method = input("Choose Authentication Method (1 for Duo, 2 for Twilio): ").strip()
+    
+    if auth_method == "1":
+        # Step 2: Ask user for Duo Push or SMS
+        duo_factor = input("Choose Duo method (1 for Push, 2 for SMS): ").strip()
+        duo_factor = "push" if duo_factor == "1" else "sms"
+        
+        # Step 3: Trigger Duo authentication
+        duo_response = duo_auth(username, factor=duo_factor)
+        if duo_response.get("stat") == "OK" and duo_response["response"]["result"] == "allow":
+            print("Duo authentication successful!")
+        else:
+            print("Duo authentication failed!")
+            sys.exit(1)
+    
+    elif auth_method == "2":
+        # Step 4: Ask user for Twilio SMS or Voice Call
+        otp_method = input("Choose Twilio OTP method (1 for SMS, 2 for Voice Call): ").strip()
+        if otp_method == "1":
+            otp = send_twilio_sms_otp()
+            print("SMS OTP sent.")
+        elif otp_method == "2":
+            otp = send_twilio_voice_otp()
+            print("Voice OTP call placed.")
+        else:
+            print("Invalid OTP method selected.")
+            sys.exit(1)
+
+        # Step 5: Prompt for OTP input
+        input_otp = input("Enter the OTP received: ").strip()
+
+        # Step 6: Verify the Twilio OTP
+        if verify_twilio_otp(input_otp, otp):
+            print("Twilio authentication successful!")
+        else:
+            print("Twilio OTP verification failed!")
+            sys.exit(1)
+    
+    else:
+        print("Invalid authentication method selected.")
+        sys.exit(1)
+
+    sys.exit(0)  # Allow login if authentication is successful
+
+if __name__ == "__main__":
+    main()
+```
 
 ---
 
-### Steps to Install Duo Authentication Proxy on Ubuntu
+### 5. **Configure SSH and PAM**:
+Follow these steps to configure SSH and integrate the Python script with PAM.
 
-1. **Install Duo Authentication Proxy**
-
-   After downloading the `.deb` package, you can proceed with the installation.
-
-   ```bash
-   sudo dpkg -i duoauthproxy-latest.deb
-   ```
-
-   If you encounter any dependency issues, run the following command to resolve them:
+1. **Edit `/etc/ssh/sshd_config`** to enable Challenge-Response Authentication:
 
    ```bash
-   sudo apt-get install -f
+   ChallengeResponseAuthentication yes
+   UsePAM yes
+   AuthenticationMethods publickey,keyboard-interactive
    ```
-
-   This will automatically install any missing dependencies.
-
-2. **Verify the Installation**
-
-   Check if the Duo Authentication Proxy service is installed:
-
+   Restart the SSH service:
    ```bash
-   sudo systemctl status duoauthproxy
+   sudo systemctl restart sshd
    ```
 
-   You should see an output indicating that the service is inactive or not yet started, which is expected after installation.
-
----
-
-### Steps to Configure the Duo Authentication Proxy
-
-1. **Backup the Existing Configuration File:**
-
-   It's a good idea to backup the configuration file before making changes:
-
+2. **Save the script** as `/usr/local/bin/duo_twilio_ssh_auth.py`:
    ```bash
-   sudo cp /etc/duo/duo.conf /etc/duo/duo.conf.backup
+   sudo nano /usr/local/bin/duo_twilio_ssh_auth.py
    ```
-
-2. **Edit the Configuration File:**
-
-   Open the configuration file for editing:
-
+   Paste the script, save, and make it executable:
    ```bash
-   sudo nano /etc/duo/duo.conf
+   sudo chmod +x /usr/local/bin/duo_twilio_ssh_auth.py
    ```
 
-3. **Add Your Duo Credentials:**
-
-   In the configuration file, you need to add the `ikey` (integration key), `skey` (secret key), and `host` (Duo API hostname) that you get from the Duo Admin Panel.
-
-   Example configuration for **RADIUS**:
-
-   ```ini
-   [duo]
-   ikey=YOUR_INTEGRATION_KEY
-   skey=YOUR_SECRET_KEY
-   host=api-XXXXXXXX.duosecurity.com
-   ```
-
-   Example configuration for **RADIUS server**:
-
-   ```ini
-   [radius_server_auto]
-   ikey=YOUR_INTEGRATION_KEY
-   skey=YOUR_SECRET_KEY
-   host=api-XXXXXXXX.duosecurity.com
-   port=1812
-   ```
-
-   Adjust the values according to the specifics of your Duo configuration.
-
-4. **Start the Duo Authentication Proxy Service:**
-
-   After configuring the Duo Authentication Proxy, start the service:
-
+3. **Configure PAM** by editing `/etc/pam.d/sshd`:
+   Add the following line:
    ```bash
-   sudo systemctl start duoauthproxy
-   ```
-
-   To ensure that the Duo Authentication Proxy starts on boot, enable the service:
-
-   ```bash
-   sudo systemctl enable duoauthproxy
+   auth required pam_exec.so /usr/local/bin/duo_twilio_ssh_auth.py
    ```
 
 ---
 
-### Test Duo Authentication Proxy
+### Testing:
 
-1. **Test the Duo Authentication Proxy Configuration:**
-
-   You can test the configuration and check for connectivity issues with the following command:
-
-   ```bash
-   sudo duoauthproxy_test
-   ```
-
-   This will check the connection to Duo's API and output any errors or issues.
+1. Try logging in via SSH. During login, you will be prompted:
+   - **Choose between Duo or Twilio**.
+   - If **Twilio** is selected, you will choose between **SMS or Voice Call** for OTP.
+   - If **Duo** is selected, you will choose between **Push or SMS** for verification.
+2. Both methods need to be verified successfully for the login to proceed.
 
 ---
 
-### Integrating Duo with OpenVPN (Using RADIUS)
-
-To integrate Duo with **OpenVPN** using **FreeRADIUS**:
-
-1. **Install FreeRADIUS** (if not already installed):
-
-   ```bash
-   sudo apt-get install freeradius
-   ```
-
-2. **Configure FreeRADIUS to Use Duo Authentication Proxy:**
-
-   Edit the FreeRADIUS client configuration file (`/etc/freeradius/3.0/clients.conf`):
-
-   ```bash
-   sudo nano /etc/freeradius/3.0/clients.conf
-   ```
-
-   Add a client configuration for OpenVPN (or your respective RADIUS client):
-
-   ```ini
-   client openvpn {
-       ipaddr = 127.0.0.1
-       secret = testing123
-       require_message_authenticator = no
-   }
-   ```
-
-3. **Enable Duo Integration in FreeRADIUS:**
-
-   Edit the `default` site configuration file to enable the Duo authentication module. Open `/etc/freeradius/3.0/sites-enabled/default` and add `duo` in the `authorize` section:
-
-   ```bash
-   sudo nano /etc/freeradius/3.0/sites-enabled/default
-   ```
-
-   In the `authorize` block, add:
-
-   ```bash
-   authorize {
-       duo
-   }
-   ```
-
-4. **Restart FreeRADIUS:**
-
-   After making the necessary changes, restart the FreeRADIUS service:
-
-   ```bash
-   sudo systemctl restart freeradius
-   ```
+### Notes:
+- This solution ensures that the user can choose between **Twilio** or **Duo** during SSH login and can further choose the type of OTP method (SMS, Voice Call, Push).
+- You can modify the logic to handle retries or additional security features based on your needs.
 
 ---
 
-### Final Testing
+### Duo Authentication Proxy:
+In this setup, **Duo Authentication Proxy** may not be required if you are directly using the **Duo API** for authentication. However, if you're setting up **Duo for SSH login** using the Duo Unix integration, you may need to configure a **Duo Authentication Proxy** for better control over authentication, especially in complex network environments. If your organization uses a Duo Authentication Proxy for managing users or for multi-location setups, then it's recommended to configure it as per Duo's official documentation.
 
-1. **Test Duo Authentication with OpenVPN** (or your configured service):
 
-   After the Duo Authentication Proxy and FreeRADIUS integration, you can test the authentication by trying to log in to your OpenVPN instance. After entering your credentials, you should be prompted for a second factor via Duo (push notification, passcode, or phone call).
 
-2. **Check Logs for Errors:**
-
-   If you encounter issues, you can view the Duo Authentication Proxy logs at:
-
-   ```bash
-   sudo cat /var/log/duo/duoauthproxy.log
-   ```
-
-   You can also check the FreeRADIUS logs for authentication details.
-
----
-
-### Troubleshooting
-
-- **Duo API Connectivity**: Ensure that the Duo Authentication Proxy server can connect to Duo’s API. Verify the firewall settings and ensure ports `443` (HTTPS) are open.
-- **FreeRADIUS Integration**: If you’re using FreeRADIUS, verify that it’s correctly pointing to the Duo Authentication Proxy and using the correct IP and port (default `127.0.0.1:1812`).
-  
----
-
-Let me know if you need further clarification or if something isn’t working as expected!
 
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
