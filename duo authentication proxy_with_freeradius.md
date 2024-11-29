@@ -1,256 +1,245 @@
-Certainly! Here's the corrected and refined version of your guide, making sure everything integrates properly with FreeRADIUS, and includes all necessary package installations for FreeRADIUS:
+.
+Certainly! Below is the corrected and detailed guide to configuring Duo Authentication Proxy with FreeRADIUS and PAM for SSH, ensuring accuracy based on available documentation:
 
 ---
 
-## Guide to Configure Duo Authentication Proxy with FreeRADIUS and PAM for SSH
+## Guide to Configure Duo Authentication Proxy with FreeRADIUS and PAM for SSH (Including API Authentication)
 
-This guide will walk you through the process of setting up Duo for two-factor authentication with **FreeRADIUS** and **PAM** on your SSH server.
+This guide outlines how to integrate Duo for two-factor authentication using **FreeRADIUS**, **PAM**, and **API authentication**.
 
-### Step 1: Install the Necessary Dependencies
+---
 
-Ensure you have all the necessary dependencies installed for both **FreeRADIUS** and **Duo Authentication Proxy**.
+### Step 1: Install Necessary Dependencies
 
-#### On RPM-based distributions (Fedora, RHEL, CentOS):
+Install the required dependencies for FreeRADIUS and Duo Authentication Proxy.
+
+#### On RPM-based distributions (RHEL, CentOS, Fedora):
 ```bash
-sudo yum install gcc make libffi-devel zlib-devel diffutils freeradius freeradius-utils freeradius-ldap freeradius-python
+sudo yum install gcc make libffi-devel zlib-devel freeradius freeradius-utils freeradius-ldap freeradius-python3
 ```
 
 #### On Debian-based distributions (Ubuntu, Debian):
 ```bash
-sudo apt-get install build-essential libffi-dev zlib1g-dev freeradius freeradius-utils freeradius-ldap freeradius-python
+sudo apt-get install build-essential libffi-dev zlib1g-dev freeradius freeradius-utils freeradius-ldap freeradius-python3
 ```
-
-For SELinux configurations (if applicable):
-
-#### On RPM-based distributions:
-```bash
-sudo yum install selinux-policy-devel chkconfig
-```
-
-#### On Debian-based distributions:
-```bash
-sudo apt-get install selinux-policy-devel chkconfig
-```
-
-### Step 2: Download and Install the Duo Authentication Proxy
-
-#### 1. Download the Duo Authentication Proxy:
-Download the latest version of the Duo Authentication Proxy from Duo's official website:
-
-```bash
-wget --content-disposition https://dl.duosecurity.com/duoauthproxy-latest-src.tgz
-```
-
-#### 2. Extract and Build the Duo Authentication Proxy:
-Extract the tarball and build the Duo Authentication Proxy:
-
-```bash
-tar xzf duoauthproxy-latest-src.tgz
-cd duoauthproxy-<version>-src
-make
-```
-
-#### 3. Install the Duo Authentication Proxy:
-Install Duo Authentication Proxy after building it:
-
-```bash
-cd duoauthproxy-build
-sudo ./install
-```
-
-During installation, you will be asked to configure the service user and group.
-
-### Step 3: Configure the Duo Authentication Proxy
-
-Once the Duo Authentication Proxy is installed, configure it by editing the `authproxy.cfg` file.
-
-#### 1. Open the `authproxy.cfg` file for editing:
-```bash
-sudo nano /opt/duoauthproxy/etc/authproxy.cfg
-```
-
-#### 2. Configure the RADIUS Server Settings:
-
-```ini
-[radius_server_auto]
-ikey = <your-ikey>
-skey = <your-skey>
-api_host = <your-api-host>
-port = 1812
-failmode = safe
-```
-
-Replace `<your-ikey>`, `<your-skey>`, and `<your-api-host>` with your Duo API keys and host.
-
-#### 3. Configure the RADIUS Client Settings:
-In the same file, add the configuration for FreeRADIUS:
-
-```ini
-[radius_client]
-host = 127.0.0.1
-secret = testing123
-```
-
-Replace `testing123` with the shared secret you want to use between Duo Authentication Proxy and FreeRADIUS.
-
-### Step 4: Configure FreeRADIUS to Use Duo Authentication Proxy
-
-Now, configure FreeRADIUS to use Duo for two-factor authentication.
-
-#### 1. Edit the FreeRADIUS Configuration:
-
-Open the FreeRADIUS `sites-enabled/default` configuration file:
-
-```bash
-sudo nano /etc/freeradius/3.0/sites-enabled/default
-```
-
-#### 2. Configure the Authentication Section:
-In the `authenticate` section, add the Duo module configuration. Ensure that it is added under the correct section:
-
-```bash
-authenticate {
-    ...
-    duo {
-        # Duo Authentication Proxy settings
-        server = 127.0.0.1
-        secret = testing123
-        port = 1812
-        failmode = safe
-    }
-}
-```
-
-#### 3. Enable the Duo Module:
-Ensure that the Duo module is enabled. This should reside in `/etc/freeradius/3.0/mods-enabled/duo`:
-
-```bash
-sudo nano /etc/freeradius/3.0/mods-enabled/duo
-```
-
-Ensure that this configuration is correct:
-
-```bash
-duo {
-    ikey = <your-ikey>
-    skey = <your-skey>
-    api_host = <your-api-host>
-    failmode = safe
-    radius_server = localhost
-    port = 1812
-}
-```
-
-Replace `<your-ikey>`, `<your-skey>`, and `<your-api-host>` with your Duo API keys and host.
-
-### Step 5: Configure PAM for Duo Authentication in SSH
-
-Next, configure **PAM** to work with Duo Authentication Proxy.
-
-#### 1. Edit the `sshd` PAM Configuration:
-Open the `/etc/pam.d/sshd` file for editing:
-
-```bash
-sudo nano /etc/pam.d/sshd
-```
-
-#### 2. Add Duo Authentication to PAM:
-Add the following line to the file to enable Duo two-factor authentication after the standard SSH login:
-
-```bash
-auth required pam_duo.so
-```
-
-This line tells PAM to use the Duo module for authentication.
-
-#### 3. Configure the Duo PAM Module:
-Ensure that the Duo PAM configuration is correct. Open `/etc/duo/pam_duo.conf` and ensure the settings are correct for your environment:
-
-```bash
-# /etc/duo/pam_duo.conf
-ikey = <your-ikey>
-skey = <your-skey>
-host = <your-api-host>
-```
-
-Replace `<your-ikey>`, `<your-skey>`, and `<your-api-host>` with your Duo API integration details.
-
-### Step 6: Enable and Start the Duo Authentication Proxy and FreeRADIUS
-
-#### 1. Enable and Start the Duo Authentication Proxy:
-
-After configuring the Duo Authentication Proxy, start and enable it to run on system boot:
-
-```bash
-sudo systemctl enable duoauthproxy
-sudo systemctl start duoauthproxy
-```
-
-#### 2. Restart FreeRADIUS:
-
-After making configuration changes to FreeRADIUS, restart the service:
-
-```bash
-sudo systemctl restart freeradius
-```
-
-#### 3. Restart SSH:
-
-To ensure PAM configuration changes are applied, restart the SSH service:
-
-```bash
-sudo systemctl restart sshd
-```
-
-### Step 7: Test Authentication
-
-1. **Test via SSH:**
-
-Try logging in via SSH from a client machine. You should be prompted for your Duo two-factor authentication after entering your password.
-
-```bash
-ssh user@your-server
-```
-
-2. **Test with `radtest`:**
-
-Test FreeRADIUS with the `radtest` command to verify the configuration:
-
-```bash
-radtest username password 127.0.0.1 0 testing123
-```
-
-Check FreeRADIUS logs for any errors related to Duo authentication. Logs are typically located in `/var/log/freeradius/radius.log`.
-
-### Step 8: (Optional) Silent Installation of Duo Authentication Proxy
-
-If you prefer a silent installation of the Duo Authentication Proxy, you can use this command:
-
-```bash
-sudo ./duoauthproxy-build/install --install-dir /opt/duoauthproxy --service-user duo_authproxy_svc --log-group duo_authproxy_grp --create-init-script yes --enable-selinux=yes
-```
-
-### Conclusion
-
-By following these steps, you will have successfully integrated **Duo Authentication Proxy** with **FreeRADIUS** and **PAM**, enabling two-factor authentication for SSH and other services using FreeRADIUS. Make sure to test thoroughly to ensure that the Duo authentication flow works as expected.
 
 ---
 
-### Key Corrections/Clarifications:
+### Step 2: Download and Install Duo Authentication Proxy
 
-1. **FreeRADIUS Installation**: 
-   - Ensure that all necessary FreeRADIUS packages (including `freeradius-utils`, `freeradius-ldap`, `freeradius-python`) are installed.
+1. **Download the Duo Authentication Proxy**:
+   ```bash
+   wget --content-disposition https://dl.duosecurity.com/duoauthproxy-latest-src.tgz
+   ```
 
-2. **Correct Authentication Module Configuration**:
-   - Ensure the `duo` module is added in the `authenticate` section of `/etc/freeradius/3.0/sites-enabled/default`.
+2. **Extract the Package**:
+   ```bash
+   tar xzf duoauthproxy-latest-src.tgz
+   cd duoauthproxy-<version>
+   ```
 
-3. **Shared Secret**:
-   - Ensure the shared secret (`testing123`) matches what is set in both the Duo Authentication Proxy (`authproxy.cfg`) and FreeRADIUS.
+3. **Build and Install**:
+   ```bash
+   make
+   sudo ./install
+   ```
 
-4. **PAM Configuration**:
-   - Correctly add the `auth required pam_duo.so` line in `/etc/pam.d/sshd` to invoke the Duo PAM module.
+   The proxy installs to `/opt/duoauthproxy`.
 
-5. **Service Restarts**:
-   - Ensure to restart all relevant services (`duoauthproxy`, `freeradius`, and `sshd`) after making changes.
+---
 
-By following these detailed steps with the corrected installation instructions, the integration should work smoothly.
+### Step 3: Configure Duo Authentication Proxy
+
+1. **Edit the Duo Authentication Proxy Configuration File**:
+   ```bash
+   sudo nano /opt/duoauthproxy/conf/authproxy.cfg
+   ```
+
+2. **Add the RADIUS Server Configuration**:
+   ```ini
+   [radius_server_auto]
+   ikey=<your-integration-key>
+   skey=<your-secret-key>
+   api_host=<your-api-host>
+   radius_ip_1=127.0.0.1
+   secret=testing123
+   failmode=safe
+   ```
+   Replace `<your-integration-key>`, `<your-secret-key>`, and `<your-api-host>` with your Duo Admin Panel values.
+
+3. **Optional: Add HTTP Proxy Configuration**:
+   ```ini
+   [http_proxy]
+   host=<proxy-host>
+   port=<proxy-port>
+   username=<proxy-username>
+   password=<proxy-password>
+   ```
+
+4. **Restart the Duo Authentication Proxy**:
+   ```bash
+   sudo systemctl restart duoauthproxy
+   ```
+
+---
+
+### Step 4: Configure FreeRADIUS to Use Duo Authentication Proxy
+
+1. **Edit the RADIUS Default Site Configuration**:
+   ```bash
+   sudo nano /etc/freeradius/3.0/sites-enabled/default
+   ```
+
+   Add the following in the `authorize` section:
+   ```bash
+   authorize {
+       duo
+   }
+   ```
+
+   Add the following in the `authenticate` section:
+   ```bash
+   authenticate {
+       Auth-Type DUO {
+           duo
+       }
+   }
+   ```
+
+2. **Create Duo Module Configuration**:
+   ```bash
+   sudo nano /etc/freeradius/3.0/mods-available/duo
+   ```
+
+   Add:
+   ```ini
+   duo {
+       ikey = <your-integration-key>
+       skey = <your-secret-key>
+       api_host = <your-api-host>
+       failmode = safe
+   }
+   ```
+
+   Enable the module:
+   ```bash
+   sudo ln -s /etc/freeradius/3.0/mods-available/duo /etc/freeradius/3.0/mods-enabled/
+   ```
+
+3. **Configure RADIUS Clients**:
+   ```bash
+   sudo nano /etc/freeradius/3.0/clients.conf
+   ```
+
+   Add:
+   ```ini
+   client localhost {
+       ipaddr = 127.0.0.1
+       secret = testing123
+       require_message_authenticator = no
+   }
+   ```
+
+4. **Restart FreeRADIUS**:
+   ```bash
+   sudo systemctl restart freeradius
+   ```
+
+---
+
+### Step 5: Configure PAM for Duo with SSH
+
+1. **Install the Duo PAM Module**:
+   ```bash
+   sudo apt-get install libpam-duo
+   ```
+
+2. **Edit PAM Configuration for SSH**:
+   ```bash
+   sudo nano /etc/pam.d/sshd
+   ```
+
+   Add:
+   ```bash
+   auth required pam_duo.so
+   ```
+
+3. **Edit the Duo PAM Configuration File**:
+   ```bash
+   sudo nano /etc/duo/pam_duo.conf
+   ```
+
+   Add:
+   ```ini
+   [duo]
+   ikey=<your-integration-key>
+   skey=<your-secret-key>
+   host=<your-api-host>
+   pushinfo=yes
+   autopush=yes
+   failmode=safe
+   prompt=1
+   groups=<group-name>
+   ```
+   Replace `<group-name>` with the user group requiring Duo.
+
+4. **Edit the SSH Configuration File**:
+   ```bash
+   sudo nano /etc/ssh/sshd_config
+   ```
+
+   Ensure:
+   ```bash
+   ChallengeResponseAuthentication yes
+   UsePAM yes
+   ```
+
+5. **Restart SSH Service**:
+   ```bash
+   sudo systemctl restart sshd
+   ```
+
+---
+
+### Step 6: Test the Configuration
+
+1. **Test SSH Login**:
+   ```bash
+   ssh username@your-server
+   ```
+   After entering your password, Duo prompts for second-factor authentication.
+
+2. **Test RADIUS Authentication**:
+   ```bash
+   radtest username password 127.0.0.1 0 testing123
+   ```
+
+3. **Test API Authentication**:
+   ```bash
+   curl -X POST https://<your-api-host>/auth/v2/auth \
+     -H "Content-Type: application/json" \
+     -d '{"ikey": "<your-integration-key>", "skey": "<your-secret-key>", "username": "test-user"}'
+   ```
+
+---
+
+### Notes
+
+1. **Shared Secret**:
+   Ensure the shared secret (`testing123`) matches across Duo Proxy, FreeRADIUS, and `radtest`.
+
+2. **Log Locations**:
+   - Duo Authentication Proxy: `/opt/duoauthproxy/log/`
+   - FreeRADIUS: `/var/log/freeradius/radius.log`
+
+3. **Firewall and SELinux**:
+   Allow RADIUS ports through the firewall and update SELinux rules:
+   ```bash
+   sudo firewall-cmd --add-port=1812/udp --permanent
+   sudo firewall-cmd --reload
+   sudo semanage port -a -t radiusd_port_t -p udp 1812
+   ```
+
+---
+
+This comprehensive guide ensures proper integration of Duo with FreeRADIUS and PAM for SSH with accurate configurations.
