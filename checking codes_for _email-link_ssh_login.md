@@ -9293,269 +9293,225 @@ done
 This solution integrates SSH login approval with MySQL, using Pushbullet for notifications, and includes explicit handling of the MySQL port number for each script.
 .
 🫥😘🫥🫥😘🫥😘🫥😘🫥😘🫥😘🫥😘🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🥹🫥🫥🥹🫥🥹😊🫥😊🫥�😊🫥😊☺️😊☺️😊☺️😊☺️😊☺️☺️😊☺️😊☺️😊☺️🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥😊😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊
-
-Here's the revised code with detailed steps for integrating Duo and Twilio authentication, including the consideration of whether a Duo authentication proxy is required:
+.
+Here’s the updated guide where OTP verification for Twilio SMS and Voice Call does not involve creating `.txt` files or hosting temporary files. Instead, the OTP is stored in memory and verified directly during runtime.
 
 ---
 
-### Steps:
+## **Enhanced 2FA for SSH Logins with Duo Security and Twilio**
 
-#### 1. **Install Required Tools**:
-Ensure your system has `python3`, `pip`, and the required dependencies. Additionally, install the **Twilio SDK** and **requests** library for Duo integration.
+---
 
+### **Overview**  
+This guide integrates Duo Security, Twilio SMS OTP, and Twilio Voice Call OTP as options for two-factor authentication (2FA) during SSH logins. Users can choose their preferred method for added security and flexibility.
+
+---
+
+### **Prerequisites**
+
+1. **Duo Security Account**:  
+   - Sign up at [Duo Security](https://www.duosecurity.com/).  
+   - Obtain:
+     - Integration Key (`ikey`)
+     - Secret Key (`skey`)
+     - API Hostname.  
+
+2. **Twilio Account**:  
+   - Sign up at [Twilio](https://www.twilio.com/).  
+   - Obtain:
+     - Account SID
+     - Auth Token
+     - Twilio Phone Number.  
+
+3. **Dependencies**:  
+   - `libpam` for PAM module support.  
+   - `curl` for HTTP requests.  
+   - `jq` (for parsing JSON).  
+   - OpenSSL development headers and libraries.  
+
+Install dependencies on Ubuntu:  
 ```bash
-sudo apt update
-sudo apt install python3 python3-pip build-essential libssl-dev
+sudo apt-get install libssl-dev build-essential curl jq
 ```
 
-#### 2. **Install Twilio and Requests Libraries**:
-Install the necessary libraries using `pip`:
+---
 
+### **Setup Instructions**
+
+#### 1. **Install Duo Unix**  
+Download and install Duo Unix for SSH integration:  
 ```bash
-pip3 install requests twilio
-```
-
-#### 3. **Download and Install Duo from Source**:
-Download and install Duo Unix package:
-
-```bash
-# Download Duo Unix package (replace with actual link)
 wget https://dl.duosecurity.com/duo_unix-latest.tar.gz
-tar -xvzf duo_unix-latest.tar.gz
+tar zxf duo_unix-latest.tar.gz
 cd duo_unix-*
-./configure
-make
-sudo make install
+./configure --prefix=/usr && make && sudo make install
 ```
 
-#### 4. **Python Script for Duo and Twilio Authentication**:
-Here’s the complete Python script that handles **Twilio** and **Duo** authentication, allowing users to choose their authentication method.
-
-```python
-import base64
-import email.utils
-import hmac
-import hashlib
-import urllib.parse
-import requests
-import sys
-import getpass
-from twilio.rest import Client
-import random
-
-# Duo API Credentials (replace with your values)
-IKEY = "YOUR_INTEGRATION_KEY"
-SKEY = "YOUR_SECRET_KEY"
-API_HOST = "YOUR_API_HOSTNAME"
-
-# Twilio API Credentials (replace with your values)
-TWILIO_ACCOUNT_SID = "YOUR_TWILIO_ACCOUNT_SID"
-TWILIO_AUTH_TOKEN = "YOUR_TWILIO_AUTH_TOKEN"
-TWILIO_PHONE_NUMBER = "YOUR_TWILIO_PHONE_NUMBER"
-USER_PHONE_NUMBER = "USER_PHONE_NUMBER_FOR_OTP"  # User's phone number
-
-def sign_request(method, host, path, params, skey, ikey):
-    """
-    Generate HTTP headers with HMAC-SHA1 signature for Duo API.
-    """
-    now = email.utils.formatdate()
-    canonical = [now, method.upper(), host.lower(), path]
-
-    args = []
-    for key in sorted(params.keys()):
-        val = params[key]
-        args.append(f'{urllib.parse.quote(key, "~")}={urllib.parse.quote(val, "~")}')
-    canonical.append('&'.join(args))
-    canonical_string = '\n'.join(canonical)
-
-    # HMAC-SHA1 signing
-    signature = hmac.new(
-        skey.encode('utf-8'),
-        canonical_string.encode('utf-8'),
-        hashlib.sha1
-    ).hexdigest()
-
-    auth = f"{ikey}:{signature}"
-    headers = {
-        'Date': now,
-        'Authorization': f"Basic {base64.b64encode(auth.encode('utf-8')).decode('utf-8')}"
-    }
-    return headers
-
-def duo_auth(username, factor="push"):
-    """
-    Trigger Duo 2FA authentication (Push or SMS).
-    """
-    method = "POST"
-    path = "/rest/v1/auth"
-    params = {
-        "user": username,
-        "factor": factor,
-        "device": "auto"
-    }
-    headers = sign_request(method, API_HOST, path, params, SKEY, IKEY)
-    url = f"https://{API_HOST}{path}"
-    response = requests.post(url, data=params, headers=headers)
-
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Error: {response.status_code} - {response.text}")
-        sys.exit(1)
-
-def send_twilio_sms_otp():
-    """
-    Send OTP via Twilio SMS.
-    """
-    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-    otp = generate_otp()
-    message = client.messages.create(
-        body=f"Your Twilio OTP code is: {otp}",
-        from_=TWILIO_PHONE_NUMBER,
-        to=USER_PHONE_NUMBER
-    )
-    return otp
-
-def send_twilio_voice_otp():
-    """
-    Send OTP via Twilio Voice Call.
-    """
-    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-    otp = generate_otp()
-    call = client.calls.create(
-        to=USER_PHONE_NUMBER,
-        from_=TWILIO_PHONE_NUMBER,
-        twiml=f'<Response><Say>Your Twilio OTP code is: {otp}</Say></Response>'
-    )
-    return otp
-
-def generate_otp():
-    """
-    Generate a 6-digit OTP.
-    """
-    otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-    return otp
-
-def verify_twilio_otp(input_otp, correct_otp):
-    """
-    Verify the OTP entered by the user.
-    """
-    if input_otp == correct_otp:
-        print("Twilio OTP verification successful!")
-        return True
-    else:
-        print("Twilio OTP verification failed!")
-        return False
-
-def main():
-    """
-    Main function to handle Duo and Twilio 2FA for SSH.
-    """
-    username = getpass.getuser()  # Get the current logged-in user
-    print(f"Authenticating user {username} with Duo and Twilio...")
-
-    # Step 1: Ask the user to choose between Duo or Twilio
-    auth_method = input("Choose Authentication Method (1 for Duo, 2 for Twilio): ").strip()
-    
-    if auth_method == "1":
-        # Step 2: Ask user for Duo Push or SMS
-        duo_factor = input("Choose Duo method (1 for Push, 2 for SMS): ").strip()
-        duo_factor = "push" if duo_factor == "1" else "sms"
-        
-        # Step 3: Trigger Duo authentication
-        duo_response = duo_auth(username, factor=duo_factor)
-        if duo_response.get("stat") == "OK" and duo_response["response"]["result"] == "allow":
-            print("Duo authentication successful!")
-        else:
-            print("Duo authentication failed!")
-            sys.exit(1)
-    
-    elif auth_method == "2":
-        # Step 4: Ask user for Twilio SMS or Voice Call
-        otp_method = input("Choose Twilio OTP method (1 for SMS, 2 for Voice Call): ").strip()
-        if otp_method == "1":
-            otp = send_twilio_sms_otp()
-            print("SMS OTP sent.")
-        elif otp_method == "2":
-            otp = send_twilio_voice_otp()
-            print("Voice OTP call placed.")
-        else:
-            print("Invalid OTP method selected.")
-            sys.exit(1)
-
-        # Step 5: Prompt for OTP input
-        input_otp = input("Enter the OTP received: ").strip()
-
-        # Step 6: Verify the Twilio OTP
-        if verify_twilio_otp(input_otp, otp):
-            print("Twilio authentication successful!")
-        else:
-            print("Twilio OTP verification failed!")
-            sys.exit(1)
-    
-    else:
-        print("Invalid authentication method selected.")
-        sys.exit(1)
-
-    sys.exit(0)  # Allow login if authentication is successful
-
-if __name__ == "__main__":
-    main()
+Configure Duo by editing `/etc/duo/login_duo.conf`:  
+```plaintext
+[duo]
+ikey = <YOUR_INTEGRATION_KEY>
+skey = <YOUR_SECRET_KEY>
+host = <YOUR_API_HOSTNAME>
 ```
 
 ---
 
-### 5. **Configure SSH and PAM**:
-Follow these steps to configure SSH and integrate the Python script with PAM.
+### **Twilio OTP Scripts**
 
-1. **Edit `/etc/ssh/sshd_config`** to enable Challenge-Response Authentication:
+#### 2. **Twilio SMS OTP Script**  
+Create a script for SMS OTP delivery:  
+```bash
+sudo nano /usr/local/bin/twilio_sms_auth.sh
+```
 
-   ```bash
-   ChallengeResponseAuthentication yes
-   UsePAM yes
-   AuthenticationMethods publickey,keyboard-interactive
-   ```
-   Restart the SSH service:
-   ```bash
-   sudo systemctl restart sshd
-   ```
+Add the following:  
+```bash
+#!/bin/bash
 
-2. **Save the script** as `/usr/local/bin/duo_twilio_ssh_auth.py`:
-   ```bash
-   sudo nano /usr/local/bin/duo_twilio_ssh_auth.py
-   ```
-   Paste the script, save, and make it executable:
-   ```bash
-   sudo chmod +x /usr/local/bin/duo_twilio_ssh_auth.py
-   ```
+TWILIO_ACCOUNT_SID="<YOUR_ACCOUNT_SID>"
+TWILIO_AUTH_TOKEN="<YOUR_AUTH_TOKEN>"
+FROM_PHONE="<YOUR_TWILIO_PHONE>"
+TO_PHONE="<USER_PHONE>"
 
-3. **Configure PAM** by editing `/etc/pam.d/sshd`:
-   Add the following line:
-   ```bash
-   auth required pam_exec.so /usr/local/bin/duo_twilio_ssh_auth.py
-   ```
+# Generate a random OTP
+CODE=$(shuf -i 100000-999999 -n 1)
+
+# Send OTP via SMS
+RESPONSE=$(curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json" \
+--data-urlencode "Body=Your SSH OTP is: $CODE" \
+--data-urlencode "From=$FROM_PHONE" \
+--data-urlencode "To=$TO_PHONE" \
+-u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN")
+
+if [[ $(echo "$RESPONSE" | jq -r '.error_code') != "null" ]]; then
+  echo "Failed to send OTP via SMS. Authentication aborted."
+  exit 1
+fi
+
+# Prompt for verification
+read -rsp "Enter the OTP sent to your phone: " INPUT_CODE
+echo ""
+
+if [[ "$INPUT_CODE" == "$CODE" ]]; then
+  echo "Authentication successful"
+  exit 0
+else
+  echo "Authentication failed"
+  exit 1
+fi
+```
+
+Make the script executable:  
+```bash
+sudo chmod +x /usr/local/bin/twilio_sms_auth.sh
+```
 
 ---
 
-### Testing:
+#### 3. **Twilio Voice Call OTP Script**  
+Create a script for voice call OTP delivery:  
+```bash
+sudo nano /usr/local/bin/twilio_call_auth.sh
+```
 
-1. Try logging in via SSH. During login, you will be prompted:
-   - **Choose between Duo or Twilio**.
-   - If **Twilio** is selected, you will choose between **SMS or Voice Call** for OTP.
-   - If **Duo** is selected, you will choose between **Push or SMS** for verification.
-2. Both methods need to be verified successfully for the login to proceed.
+Add the following:  
+```bash
+#!/bin/bash
+
+TWILIO_ACCOUNT_SID="<YOUR_ACCOUNT_SID>"
+TWILIO_AUTH_TOKEN="<YOUR_AUTH_TOKEN>"
+FROM_PHONE="<YOUR_TWILIO_PHONE>"
+TO_PHONE="<USER_PHONE>"
+
+# Generate a random OTP
+CODE=$(shuf -i 100000-999999 -n 1)
+
+# Use Twilio's Programmable Voice API to make the call
+CALL_RESPONSE=$(curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Calls.json" \
+--data-urlencode "Twiml=<Response><Say>Your SSH OTP is: $CODE. Please enter it to proceed.</Say></Response>" \
+--data-urlencode "From=$FROM_PHONE" \
+--data-urlencode "To=$TO_PHONE" \
+-u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN")
+
+if [[ $(echo "$CALL_RESPONSE" | jq -r '.error_code') != "null" ]]; then
+  echo "Failed to make voice call. Authentication aborted."
+  exit 1
+fi
+
+# Prompt for verification
+read -rsp "Enter the OTP received via call: " INPUT_CODE
+echo ""
+
+if [[ "$INPUT_CODE" == "$CODE" ]]; then
+  echo "Authentication successful"
+  exit 0
+else
+  echo "Authentication failed"
+  exit 1
+fi
+```
+
+Make the script executable:  
+```bash
+sudo chmod +x /usr/local/bin/twilio_call_auth.sh
+```
 
 ---
 
-### Notes:
-- This solution ensures that the user can choose between **Twilio** or **Duo** during SSH login and can further choose the type of OTP method (SMS, Voice Call, Push).
-- You can modify the logic to handle retries or additional security features based on your needs.
+#### 4. **2FA Selection Script**  
+Create a script for users to select their preferred 2FA method:  
+```bash
+sudo nano /usr/local/bin/ssh_2fa.sh
+```
+
+Add the following:  
+```bash
+#!/bin/bash
+
+echo "Choose a 2FA method:"
+echo "1. Duo Security"
+echo "2. Twilio SMS OTP"
+echo "3. Twilio Voice Call OTP"
+read -rp "Enter your choice (1, 2, or 3): " CHOICE
+
+case "$CHOICE" in
+  1) /usr/sbin/login_duo ;;
+  2) /usr/local/bin/twilio_sms_auth.sh ;;
+  3) /usr/local/bin/twilio_call_auth.sh ;;
+  *) echo "Invalid choice. Authentication failed."; exit 1 ;;
+esac
+```
+
+Make the script executable:  
+```bash
+sudo chmod +x /usr/local/bin/ssh_2fa.sh
+```
 
 ---
 
-### Duo Authentication Proxy:
-In this setup, **Duo Authentication Proxy** may not be required if you are directly using the **Duo API** for authentication. However, if you're setting up **Duo for SSH login** using the Duo Unix integration, you may need to configure a **Duo Authentication Proxy** for better control over authentication, especially in complex network environments. If your organization uses a Duo Authentication Proxy for managing users or for multi-location setups, then it's recommended to configure it as per Duo's official documentation.
+### **Integrate with SSH**  
+Edit the SSH configuration file:  
+```bash
+sudo nano /etc/ssh/sshd_config
+```
 
+Add or update:  
+```plaintext
+ForceCommand /usr/local/bin/ssh_2fa.sh
+PermitTunnel no
+AllowTcpForwarding no
+```
+
+Restart the SSH service:  
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
+### **Conclusion**  
+This updated guide avoids the use of temporary `.txt` files for OTP handling and ensures secure runtime comparisons for both SMS and voice call authentication. It integrates Duo Security, Twilio SMS, and Twilio Voice Call OTP as flexible and secure 2FA options for SSH logins.
 
 
 🫥🥰🫥🥰🫥😊🫥🫥😊🫥😊🫥☺️🫥😊🫥😊🫥🫥😊🫥😊🫥😊🫥😊🫥😊🫥😊🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥😊🫥😊🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰🫥🥰🫥😍🫥😍🫥🫥😍🫥😍🫥😍🫥☺️🫥☺️🫥😍🫥🫥😍🫥😍🫥😍🫥🥰🫥🥰🫥🫥🥰🫥🥰🫥🥰🫥🥰😍🥰😍🥰😍☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥😊🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥
