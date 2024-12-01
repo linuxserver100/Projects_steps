@@ -9395,7 +9395,7 @@ echo ""
 
 if [[ "$INPUT_CODE" == "$CODE" ]]; then
   echo "Authentication successful"
-  exit 0
+  exec /bin/bash
 else
   echo "Authentication failed"
   exit 1
@@ -9445,7 +9445,7 @@ echo ""
 
 if [[ "$INPUT_CODE" == "$CODE" ]]; then
   echo "Authentication successful"
-  exit 0
+  exec /bin/bash
 else
   echo "Authentication failed"
   exit 1
@@ -9471,8 +9471,8 @@ Add the following:
 
 echo "Choose a 2FA method:"
 echo "1. Duo Security"
-echo "2. Twilio SMS OTP"
-echo "3. Twilio Voice Call OTP"
+echo "2. Secure SMS OTP"
+echo "3. Secure Voice Call OTP"
 read -rp "Enter your choice (1, 2, or 3): " CHOICE
 
 case "$CHOICE" in
