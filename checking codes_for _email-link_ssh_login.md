@@ -9826,8 +9826,9 @@ _twilio_ssh_auth.py
 
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
+.
 
-Sure! Below is the rewritten guide with **predefined phone numbers** and **device IDs** instead of asking the user for them interactively.
+Certainly! Below is a rewritten version of the guide, which details the setup, scripts, and implementation for integrating **Pushbullet** and **Twilio** 2FA into your SSH login process. This guide includes the addition of a prompt asking the user to select either **Pushbullet** or **Twilio** for OTP verification and further options for choosing **SMS** or **Call** for Twilio-based OTP delivery.
 
 ---
 
@@ -10059,14 +10060,20 @@ $mongoCollection = "users";
 $collection = $client->$mongoDb->$mongoCollection;
 
 // Predefined parameters
-$method = "pushbullet";  // Or "twilio"
-$device_id = "predefined_device_id";  // Or empty if using Twilio
+$method = "pushbullet";  //
+
+ Or "twilio"
+$device_id = "predefined_device_id";  // Or empty
+
+
+
+// If using Twilio
+
+
 $phone_number = "+1234567890";  // For Twilio
 
 // Verification code (assuming we receive it somehow)
-$code = "123456
-
-";  // This would be dynamically received in a real case
+$code = "123456";  // This would be dynamically received in a real case
 
 // Handle Pushbullet or Twilio OTP based on predefined method
 if ($method == 'pushbullet') {
@@ -10081,6 +10088,8 @@ if ($method == 'pushbullet') {
         echo "Device verified successfully.";
     } else {
         echo "Invalid verification code. Access denied.";
+        // Delete user data from MongoDB after denial
+        $collection->deleteOne(['device_id' => $device_id]);
     }
 } elseif ($method == 'twilio') {
     // Verify Twilio OTP
@@ -10094,6 +10103,8 @@ if ($method == 'pushbullet') {
         echo "Phone verified successfully.";
     } else {
         echo "Invalid OTP. Access denied.";
+        // Delete user data from MongoDB after denial
+        $collection->deleteOne(['phone_number' => $phone_number]);
     }
 } else {
     echo "Invalid method or parameters.";
@@ -10133,7 +10144,7 @@ Modify the SSH configuration to run a script that checks Pushbullet or Twilio ve
 
 ### **7. 2FA Validation Script (`validate_2fa.sh`)**
 
-This script checks whether the user’s Pushbullet or Twilio verification is complete in MongoDB and denies access if not verified.
+This script checks whether the user’s Pushbullet or Twilio verification is complete in MongoDB and denies access if not verified. If verification fails, the user's data is deleted from MongoDB.
 
 #### **Script: `/usr/local/bin/validate_2fa.sh`**
 
@@ -10177,6 +10188,12 @@ if [[ "$VERIFIED" == "true" ]]; then
     exec $SHELL
 else
     echo "Verification failed. Access denied."
+    # Delete user data from MongoDB after denial
+    if [ "$METHOD" == "pushbullet" ]; then
+        mongosh --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ device_id: '$USER_DEVICE_ID' });"
+    elif [ "$METHOD" == "twilio" ]; then
+        mongosh --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ phone_number: '$USER_PHONE_NUMBER' });"
+    fi
     exit 1
 fi
 ```
@@ -10215,10 +10232,12 @@ fi
    ssh youruser@your-server-ip
    ```
 
-   - **If the device is verified**: The user is granted access, and the device verification status is updated in MongoDB.
-   - **If the device is not verified**: The user is prompted to authenticate via either Pushbullet or Twilio, after which access is either granted or denied based on the verification.
+   - **Prompt for Twilio or Pushbullet:** The user will be prompted to select either **Pushbullet** or **Twilio** for OTP verification.
+   - **If Twilio is selected:** The user will be asked to choose between **SMS** or **Call** for OTP delivery.
+   - **If the device is verified:** The user is granted access, and the device verification status is updated in MongoDB.
+   - **If the device is not verified:** The user is prompted to authenticate via either **Pushbullet** or **Twilio**. If access is denied, the user's data is deleted from MongoDB.
 
----
+--- 
 
 ### **Optional Enhancements**
 
@@ -10231,9 +10250,7 @@ fi
    - Use SSL/TLS for MongoDB connections for encrypted communication.
    - Ensure SSH key-based authentication for added security.
 
-This updated guide integrates **Pushbullet** for 2FA and **Twilio** for SMS/Call OTP verification into your SSH login process, ensuring a secure authentication flow with predefined parameters.
-
-
+This setup ensures that **Pushbullet** and **Twilio** 2FA are integrated into your SSH login process, providing a secure and flexible authentication flow.
 
 
 
