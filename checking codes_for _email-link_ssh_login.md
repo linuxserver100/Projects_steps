@@ -9827,7 +9827,8 @@ _twilio_ssh_auth.py
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
 
-.Certainly! Below is the updated version of the code with the required changes. The **Pushbullet token** has been replaced by an **email for verification**, and the **user deletion process** is now handled within the MongoDB database rather than through an external script.
+
+Certainly! Here's the updated version of the code with the required changes, where **Pushbullet** now uses the **email for verification** instead of the user ID.
 
 ---
 
@@ -9880,9 +9881,9 @@ EMAIL="USER_EMAIL"  # Email address for Pushbullet user verification
 MONGO_URI="mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority"
 USERNAME=$(whoami)
 
-mongo "$MONGO_URI" --eval "db.verification.insertOne({username: '$USERNAME', status: 'pending', created_at: new Date()})"
+mongo "$MONGO_URI" --eval "db.verification.insertOne({email: '$EMAIL', status: 'pending', created_at: new Date()})"
 
-REQUEST_ID=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: '$USERNAME'}).sort({created_at: -1}).limit(1)._id.valueOf()")
+REQUEST_ID=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({email: '$EMAIL'}).sort({created_at: -1}).limit(1)._id.valueOf()")
 
 TITLE="SSH Login Attempt"
 MESSAGE="Login attempt on your server. Approve/Deny: http://your-server-ip/ssh_approval/approval.php?id=$REQUEST_ID"
@@ -9992,7 +9993,7 @@ case $choice in
         /usr/local/bin/send_push_notification.sh
         STATUS="pending"
         while [ "$STATUS" == "pending" ]; do
-            STATUS=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: '$USERNAME'}).sort({created_at: -1}).limit(1).status")
+            STATUS=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({email: '$USERNAME'}).sort({created_at: -1}).limit(1).status")
             sleep 2
         done
         [ "$STATUS" == "approved" ] && exit 0 || exit 1
@@ -10043,13 +10044,13 @@ sudo mkdir -p /var/www/html/ssh_approval
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SSH Login Approval
-
-</title>
+    <title>SSH Login Approval</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            text-align: center;
+           
+
+ text-align: center;
             margin-top: 50px;
         }
         .button {
@@ -10126,7 +10127,10 @@ sudo systemctl restart sshd
 ### **Step 6: Test the System**
 SSH into the server and test all methods.  
 
-This completes the setup for secure 2FA SSH authentication using MongoDB Atlas with a PHP approval script featuring email-based Pushbullet notification and user deletion handled within MongoDB.
+This completes the setup for secure 2FA SSH authentication using MongoDB Atlas with a PHP approval script featuring **email-based Pushbullet notification** and user deletion handled within MongoDB.
+
+
+
 
 After the Duo authentication is successful, the script will proceed with the SSH login and enforce the execution of the specified command (`/bin/bash`).
 
