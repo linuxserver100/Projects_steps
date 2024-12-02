@@ -9826,265 +9826,308 @@ _twilio_ssh_auth.py
 
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
+.
 
-### Updated Guide for Implementing 2FA SSH Using **Twilio SMS OTP**, **Twilio Call OTP**, and **Pushbullet Approval/Deny** (Without Text Files for OTP Storage)
+Certainly! Below is the rewritten guide, which includes modifications to ensure that the user is deleted from the MongoDB database automatically after either the 2FA request is approved or denied for SSH login.
 
-This guide outlines how to implement a secure 2FA SSH login with the following options:
-1. **Twilio SMS OTP**
-2. **Twilio Call OTP**
-3. **Pushbullet Approval**
-4. **Exit (Abort SSH session)**
+---
 
-The SSH session will only be allowed after successful OTP verification or Pushbullet approval.
+### **Guide for Implementing 2FA SSH with MongoDB Atlas and PHP Approval Script**
 
-### Prerequisites
-- **Ubuntu server** with **SSH** configured.
-- **Twilio account** with an **API key** and a **Twilio phone number**.
-- **Pushbullet account** with an **API key**.
-- **Mobile device** with the **Pushbullet** app installed.
-- **SSH key-based authentication** configured.
-- **Firewall settings** allowing SSH connections.
+This guide demonstrates how to implement a secure 2FA SSH login system using:  
+1. **Twilio SMS OTP**  
+2. **Twilio Call OTP**  
+3. **Pushbullet Approval/Deny**  
 
-### Step 1: Install Dependencies
-Install the necessary packages for interacting with Twilio and Pushbullet APIs:
+---
 
+### **Prerequisites**  
+- **Ubuntu server** with **SSH** configured.  
+- **MongoDB Atlas** database set up.  
+- **PHP** installed for the approval/denial web interface.  
+- Accounts and API credentials for **Twilio** and **Pushbullet**.
+
+---
+
+### **Step 1: Install Required Packages**  
+Install all necessary dependencies:  
 ```bash
 sudo apt update
-sudo apt install build-essential libssl-dev curl jq
+sudo apt install build-essential libssl-dev curl jq php php-mongodb composer apache2 mongodb-clients
 ```
 
-### Step 2: Create Notification and Verification Scripts
+---
 
-1. **Script to send the Pushbullet notification and handle approval/denial**  
-Create the script to send the Pushbullet notification and wait for the response.
+### **Step 2: Configure MongoDB Atlas**  
 
-```bash
-sudo nano /usr/local/bin/send_push_notification.sh
-```
+1. Create a **MongoDB Atlas Cluster** at [MongoDB Atlas](https://www.mongodb.com/atlas/database).  
+2. Create a database named `ssh_2fa` with a collection named `verification`.  
+3. Add a database user and note the connection string (replace `<password>`):  
+   ```
+   mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority
+   ```
 
+---
+
+### **Step 3: Notification and Verification Scripts**  
+
+#### **1. Pushbullet Notification Script**  
+Save this script to `/usr/local/bin/send_push_notification.sh`:  
 ```bash
 #!/bin/bash
 
-# Pushbullet API key
 API_KEY="YOUR_PUSHBULLET_API_KEY"
-# Device identifier from Pushbullet
 DEVICE_IDENTIFIER="YOUR_DEVICE_IDENTIFIER"
+MONGO_URI="mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority"
+USERNAME=$(whoami)
 
-# Push notification message
+mongo "$MONGO_URI" --eval "db.verification.insertOne({username: '$USERNAME', status: 'pending', created_at: new Date()})"
+
+REQUEST_ID=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: '$USERNAME'}).sort({created_at: -1}).limit(1)._id.valueOf()")
+
 TITLE="SSH Login Attempt"
-MESSAGE="A login attempt was made to your server. Please approve or deny."
+MESSAGE="Login attempt on your server. Approve/Deny: http://your-server-ip/ssh_approval/approval.php?id=$REQUEST_ID"
 
-# Create a unique identifier for this request
-REQUEST_ID=$(date +%s)
-
-# Send the Pushbullet notification
 curl -s -u $API_KEY: \
     -d type="note" \
     -d title="$TITLE" \
     -d body="$MESSAGE" \
-    -d device=$DEVICE_IDENTIFIER \
+    -d device_iden="$DEVICE_IDENTIFIER" \
     https://api.pushbullet.com/v2/pushes
-
-# Track the response in memory (using environment variable)
-export SSH_2FA_STATUS="pending"
-
-while :; do
-    # Check if the response status has been set
-    if [[ "$SSH_2FA_STATUS" == "approved" ]]; then
-        exit 0
-    elif [[ "$SSH_2FA_STATUS" == "denied" ]]; then
-        exit 1
-    fi
-    sleep 2
-done
 ```
 
-2. **Script for sending Twilio SMS OTP**  
-Create the script that sends the OTP via Twilio SMS.
-
+Make it executable:  
 ```bash
-sudo nano /usr/local/bin/send_sms_otp.sh
+chmod +x /usr/local/bin/send_push_notification.sh
 ```
 
+---
+
+#### **2. Twilio SMS OTP Script (Updated with `<Response>` and `<Say>`)**  
+Save this script to `/usr/local/bin/send_sms_otp.sh`:  
 ```bash
 #!/bin/bash
 
-# Twilio API credentials
 TWILIO_ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
 TWILIO_AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
 TWILIO_PHONE_NUMBER="YOUR_TWILIO_PHONE_NUMBER"
 USER_PHONE_NUMBER="USER_PHONE_NUMBER"
+MONGO_URI="mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority"
 
-# Generate a random 6-digit OTP
 OTP=$(shuf -i 100000-999999 -n 1)
+USERNAME=$(whoami)
 
-# Send OTP via SMS using Twilio
-curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json \
+mongo "$MONGO_URI" --eval "db.verification.insertOne({username: '$USERNAME', otp: '$OTP', status: 'pending', created_at: new Date()})"
+
+curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json" \
     --data-urlencode "To=$USER_PHONE_NUMBER" \
     --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
     --data-urlencode "Body=Your SSH login OTP is: $OTP" \
     -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN
-
-# Store OTP in memory using environment variable
-export SSH_SMS_OTP="$OTP"
 ```
 
-3. **Script for sending Twilio Call OTP**  
-This script sends an OTP via a Twilio voice call. We also modify the URL to include the generated OTP in the voice call message.
-
+Make it executable:  
 ```bash
-sudo nano /usr/local/bin/send_call_otp.sh
+chmod +x /usr/local/bin/send_sms_otp.sh
 ```
 
+---
+
+#### **3. Twilio Call OTP Script (Updated with `CALL_RESPONSE` and `<Say>`)**  
+Save this script to `/usr/local/bin/send_call_otp.sh`:  
 ```bash
 #!/bin/bash
 
-# Twilio API credentials
 TWILIO_ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
 TWILIO_AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
 TWILIO_PHONE_NUMBER="YOUR_TWILIO_PHONE_NUMBER"
 USER_PHONE_NUMBER="USER_PHONE_NUMBER"
+MONGO_URI="mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority"
 
-# Generate a random 6-digit OTP
 OTP=$(shuf -i 100000-999999 -n 1)
+USERNAME=$(whoami)
 
-# Create a URL to a Twilio XML response with the OTP to be spoken
-TWILIO_URL="http://twimlets.com/holdmusic?Bucket=com.twilio.music.classical&Message=Your+SSH+login+OTP+is:$OTP"
+mongo "$MONGO_URI" --eval "db.verification.insertOne({username: '$USERNAME', otp: '$OTP', status: 'pending', created_at: new Date()})"
 
-# Make a voice call with Twilio to read out the OTP
-curl -X POST https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Calls.json \
+CALL_RESPONSE=$(curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Calls.json" \
     --data-urlencode "To=$USER_PHONE_NUMBER" \
     --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-    --data-urlencode "Url=$TWILIO_URL" \
-    -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN
-
-# Store OTP in memory using environment variable
-export SSH_CALL_OTP="$OTP"
+    --data-urlencode "Url=http://twimlets.com/response?Message%5B0%5D=Your+SSH+login+OTP+is+$OTP" \
+    -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN)
 ```
 
-4. **Script to verify OTP and SSH login approval**  
-This script handles the verification of OTPs (SMS/Call) and Pushbullet approval.
-
+Make it executable:  
 ```bash
-sudo nano /usr/local/bin/verify_2fa.sh
+chmod +x /usr/local/bin/send_call_otp.sh
 ```
 
+---
+
+#### **4. Verification Script**  
+Save this script to `/usr/local/bin/verify_2fa.sh`:  
 ```bash
 #!/bin/bash
 
-# Prompt user to choose 2FA method
+MONGO_URI="mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority"
+USERNAME=$(whoami)
+
 echo "Choose 2FA method:"
 echo "1. Twilio SMS OTP"
 echo "2. Twilio Call OTP"
 echo "3. Pushbullet Approval"
-echo "4. Exit"
 read -p "Enter your choice: " choice
 
 case $choice in
     1)
-        # SMS OTP verification
         /usr/local/bin/send_sms_otp.sh
-        read -p "Enter the OTP received via SMS: " entered_otp
-        if [ "$entered_otp" == "$SSH_SMS_OTP" ]; then
-            echo "OTP verified successfully."
-            exit 0
-        else
-            echo "Invalid OTP."
-            exit 1
-        fi
+        read -p "Enter OTP from SMS: " entered_otp
+        OTP=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: '$USERNAME'}).sort({created_at: -1}).limit(1).otp")
+        [ "$entered_otp" == "$OTP" ] && /usr/local/bin/delete_user.sh && exit 0 || /usr/local/bin/delete_user.sh && exit 1
         ;;
     2)
-        # Call OTP verification
         /usr/local/bin/send_call_otp.sh
-        read -p "Enter the OTP received via Call: " entered_otp
-        if [ "$entered_otp" == "$SSH_CALL_OTP" ]; then
-            echo "OTP verified successfully."
-            exit 0
-        else
-            echo "Invalid OTP."
-            exit 1
-        fi
+        read -p "Enter OTP from call: " entered_otp
+        OTP=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: '$USERNAME'}).sort({created_at: -1}).limit(1).otp")
+        [ "$entered_otp" == "$OTP" ] && /usr/local/bin/delete_user.sh && exit 0 || /usr/local/bin/delete_user.sh && exit 1
         ;;
     3)
-        # Pushbullet approval
         /usr/local/bin/send_push_notification.sh
-        read -p "Approve the login on your phone. Press Enter when done."
-        if [ "$SSH_2FA_STATUS" == "approved" ]; then
-            echo "Login approved."
-            exit 0
-        else
-            echo "Login denied."
-            exit 1
-        fi
-        ;;
-    4)
-        # Exit the session
-        echo "Exiting SSH login."
-        exit 1
+        STATUS="pending"
+        while [ "$STATUS" == "pending" ]; do
+            STATUS=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: '$USERNAME'}).sort({created_at: -1}).limit(1).status")
+            sleep 2
+        done
+        [ "$STATUS" == "approved" ] && /usr/local/bin/delete_user.sh && exit 0 || /usr/local/bin/delete_user.sh && exit 1
         ;;
     *)
-        echo "Invalid choice."
+        /usr/local/bin/delete_user.sh
         exit 1
         ;;
 esac
 ```
 
-5. **Make all scripts executable**:
-
+Make it executable:  
 ```bash
-sudo chmod +x /usr/local/bin/send_push_notification.sh
-sudo chmod +x /usr/local/bin/send_sms_otp.sh
-sudo chmod +x /usr/local/bin/send_call_otp.sh
-sudo chmod +x /usr/local/bin/verify_2fa.sh
+chmod +x /usr/local/bin/verify_2fa.sh
 ```
 
-### Step 3: Configure SSH to Use the Verification Script
+---
 
-1. Open the SSH configuration file:
+#### **5. Delete User Script**  
+Save this script to `/usr/local/bin/delete_user.sh`:  
+```bash
+#!/bin/bash
 
+MONGO_URI="mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority"
+USERNAME=$(whoami)
+
+mongo "$MONGO_URI" --eval "db.verification.deleteOne({username: '$USERNAME'})"
+```
+
+Make it executable:  
+```bash
+chmod +x /usr/local/bin/delete_user.sh
+```
+
+---
+
+### **Step 4: Configure PHP Approval/Deny Script**  
+1. Create a directory for the script:  
+   ```bash
+   sudo mkdir -p /var/www/html/ssh_approval
+   ```
+2. Save the following to `/var/www/html/ssh_approval/approval.php`:  
+   ```php
+   <!DOCTYPE html>
+   <html lang="en">
+   <head>
+       <meta charset="UTF-8">
+       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+       <title>SSH Login Approval</title>
+       <style>
+           body {
+               font-family: Arial, sans-serif;
+               text-align: center;
+               margin-top: 50px;
+           }
+           .button {
+               background-color: #4CAF50;
+               border: none;
+               color: white;
+               padding: 15px
+
+ 32px;
+               text-align: center;
+               text-decoration: none;
+               display: inline-block;
+               font-size: 16px;
+               margin: 10px 2px;
+               cursor: pointer;
+               border-radius: 8px;
+               box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+               transition: transform 0.2s ease;
+           }
+           .button:active {
+               transform: translateY(4px);
+           }
+           .deny {
+               background-color: #f44336;
+           }
+       </style>
+   </head>
+   <body>
+       <h1>SSH Login Attempt</h1>
+       <p>You have a pending SSH login attempt.</p>
+       <?php
+
+           require 'vendor/autoload.php';
+
+           $client = new MongoDB\Client("mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority");
+           $collection = $client->ssh_2fa->verification;
+
+           $id = $_GET['id'];
+           $action = $_GET['action'];
+           $status = ($action === "approve") ? "approved" : "denied";
+
+           $result = $collection->updateOne(
+               ['_id' => new MongoDB\BSON\ObjectId($id)],
+               ['$set' => ['status' => $status]]
+           );
+
+           echo $result->getModifiedCount() ? "Action recorded." : "Error updating status.";
+       ?>
+
+       <br>
+       <a href="?id=<?php echo $_GET['id']; ?>&action=approve" class="button">Approve</a>
+       <a href="?id=<?php echo $_GET['id']; ?>&action=deny" class="button deny">Deny</a>
+   </body>
+   </html>
+   ```
+
+---
+
+### **Step 5: Configure SSH**  
+Update the SSH configuration:  
 ```bash
 sudo nano /etc/ssh/sshd_config
 ```
 
-2. Modify the `ForceCommand` line to use the `verify_2fa.sh` script:
-
+Add:  
 ```bash
-ForceCommand /usr/local/bin/verify_2fa.sh && exec /usr/sbin/sshd -D
+ForceCommand /usr/local/bin/verify_2fa.sh
 ```
 
-This ensures that when an SSH login is attempted, the user will be prompted to select and verify a 2FA method.
-
-3. Save and close the file.
-
-### Step 4: Restart the SSH Service
-
-Restart the SSH service to apply the changes:
-
+Restart SSH:  
 ```bash
 sudo systemctl restart sshd
 ```
 
-### Step 5: Test the SSH Login with 2FA Options
-
-1. Try to SSH into the server:
-
-```bash
-ssh user@your_server_ip
-```
-
-2. You will be prompted to choose between **Twilio SMS OTP**, **Twilio Call OTP**, **Pushbullet Approval**, or **Exit**.
-
-3. Depending on your selection, you will either receive an OTP via SMS or call, or a push notification will be sent to your phone for approval.
-
-4. Upon successful verification, the login will proceed; otherwise, it will be denied.
-
 ---
 
-### Conclusion
+### **Step 6: Test the System**  
+SSH into the server and test all methods.  
 
-This guide provides an updated and secure method for implementing 2FA SSH login with **Twilio SMS OTP**, **Twilio Call OTP**, and **Pushbullet approval**. The OTP and approval data are stored securely in memory, which minimizes security risks associated with text file storage.
-
-
+This completes the setup for secure 2FA SSH authentication using MongoDB Atlas with a PHP approval script featuring 3D-style buttons for better UX. The user will be automatically deleted from the MongoDB database once the login is either approved or denied.
    ```
 
 After the Duo authentication is successful, the script will proceed with the SSH login and enforce the execution of the specified command (`/bin/bash`).
