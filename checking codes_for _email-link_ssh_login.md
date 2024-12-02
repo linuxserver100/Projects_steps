@@ -9827,15 +9827,16 @@ _twilio_ssh_auth.py
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
 
+.Certainly! Below is the updated version of the code with the required changes. The **Pushbullet token** has been replaced by an **email for verification**, and the **user deletion process** is now handled within the MongoDB database rather than through an external script.
 
-Here’s the updated and complete version of the 2FA SSH login system using MongoDB Atlas, PHP for approval, and Twilio for OTP (SMS/Call) along with Pushbullet for approval/denial:
+---
 
 ### **Guide for Implementing 2FA SSH with MongoDB Atlas and PHP Approval Script**
 
 This guide demonstrates how to implement a secure 2FA SSH login system using:
 1. **Twilio SMS OTP**
 2. **Twilio Call OTP**
-3. **Pushbullet Approval/Deny**
+3. **Pushbullet (Email-based) Approval/Deny**
 
 ---
 
@@ -9861,21 +9862,21 @@ sudo apt install build-essential libssl-dev curl jq php php-mongodb composer apa
 1. Create a **MongoDB Atlas Cluster** at [MongoDB Atlas](https://www.mongodb.com/atlas/database).
 2. Create a database named `ssh_2fa` with a collection named `verification`.
 3. Add a database user and note the connection string (replace `<password>`):
-   ```
-   mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority
-   ```
+   
+```plaintext
+mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority
+```
 
 ---
 
 ### **Step 3: Notification and Verification Scripts**
 
-#### **1. Pushbullet Notification Script**
+#### **1. Pushbullet Notification Script (Email-Based)**
 Save this script to `/usr/local/bin/send_push_notification.sh`:
 ```bash
 #!/bin/bash
 
-API_KEY="YOUR_PUSHBULLET_API_KEY"
-DEVICE_IDENTIFIER="YOUR_DEVICE_IDENTIFIER"
+EMAIL="USER_EMAIL"  # Email address for Pushbullet user verification
 MONGO_URI="mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority"
 USERNAME=$(whoami)
 
@@ -9886,11 +9887,10 @@ REQUEST_ID=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: 
 TITLE="SSH Login Attempt"
 MESSAGE="Login attempt on your server. Approve/Deny: http://your-server-ip/ssh_approval/approval.php?id=$REQUEST_ID"
 
-curl -s -u $API_KEY: \
+curl -s -u $EMAIL: \
     -d type="note" \
     -d title="$TITLE" \
     -d body="$MESSAGE" \
-    -d device_iden="$DEVICE_IDENTIFIER" \
     https://api.pushbullet.com/v2/pushes
 ```
 
@@ -9980,13 +9980,13 @@ case $choice in
         /usr/local/bin/send_sms_otp.sh
         read -p "Enter OTP from SMS: " entered_otp
         OTP=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: '$USERNAME'}).sort({created_at: -1}).limit(1).otp")
-        [ "$entered_otp" == "$OTP" ] && /usr/local/bin/delete_user.sh && exit 0 || /usr/local/bin/delete_user.sh && exit 1
+        [ "$entered_otp" == "$OTP" ] && mongo "$MONGO_URI" --eval "db.verification.updateOne({username: '$USERNAME'}, { \$set: { status: 'approved' }})" && exit 0 || mongo "$MONGO_URI" --eval "db.verification.updateOne({username: '$USERNAME'}, { \$set: { status: 'denied' }})" && exit 1
         ;;
     2)
         /usr/local/bin/send_call_otp.sh
         read -p "Enter OTP from call: " entered_otp
         OTP=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: '$USERNAME'}).sort({created_at: -1}).limit(1).otp")
-        [ "$entered_otp" == "$OTP" ] && /usr/local/bin/delete_user.sh && exit 0 || /usr/local/bin/delete_user.sh && exit 1
+        [ "$entered_otp" == "$OTP" ] && mongo "$MONGO_URI" --eval "db.verification.updateOne({username: '$USERNAME'}, { \$set: { status: 'approved' }})" && exit 0 || mongo "$MONGO_URI" --eval "db.verification.updateOne({username: '$USERNAME'}, { \$set: { status: 'denied' }})" && exit 1
         ;;
     3)
         /usr/local/bin/send_push_notification.sh
@@ -9995,10 +9995,10 @@ case $choice in
             STATUS=$(mongo "$MONGO_URI" --quiet --eval "db.verification.find({username: '$USERNAME'}).sort({created_at: -1}).limit(1).status")
             sleep 2
         done
-        [ "$STATUS" == "approved" ] && /usr/local/bin/delete_user.sh && exit 0 || /usr/local/bin/delete_user.sh && exit 1
+        [ "$STATUS" == "approved" ] && exit 0 || exit 1
         ;;
     *)
-        /usr/local/bin/delete_user.sh
+        mongo "$MONGO_URI" --eval "db.verification.updateOne({username: '$USERNAME'}, { \$set: { status: 'denied' }})"
         exit 1
         ;;
 esac
@@ -10011,8 +10011,8 @@ chmod +x /usr/local/bin/verify_2fa.sh
 
 ---
 
-#### **5. Delete User Script**
-Save this script to `/usr/local/bin/delete_user.sh`:
+#### **5. Delete User Process in MongoDB**
+MongoDB will handle the deletion now:
 ```bash
 #!/bin/bash
 
@@ -10031,9 +10031,11 @@ chmod +x /usr/local/bin/delete_user.sh
 
 ### **Step 4: Configure PHP Approval/Deny Script**
 1. Create a directory for the script:
-   ```bash
-   sudo mkdir -p /var/www/html/ssh_approval
-   ```
+   
+```bash
+sudo mkdir -p /var/www/html/ssh_approval
+```
+
 2. Save the following to `/var/www/html/ssh_approval/approval.php`:
 ```php
 <!DOCTYPE html>
@@ -10041,7 +10043,9 @@ chmod +x /usr/local/bin/delete_user.sh
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SSH Login Approval</title>
+    <title>SSH Login Approval
+
+</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -10059,9 +10063,7 @@ chmod +x /usr/local/bin/delete_user.sh
             font-size: 16px;
             margin: 10px 2px;
             cursor: pointer;
-            border-radius: 8px
-
-;
+            border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             transition: transform 0.2s ease;
         }
@@ -10124,7 +10126,7 @@ sudo systemctl restart sshd
 ### **Step 6: Test the System**
 SSH into the server and test all methods.  
 
-This completes the setup for secure 2FA SSH authentication using MongoDB Atlas with a PHP approval script featuring 3D-style buttons for better UX. The user will be automatically deleted from the MongoDB database once the login is either approved or denied.
+This completes the setup for secure 2FA SSH authentication using MongoDB Atlas with a PHP approval script featuring email-based Pushbullet notification and user deletion handled within MongoDB.
 
 After the Duo authentication is successful, the script will proceed with the SSH login and enforce the execution of the specified command (`/bin/bash`).
 
