@@ -9826,31 +9826,29 @@ _twilio_ssh_auth.py
 
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
-.
 
-Certainly! Below is the rewritten guide, which includes modifications to ensure that the user is deleted from the MongoDB database automatically after either the 2FA request is approved or denied for SSH login.
 
----
+Here’s the updated and complete version of the 2FA SSH login system using MongoDB Atlas, PHP for approval, and Twilio for OTP (SMS/Call) along with Pushbullet for approval/denial:
 
 ### **Guide for Implementing 2FA SSH with MongoDB Atlas and PHP Approval Script**
 
-This guide demonstrates how to implement a secure 2FA SSH login system using:  
-1. **Twilio SMS OTP**  
-2. **Twilio Call OTP**  
-3. **Pushbullet Approval/Deny**  
+This guide demonstrates how to implement a secure 2FA SSH login system using:
+1. **Twilio SMS OTP**
+2. **Twilio Call OTP**
+3. **Pushbullet Approval/Deny**
 
 ---
 
-### **Prerequisites**  
-- **Ubuntu server** with **SSH** configured.  
-- **MongoDB Atlas** database set up.  
-- **PHP** installed for the approval/denial web interface.  
+### **Prerequisites**
+- **Ubuntu server** with **SSH** configured.
+- **MongoDB Atlas** database set up.
+- **PHP** installed for the approval/denial web interface.
 - Accounts and API credentials for **Twilio** and **Pushbullet**.
 
 ---
 
-### **Step 1: Install Required Packages**  
-Install all necessary dependencies:  
+### **Step 1: Install Required Packages**
+Install all necessary dependencies:
 ```bash
 sudo apt update
 sudo apt install build-essential libssl-dev curl jq php php-mongodb composer apache2 mongodb-clients
@@ -9858,21 +9856,21 @@ sudo apt install build-essential libssl-dev curl jq php php-mongodb composer apa
 
 ---
 
-### **Step 2: Configure MongoDB Atlas**  
+### **Step 2: Configure MongoDB Atlas**
 
-1. Create a **MongoDB Atlas Cluster** at [MongoDB Atlas](https://www.mongodb.com/atlas/database).  
-2. Create a database named `ssh_2fa` with a collection named `verification`.  
-3. Add a database user and note the connection string (replace `<password>`):  
+1. Create a **MongoDB Atlas Cluster** at [MongoDB Atlas](https://www.mongodb.com/atlas/database).
+2. Create a database named `ssh_2fa` with a collection named `verification`.
+3. Add a database user and note the connection string (replace `<password>`):
    ```
    mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority
    ```
 
 ---
 
-### **Step 3: Notification and Verification Scripts**  
+### **Step 3: Notification and Verification Scripts**
 
-#### **1. Pushbullet Notification Script**  
-Save this script to `/usr/local/bin/send_push_notification.sh`:  
+#### **1. Pushbullet Notification Script**
+Save this script to `/usr/local/bin/send_push_notification.sh`:
 ```bash
 #!/bin/bash
 
@@ -9896,15 +9894,15 @@ curl -s -u $API_KEY: \
     https://api.pushbullet.com/v2/pushes
 ```
 
-Make it executable:  
+Make it executable:
 ```bash
 chmod +x /usr/local/bin/send_push_notification.sh
 ```
 
 ---
 
-#### **2. Twilio SMS OTP Script (Updated with `<Response>` and `<Say>`)**  
-Save this script to `/usr/local/bin/send_sms_otp.sh`:  
+#### **2. Twilio SMS OTP Script**
+Save this script to `/usr/local/bin/send_sms_otp.sh`:
 ```bash
 #!/bin/bash
 
@@ -9926,15 +9924,15 @@ curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Mes
     -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN
 ```
 
-Make it executable:  
+Make it executable:
 ```bash
 chmod +x /usr/local/bin/send_sms_otp.sh
 ```
 
 ---
 
-#### **3. Twilio Call OTP Script (Updated with `CALL_RESPONSE` and `<Say>`)**  
-Save this script to `/usr/local/bin/send_call_otp.sh`:  
+#### **3. Twilio Call OTP Script**
+Save this script to `/usr/local/bin/send_call_otp.sh`:
 ```bash
 #!/bin/bash
 
@@ -9956,15 +9954,15 @@ CALL_RESPONSE=$(curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWI
     -u $TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN)
 ```
 
-Make it executable:  
+Make it executable:
 ```bash
 chmod +x /usr/local/bin/send_call_otp.sh
 ```
 
 ---
 
-#### **4. Verification Script**  
-Save this script to `/usr/local/bin/verify_2fa.sh`:  
+#### **4. Verification Script**
+Save this script to `/usr/local/bin/verify_2fa.sh`:
 ```bash
 #!/bin/bash
 
@@ -10006,15 +10004,15 @@ case $choice in
 esac
 ```
 
-Make it executable:  
+Make it executable:
 ```bash
 chmod +x /usr/local/bin/verify_2fa.sh
 ```
 
 ---
 
-#### **5. Delete User Script**  
-Save this script to `/usr/local/bin/delete_user.sh`:  
+#### **5. Delete User Script**
+Save this script to `/usr/local/bin/delete_user.sh`:
 ```bash
 #!/bin/bash
 
@@ -10024,111 +10022,109 @@ USERNAME=$(whoami)
 mongo "$MONGO_URI" --eval "db.verification.deleteOne({username: '$USERNAME'})"
 ```
 
-Make it executable:  
+Make it executable:
 ```bash
 chmod +x /usr/local/bin/delete_user.sh
 ```
 
 ---
 
-### **Step 4: Configure PHP Approval/Deny Script**  
-1. Create a directory for the script:  
+### **Step 4: Configure PHP Approval/Deny Script**
+1. Create a directory for the script:
    ```bash
    sudo mkdir -p /var/www/html/ssh_approval
    ```
-2. Save the following to `/var/www/html/ssh_approval/approval.php`:  
-   ```php
-   <!DOCTYPE html>
-   <html lang="en">
-   <head>
-       <meta charset="UTF-8">
-       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-       <title>SSH Login Approval</title>
-       <style>
-           body {
-               font-family: Arial, sans-serif;
-               text-align: center;
-               margin-top: 50px;
-           }
-           .button {
-               background-color: #4CAF50;
-               border: none;
-               color: white;
-               padding: 15px
+2. Save the following to `/var/www/html/ssh_approval/approval.php`:
+```php
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH Login Approval</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 2px;
+            cursor: pointer;
+            border-radius: 8px
 
- 32px;
-               text-align: center;
-               text-decoration: none;
-               display: inline-block;
-               font-size: 16px;
-               margin: 10px 2px;
-               cursor: pointer;
-               border-radius: 8px;
-               box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-               transition: transform 0.2s ease;
-           }
-           .button:active {
-               transform: translateY(4px);
-           }
-           .deny {
-               background-color: #f44336;
-           }
-       </style>
-   </head>
-   <body>
-       <h1>SSH Login Attempt</h1>
-       <p>You have a pending SSH login attempt.</p>
-       <?php
+;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+        .button:active {
+            transform: translateY(4px);
+        }
+        .deny {
+            background-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>SSH Login Attempt</h1>
+    <p>You have a pending SSH login attempt.</p>
+    <?php
+        require 'vendor/autoload.php';
 
-           require 'vendor/autoload.php';
+        $client = new MongoDB\Client("mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority");
+        $collection = $client->ssh_2fa->verification;
 
-           $client = new MongoDB\Client("mongodb+srv://<username>:<password>@cluster.mongodb.net/ssh_2fa?retryWrites=true&w=majority");
-           $collection = $client->ssh_2fa->verification;
+        $id = $_GET['id'];
+        $action = $_GET['action'];
+        $status = ($action === "approve") ? "approved" : "denied";
 
-           $id = $_GET['id'];
-           $action = $_GET['action'];
-           $status = ($action === "approve") ? "approved" : "denied";
+        $result = $collection->updateOne(
+            ['_id' => new MongoDB\BSON\ObjectId($id)],
+            ['$set' => ['status' => $status]]
+        );
 
-           $result = $collection->updateOne(
-               ['_id' => new MongoDB\BSON\ObjectId($id)],
-               ['$set' => ['status' => $status]]
-           );
+        echo $result->getModifiedCount() ? "Action recorded." : "Error updating status.";
+    ?>
 
-           echo $result->getModifiedCount() ? "Action recorded." : "Error updating status.";
-       ?>
-
-       <br>
-       <a href="?id=<?php echo $_GET['id']; ?>&action=approve" class="button">Approve</a>
-       <a href="?id=<?php echo $_GET['id']; ?>&action=deny" class="button deny">Deny</a>
-   </body>
-   </html>
-   ```
+    <br>
+    <a href="?id=<?php echo $_GET['id']; ?>&action=approve" class="button">Approve</a>
+    <a href="?id=<?php echo $_GET['id']; ?>&action=deny" class="button deny">Deny</a>
+</body>
+</html>
+```
 
 ---
 
-### **Step 5: Configure SSH**  
-Update the SSH configuration:  
+### **Step 5: Configure SSH**
+Update the SSH configuration:
 ```bash
 sudo nano /etc/ssh/sshd_config
 ```
 
-Add:  
+Add:
 ```bash
 ForceCommand /usr/local/bin/verify_2fa.sh
 ```
 
-Restart SSH:  
+Restart SSH:
 ```bash
 sudo systemctl restart sshd
 ```
 
 ---
 
-### **Step 6: Test the System**  
+### **Step 6: Test the System**
 SSH into the server and test all methods.  
 
 This completes the setup for secure 2FA SSH authentication using MongoDB Atlas with a PHP approval script featuring 3D-style buttons for better UX. The user will be automatically deleted from the MongoDB database once the login is either approved or denied.
-   ```
 
 After the Duo authentication is successful, the script will proceed with the SSH login and enforce the execution of the specified command (`/bin/bash`).
 
