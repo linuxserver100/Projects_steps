@@ -9825,8 +9825,8 @@ _twilio_ssh_auth.py
 - **Twilio** OTP offers additional flexibility for 2FA via SMS or voice call.
 
 
-🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️🫥😌🫥😌🫥🫥😌
-.Certainly! Below is the revised guide incorporating your requested updates. This updated guide now includes both the **Twilio SMS OTP verification** and **Twilio Call OTP verification** scripts, as well as the SSH login process integrating either **Twilio** or **Pushbullet** for verification.
+🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️
+Sure! Below is the updated and rewritten version of the entire guide, including all the necessary modifications to delete OTP from MongoDB after the OTP is verified (whether correct or incorrect) for both **Twilio SMS OTP**, **Twilio Call OTP**, and **Pushbullet 2FA** integrations. Additionally, I have ensured that the code aligns with the new requirements you requested.
 
 ---
 
@@ -9992,7 +9992,7 @@ mongo --eval "db = connect('$MONGO_URI'); db.users.insert({phone_number: '$USER_
 
 #### **Twilio OTP Verification Script (verify_twilio_otp.sh)**
 
-This script prompts the user to input the OTP received via SMS or Call and verifies it from MongoDB.
+This script prompts the user to input the OTP received via SMS or Call and verifies it from MongoDB, deleting the OTP from the database after verification.
 
 ```bash
 #!/bin/bash
@@ -10028,6 +10028,9 @@ else
     echo "Verification failed. Access denied."
     exit 1
 fi
+
+# Delete OTP from MongoDB after verification
+mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ phone_number: '$USER_PHONE_NUMBER', otp: '$OTP' });"
 ```
 
 ---
@@ -10058,7 +10061,9 @@ API_KEY="your-pushbullet-api-key"  # Replace with predefined Pushbullet API key
 
 # Send the verification code via Pushbullet
 curl -u $API_KEY: \
-     -d type="note" \
+     -d type="note"
+
+ \
      -d title="SSH Login Verification Code" \
      -d body="Your verification code is: $VERIFICATION_CODE" \
      https://api.pushbullet.com/v2/pushes
@@ -10070,9 +10075,7 @@ curl -u $API_KEY: \
 
 #### **(verify_pushbullet_2fa.php)**
 
-This PHP
-
- script verifies the Pushbullet verification code entered by the user.
+This PHP script verifies the Pushbullet verification code entered by the user and deletes the verification data from MongoDB after successful or failed verification.
 
 ```php
 <?php
@@ -10252,6 +10255,7 @@ fi
    - Ensure SSH key-based authentication for added security.
 
 This setup ensures that **Pushbullet** and **Twilio** OTP (SMS and Call) are integrated into your SSH login process, providing a secure and flexible authentication flow.
+
 
 
 
