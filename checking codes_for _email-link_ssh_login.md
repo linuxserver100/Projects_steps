@@ -9826,7 +9826,8 @@ _twilio_ssh_auth.py
 
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️
-Certainly! Below is the complete revised version of your code with the updated Twilio OTP verification process. I have also ensured all the scripts are in line with the correct usage and approach.
+
+Sure! Below is the rewritten and updated version of the code and instructions for integrating **Twilio OTP (SMS/Call)** and **Pushbullet 2FA** into an SSH login process, with MongoDB Atlas for verification. I’ve rewritten the Twilio OTP scripts with a new format, as requested.
 
 ---
 
@@ -9834,50 +9835,38 @@ Certainly! Below is the complete revised version of your code with the updated T
 
 #### **Install MongoDB from Official APT Repository**
 
-1. **Import MongoDB public key**
-
-   First, import MongoDB's GPG key to ensure package authenticity:
+1. **Import MongoDB Public Key:**
 
    ```bash
    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo tee /etc/apt/trusted.gpg.d/mongodb.asc
    ```
 
-2. **Add MongoDB repository**
-
-   Add the official MongoDB repository to your APT sources:
+2. **Add MongoDB Repository:**
 
    ```bash
    echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
    ```
 
-3. **Update APT Package Database**
-
-   Update the package list:
+3. **Update APT Package Database:**
 
    ```bash
    sudo apt update
    ```
 
-4. **Install MongoDB**
-
-   Install MongoDB:
+4. **Install MongoDB:**
 
    ```bash
    sudo apt install -y mongodb-org
    ```
 
-5. **Start and Enable MongoDB Service**
-
-   Start MongoDB and enable it to start on boot:
+5. **Start and Enable MongoDB Service:**
 
    ```bash
    sudo systemctl start mongod
    sudo systemctl enable mongod
    ```
 
-6. **Verify MongoDB Status**
-
-   Check if MongoDB is running:
+6. **Verify MongoDB Status:**
 
    ```bash
    sudo systemctl status mongod
@@ -9889,44 +9878,34 @@ Certainly! Below is the complete revised version of your code with the updated T
 
 #### **Create MongoDB Atlas Account and Cluster**
 
-1. **Sign up or Log in to MongoDB Atlas**  
-   Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas), create an account, or log in.
+1. **Sign Up/Login to MongoDB Atlas:**  
+   Visit [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) and create or log into your account.
 
-2. **Create a Cluster**
-
+2. **Create a Cluster:**  
    Create a free-tier (M0) cluster in MongoDB Atlas.
 
-3. **Create Database and Collection**
+3. **Create Database and Collection:**
 
    - Go to the "Clusters" tab in Atlas.
-   - Click "Collections" and create a new database named `user_verification` with a collection `users`.
+   - Click "Collections" and create a new database named `user_verification` with a collection called `users`.
 
-4. **Configure IP Whitelist**
+4. **Configure IP Whitelist:**  
+   Allow your Ubuntu server to connect to MongoDB Atlas by adding your server's public IP address in the "Network Access" tab.
 
-   Allow your Ubuntu server to connect to MongoDB Atlas by adding the public IP of your server:
-
-   - Go to the "Network Access" tab in Atlas and click "Add IP Address".
-   - Add your server's IP.
-
-5. **Get MongoDB Atlas Connection URI**
-
-   - In the Atlas dashboard, go to the "Connect" tab.
-   - Choose "Connect your application".
-   - Copy the connection URI, which will look like this:
+5. **Get MongoDB Atlas Connection URI:**  
+   Copy the connection URI from Atlas. It will look like this:
 
    ```bash
    mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority
    ```
 
-   Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
-
 ---
 
 ### **3. Twilio OTP Script (SMS/Call) and Verification in One**
 
-This script generates a one-time passcode (OTP) and sends it via Twilio (SMS or Call). It also verifies the OTP entered by the user and deletes it from MongoDB after verification.
+#### **Updated Twilio OTP Script (send_twilio_otp.sh)**
 
-#### **Twilio OTP Script (send_verify_twilio_otp.sh)**
+Here is the updated script for sending OTP via Twilio and verifying it in MongoDB:
 
 ```bash
 #!/bin/bash
@@ -9945,7 +9924,7 @@ MONGO_COLLECTION="users"
 USER_PHONE_NUMBER="+1234567890"  # Replace with predefined phone number
 
 # Choose OTP method (sms or call)
-read -p "Choose method (sms/call): " METHOD
+read -p "Choose OTP method (sms/call): " METHOD
 
 # Generate a 6-digit OTP
 OTP=$(shuf -i 100000-999999 -n 1)
@@ -10009,7 +9988,9 @@ mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({ phone
 
 ### **4. Pushbullet 2FA Script**
 
-This script generates a unique verification code and sends a Pushbullet notification to the user with the verification code.
+#### **send_pushbullet_2fa.sh**
+
+This script generates a unique verification code and sends a Pushbullet notification to the user.
 
 ```bash
 #!/bin/bash
@@ -10043,7 +10024,7 @@ curl -u $API_KEY: \
 
 ### **5. PHP Script for Pushbullet 2FA Verification**
 
-#### **(verify_pushbullet_2fa.php)**
+#### **verify_pushbullet_2fa.php**
 
 This PHP script verifies the Pushbullet verification code entered by the user and deletes the verification data from MongoDB after successful or failed verification.
 
@@ -10066,9 +10047,7 @@ $collection = $client->$mongoDb->$mongoCollection;
 
 // Predefined parameters
 $device_id = "predefined_device_id";  // Predefined device ID
-$code = "
-
-123456";  // This would be dynamically received in a real case
+$code = "123456";  // This would be dynamically received in a real case
 
 // Verify Pushbullet code
 $document = $collection->findOne(['device_id' => $device_id, 'verification_code' => $code]);
@@ -10081,6 +10060,8 @@ if ($document) {
     echo "Device verified successfully.";
 } else {
     echo "Invalid verification code. Access denied.";
+
+
     // Delete user data from MongoDB after denial
     $collection->deleteOne(['device_id' => $device_id]);
 }
@@ -10183,7 +10164,7 @@ fi
    Run the Twilio OTP script to send either an SMS or a Call OTP:
 
    ```bash
-   ./send_verify_twilio_otp.sh
+   ./send_twilio_otp.sh
    ```
 
 2. **Generate Pushbullet 2FA and Send Notification**
@@ -10221,6 +10202,7 @@ fi
    - Ensure SSH key-based authentication for added security.
 
 This setup ensures that **Pushbullet** and **Twilio** OTP (SMS and Call) are integrated into your SSH login process, providing a secure and flexible authentication flow.
+.
 
 
 
