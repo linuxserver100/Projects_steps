@@ -9826,13 +9826,11 @@ _twilio_ssh_auth.py
 
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️
-
-
-Certainly! Below is the updated version of the solution with a revised **`send_twilio_otp.sh`** script to handle the distinction between **Twilio SMS** and **Twilio Call** OTPs as options. The **`validate_2fa.sh`** script will prompt for these options during SSH login, and based on the user's input, the respective OTP method (SMS or Call) will be used.
+Sure! Below is the updated solution, with modifications made to the **Pushbullet verification process**. The main change is the addition of **approve/deny options** in the browser interface, which will update the MongoDB database accordingly. When the user denies the verification, they won't be allowed SSH access, and when approved, the user will be marked as verified and granted SSH access.
 
 ---
 
-## **1. MongoDB Installation and Setup**
+### **1. MongoDB Installation and Setup**
 
 ### **Install MongoDB from Official APT Repository**
 
@@ -9875,7 +9873,7 @@ sudo systemctl status mongod
 
 ---
 
-## **2. MongoDB Atlas Setup (Cloud)**
+### **2. MongoDB Atlas Setup (Cloud)**
 
 1. **Create MongoDB Atlas Account and Cluster:**  
    Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) and sign up or log in.
@@ -9898,9 +9896,9 @@ mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retry
 
 ---
 
-## **3. Twilio OTP Script (send_twilio_otp.sh)**
+### **3. Twilio OTP Script (send_twilio_otp.sh)**
 
-This script now allows the user to choose between **Twilio SMS** or **Twilio Call** during authentication. The user will be prompted to choose between these two OTP methods, and the script will handle the sending accordingly.
+This script now allows the user to choose between **Twilio SMS** or **Twilio Call** during authentication. The user will be prompted to choose between these two OTP methods, and the script will handle sending accordingly.
 
 ```bash
 #!/bin/bash
@@ -9958,9 +9956,9 @@ fi
 
 ---
 
-## **4. Pushbullet 2FA Script (send_pushbullet_2fa.sh)**
+### **4. Pushbullet 2FA Script (send_pushbullet_2fa.sh)**
 
-This script remains the same as it handles sending the Pushbullet notification with a generated verification code.
+This script generates a unique verification code and sends a **verification link** via Pushbullet. The link leads the user to a browser-based verification page.
 
 ```bash
 #!/bin/bash
@@ -9976,25 +9974,28 @@ USER_DEVICE_ID="predefined_device_id"  # Replace with predefined device ID
 # Generate a unique verification code
 VERIFICATION_CODE=$(uuidgen)
 
+# Generate a verification link
+VERIFICATION_LINK="http://yourdomain.com/verify.php?code=$VERIFICATION_CODE"
+
 # Store the device ID and verification code in MongoDB (unverified by default)
 mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.insert({device_id: '$USER_DEVICE_ID', verification_code: '$VERIFICATION_CODE', verified: false, created_at: new Date()});"
 
 # Pushbullet API Key (obtain it from your Pushbullet account)
 API_KEY="your-pushbullet-api-key"  # Replace with predefined Pushbullet API key
 
-# Send the verification code via Pushbullet
+# Send the verification code via Pushbullet with the verification link
 curl -u $API_KEY: \
      -d type="note" \
-     -d title="SSH Login Verification Code" \
-     -d body="Your verification code is: $VERIFICATION_CODE" \
+     -d title="SSH Login Verification" \
+     -d body="Your verification link: $VERIFICATION_LINK" \
      https://api.pushbullet.com/v2/pushes
 ```
 
 ---
 
-## **5. PHP Script for Pushbullet 2FA Verification (pushbullet_verify.php)**
+### **5. PHP Script for Pushbullet 2FA Verification (verify.php)**
 
-This PHP script remains the same, where it checks the verification code from MongoDB and updates the verification status.
+This PHP script now provides **Approve** and **Deny** options in the browser for user interaction. Based on the choice, the MongoDB database will be updated.
 
 ```php
 <?php
@@ -10013,31 +10014,53 @@ $mongoDb = "user_verification";
 $mongoCollection = "users";
 $collection = $client->$mongoDb->$mongoCollection;
 
-// Predefined parameters
-$device_id = "predefined_device_id";  // Predefined device ID
-$code = "123456";  // This would be dynamically received in a real case
+// Get the verification code from URL
+if (isset($_GET['code'])) {
+    $code = $_GET['code'];
 
-// Verify Pushbullet code
-$document = $collection->findOne(['device_id' => $device_id, 'verification_code' => $code]);
+    // Verify the code in MongoDB
+    $document = $collection->findOne(['verification_code' => $code]);
 
-if ($document) {
-    $collection->updateOne(
-        ['device_id' => $device_id],
-        ['$set' => ['verified' => true]]
-    );
-    echo "Device verified successfully.";
+    if ($document) {
+        echo "
+        <h3>Approve or Deny</h3>
+        <p>Verification code: $code</p>
+        <form action='' method='POST'>
+            <input type='submit' name='approve' value='Approve' />
+            <input type='submit' name='deny' value='Deny' />
+        </form>";
+
+        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+            if (isset($_POST['approve'])) {
+                // Update the document to mark it as verified
+                $collection->updateOne(
+                    ['verification_code' => $code],
+                    ['$set' => ['verified' => true]]
+                );
+                echo "Device approved successfully. Access granted.";
+            } elseif (isset($_POST['deny'])) {
+                // Update the document to mark it as denied
+                $collection->updateOne(
+                    ['verification_code' => $code],
+                    ['$set' => ['verified' => false]]
+                );
+                echo "Device denied. Access denied.";
+            }
+        }
+    } else {
+        echo "Invalid verification code. Access denied.";
+    }
 } else {
-    echo "Invalid verification code. Access denied.";
-
-    // Delete user data from MongoDB after denial
-    $collection->deleteOne(['device_id' => $device_id]);
+    echo "No verification code provided.";
 }
 ?>
 ```
 
+**Important:** Make sure the `verify.php` file is placed in `/var/www/html/` or your web server’s public directory so it can be accessed through the browser.
+
 ---
 
-## **6. SSH Configuration (/etc/ssh/sshd_config)**
+### **6. SSH Configuration (/etc/ssh/sshd_config)**
 
 Modify the SSH configuration to run a script that checks the **Pushbullet** or **Twilio** verification during login.
 
@@ -10047,7 +10070,9 @@ Modify the SSH configuration to run a script that checks the **Pushbullet** or *
 sudo nano /etc/ssh/sshd_config
 ```
 
-2. **Add the following lines to enforce **Twilio** and **Pushbullet** 2FA validation:**
+2. **Add
+
+ the following lines to enforce **Twilio** and **Pushbullet** 2FA validation:**
 
 ```bash
 # ForceCommand to run 2FA validation after login
@@ -10065,7 +10090,7 @@ sudo systemctl reload sshd
 
 ---
 
-## **7. 2FA Validation Script (/usr/local/bin/validate_2fa.sh)**
+### **7. 2FA Validation Script (/usr/local/bin/validate_2fa.sh)**
 
 This script prompts the user for the authentication method (Pushbullet or Twilio OTP). If Twilio OTP is selected, the user is asked to choose between SMS or Call.
 
@@ -10080,9 +10105,7 @@ read -p "Enter your choice (1/2): " choice
 
 # Function for Pushbullet 2FA
 function pushbullet_2fa {
-    # MongoDB Atlas Connection
-
- URI
+    # MongoDB Atlas Connection URI
     MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority"
     MONGO_DB="user_verification"
     MONGO_COLLECTION="users"
@@ -10090,16 +10113,13 @@ function pushbullet_2fa {
     # Predefined User Pushbullet Device ID
     USER_DEVICE_ID="predefined_device_id"  # Replace with predefined device ID
 
-    # Prompt user for verification code
-    read -p "Enter the Pushbullet verification code: " USER_CODE
-
-    # Check verification code from MongoDB
-    mongo --eval "db = connect('$MONGO_URI'); var result = db.$MONGO_COLLECTION.findOne({device_id: '$USER_DEVICE_ID', verification_code: '$USER_CODE'}); result;" > result.json
-    if grep -q '"verified":true' result.json; then
+    # Check verification status from MongoDB
+    document=$(mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.findOne({device_id: '$USER_DEVICE_ID'});" --quiet)
+    if echo "$document" | grep -q '"verified":true'; then
         echo "Pushbullet verification successful. Access granted."
         exec $SHELL  # Grant access to the shell
     else
-        echo "Invalid Pushbullet verification code. Access denied."
+        echo "Pushbullet verification denied. Access denied."
         exit 1
     fi
 }
@@ -10137,9 +10157,9 @@ fi
 
 ---
 
-## **8. Testing the Process**
+### **8. Testing the Process**
 
-### **Step 1: Generate Twilio OTP (SMS or Call)**
+#### **Step 1: Generate Twilio OTP (SMS or Call)**
 
 Run the Twilio OTP script to send either an SMS or a Call OTP:
 
@@ -10147,15 +10167,15 @@ Run the Twilio OTP script to send either an SMS or a Call OTP:
 /usr/local/bin/send_twilio_otp.sh
 ```
 
-### **Step 2: Generate Pushbullet 2FA and Send Notification**
+#### **Step 2: Generate Pushbullet 2FA and Send Notification**
 
-Run the Pushbullet 2FA script to generate a verification code and send a Pushbullet notification:
+Run the Pushbullet 2FA script to generate a verification link and send a Pushbullet notification:
 
 ```bash
 /usr/local/bin/send_pushbullet_2fa.sh
 ```
 
-### **Step 3: SSH Login**
+#### **Step 3: SSH Login**
 
 The user attempts to log in via SSH:
 
@@ -10163,10 +10183,10 @@ The user attempts to log in via SSH:
 ssh youruser@your-server-ip
 ```
 
-   - **Prompt for Twilio OTP:** If Twilio OTP is selected, the user will be prompted to input the OTP received via SMS or Call.
-   - **Prompt for Pushbullet Verification:** If Pushbullet 2FA is chosen, the user will be asked to input the verification code sent to their device.
-   - **If the device or phone is verified:** The user is granted access, and the device/phone verification status is updated in MongoDB.
-   - **If verification fails:** The user is denied access, and their data is deleted from MongoDB.
+- **Prompt for Twilio OTP:** If Twilio OTP is selected, the user will be prompted to input the OTP received via SMS or Call.
+- **Prompt for Pushbullet Verification:** If Pushbullet 2FA is chosen, the user will be asked to input the verification code sent to their device, or they will be directed to the **verification link** via their browser.
+- **If the device or phone is verified:** The user is granted access, and the device/phone verification status is updated in MongoDB.
+- **If verification fails:** The user is denied access, and their data is deleted from MongoDB.
 
 ---
 
@@ -10180,6 +10200,7 @@ ssh youruser@your-server-ip
    - Use SSL/TLS for MongoDB connections for encrypted communication.
    - Ensure SSH key-based authentication for added security.
 
-This updated solution ensures that **Twilio OTP** (SMS or Call) and **Pushbullet** 2FA work seamlessly during the SSH login process, providing a secure and integrated flow.
+This updated solution integrates **Twilio OTP** (SMS or Call) and **Pushbullet** 2FA seamlessly, with the added capability of verifying through a browser via the **Pushbullet verification link**.
+
 
 
