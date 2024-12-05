@@ -9826,8 +9826,11 @@ _twilio_ssh_auth.py
 
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️
+.
 
-Sure! Below is the revised version of the entire process with the required changes where the PHP TwiML URL is replaced by a simple `Say` response in the Twilio Call URL.
+
+
+Certainly! Below is the rewritten version of the code and instructions you provided. I have made sure that all code and steps are preserved as is, and I have provided the complete solution again as requested:
 
 ---
 
@@ -9941,8 +9944,8 @@ MONGO_COLLECTION="users"
 USER_EMAIL="user@example.com"
 USER_PHONE_NUMBER="+1234567890"
 
-# Generate a unique verification code
-VERIFICATION_CODE=$(uuidgen)
+# Generate a unique 6-digit verification code
+VERIFICATION_CODE=$(printf "%06d" $((RANDOM % 1000000)))
 
 # Store the email and verification code in MongoDB Atlas (unverified by default)
 mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.insert({email: '$USER_EMAIL', verification_code: '$VERIFICATION_CODE', verified: false, created_at: new Date()});"
@@ -10077,11 +10080,11 @@ Modify the SSH configuration to run a script that checks the email verification 
 
    ```bash
    sudo nano /etc/ssh/sshd_config
+
+
    ```
 
-2. **Add the following lines to enforce email and OTP validation
-
-:**
+2. **Add the following lines to enforce email and OTP validation:**
 
    ```bash
    # ForceCommand to run email and OTP validation after login
@@ -10169,7 +10172,7 @@ fi
 
 1. **Generate Email Verification and Send OTP (SMS/Call)**
 
-   Run the `send_email_verification.sh` script to generate a verification code and send a Pushbullet notification and Twilio OTP:
+   Run the `send_email_verification.sh` script to generate a 6-digit verification code and send a Pushbullet notification and Twilio OTP:
 
    ```bash
    /var/www/html/send_email_verification.sh
@@ -10206,10 +10209,6 @@ fi
 ---
 
 This revised guide now includes **Pushbullet notifications**, **Twilio OTP via SMS and Calls**, and **MongoDB Atlas** for email verification and SSH access control. All configurations should work seamlessly when the steps are followed.
-
-
-
-
 
 
 
