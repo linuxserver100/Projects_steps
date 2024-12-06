@@ -9828,13 +9828,12 @@ _twilio_ssh_auth.py
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️
 
 
-Sure! Below is the complete guide with the same logic as before, but with predefined email parameters and other necessary adjustments:
+
+To meet your request for a revised solution where user details are deleted from the database whether access is granted or denied, I will update the necessary scripts to include MongoDB cleanup (deleting user details) after each authentication attempt. Here is the updated solution:
 
 ---
 
 ### **1. Required Packages Installation**
-
-Before implementing the scripts, ensure that all required packages and dependencies are installed:
 
 ```bash
 # Install MongoDB (if not already installed)
@@ -9858,15 +9857,11 @@ sudo mv twilio-cli /usr/local/bin/twilio-cli
 
 ### **2. SSH Configuration (/etc/ssh/sshd_config)**
 
-Modify the SSH configuration to ensure it prompts for either Pushbullet or Twilio authentication.
-
-1. Open the SSH configuration file for editing:
-
 ```bash
 sudo nano /etc/ssh/sshd_config
 ```
 
-2. Add or modify the following lines:
+Add or modify the following lines:
 
 ```bash
 # Enforce ForcedCommand for OTP or email validation script
@@ -9879,7 +9874,7 @@ ChallengeResponseAuthentication yes
 UsePAM yes
 ```
 
-3. Restart the SSH service to apply the changes:
+Restart SSH service:
 
 ```bash
 sudo systemctl restart sshd
@@ -9888,8 +9883,6 @@ sudo systemctl restart sshd
 ---
 
 ### **3. Email Verification Script with Pushbullet (`/var/www/html/send_email_verification.sh`)**
-
-This script will send a unique verification code to the user via Pushbullet, using a predefined email parameter.
 
 ```bash
 #!/bin/bash
@@ -9926,17 +9919,9 @@ curl -u $PUSHBULLET_API_KEY: \
      https://api.pushbullet.com/v2/pushes
 ```
 
-**Explanation:**
-
-- Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
-- Replace `your-server-ip` with your server's IP or domain.
-- Replace `your_pushbullet_api_key` with your actual Pushbullet API key.
-
 ---
 
 ### **4. OTP Verification Script with Twilio (`/etc/ssh/verify-otp.sh`)**
-
-This script sends an OTP to the user via SMS or Voice Call using Twilio and checks the OTP provided by the user.
 
 ```bash
 #!/bin/bash
@@ -9991,22 +9976,25 @@ read input_otp
 # Verify OTP
 if [ "$input_otp" == "$OTP" ]; then
   echo "OTP verified successfully."
-  exit 0  # Success, allow login
+  access_granted=true
 else
   echo "Invalid OTP, access denied."
+  access_granted=false
+fi
+
+# MongoDB Cleanup: Delete user data from MongoDB after verification attempt (whether successful or not)
+mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({email: '$USER_EMAIL'});"
+
+if [ "$access_granted" = true ]; then
+  exit 0  # Success, allow login
+else
   exit 1  # Deny login
 fi
 ```
 
-**Explanation:**
-
-- Replace `your_twilio_sid`, `your_twilio_auth_token`, and `your_twilio_phone_number` with your actual Twilio credentials.
-
 ---
 
 ### **5. Authentication Script (`/usr/local/bin/validate_auth.sh`)**
-
-This script gives the user the choice to use either Pushbullet (email verification) or Twilio (OTP verification) for authentication.
 
 ```bash
 #!/bin/bash
@@ -10032,16 +10020,9 @@ case $choice in
 esac
 ```
 
-**Explanation:**
-
-- The script now uses predefined email for Pushbullet authentication.
-- It triggers the corresponding script based on the user’s choice.
-
 ---
 
 ### **6. PHP Script for Email Verification (`/var/www/html/verify_email.php`)**
-
-This PHP script verifies the email address by checking MongoDB Atlas and updates the status once it’s verified.
 
 ```php
 <?php
@@ -10087,31 +10068,27 @@ if (isset($_GET['email']) && isset($_GET['code'])) {
     } catch (Exception $e) {
         echo "Error: Failed to verify email. " . $e->getMessage();
     }
+
+    // MongoDB Cleanup: Delete user data after email verification attempt
+    $collection->deleteOne(['email' => $email]);
 } else {
     echo "Error: Invalid parameters.";
 }
 ?>
 ```
 
-**Explanation:**
-
-- Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
-
 ---
 
-### **7. Testing
-
-**
+### **7. Testing**
 
 1. Attempt to log in via SSH. You will be prompted to choose between email verification or OTP verification.
-2. Depending on your choice, the system will proceed with the corresponding method to authenticate your login.
+2. Depending on your choice, the system will send the corresponding authentication code and validate it.
+3. After the authentication attempt, whether successful or not, the user's details will be deleted from the MongoDB database.
 
 ---
 
-This setup now uses predefined email and phone number parameters, as requested, while maintaining the same functionality.
-
-
-
+**Note:** 
+- In this solution, MongoDB records for the user are deleted both after OTP validation and email verification, regardless of whether the user is granted or denied access to the system.
 
 
 
