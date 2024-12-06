@@ -9826,13 +9826,15 @@ _twilio_ssh_auth.py
 
 
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️
-Certainly! Below is the complete guide on how to integrate Pushbullet (email verification) and Twilio (OTP verification via SMS or Voice) for SSH login authentication. The user will be prompted to select between these two authentication methods when they log in via SSH.
+
+
+Sure! Below is the complete guide with the same logic as before, but with predefined email parameters and other necessary adjustments:
 
 ---
 
 ### **1. Required Packages Installation**
 
-Before implementing the scripts, make sure the necessary packages and dependencies are installed:
+Before implementing the scripts, ensure that all required packages and dependencies are installed:
 
 ```bash
 # Install MongoDB (if not already installed)
@@ -9856,7 +9858,7 @@ sudo mv twilio-cli /usr/local/bin/twilio-cli
 
 ### **2. SSH Configuration (/etc/ssh/sshd_config)**
 
-Modify the SSH configuration to prompt for either Pushbullet or Twilio authentication.
+Modify the SSH configuration to ensure it prompts for either Pushbullet or Twilio authentication.
 
 1. Open the SSH configuration file for editing:
 
@@ -9887,7 +9889,7 @@ sudo systemctl restart sshd
 
 ### **3. Email Verification Script with Pushbullet (`/var/www/html/send_email_verification.sh`)**
 
-This script will generate a unique verification code and send it to the user via Pushbullet.
+This script will send a unique verification code to the user via Pushbullet, using a predefined email parameter.
 
 ```bash
 #!/bin/bash
@@ -9897,8 +9899,8 @@ MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verific
 MONGO_DB="user_verification"
 MONGO_COLLECTION="users"
 
-# User email address (passed as argument)
-USER_EMAIL=$1
+# Predefined user email address
+USER_EMAIL="user@example.com"
 
 # Generate a unique verification code
 VERIFICATION_CODE=$(uuidgen)
@@ -9944,9 +9946,8 @@ TWILIO_SID="your_twilio_sid"
 TWILIO_AUTH_TOKEN="your_twilio_auth_token"
 TWILIO_PHONE_NUMBER="your_twilio_phone_number"
 
-# User details
-USERNAME=$(whoami)
-PHONE_NUMBER=$(getent passwd "$USERNAME" | cut -d: -f5 | cut -d, -f1)  # Extract user phone number from passwd file
+# Predefined user phone number (for example, from a configuration file or environment variable)
+PHONE_NUMBER="+1234567890"  # Use your actual phone number here
 
 # Generate a random 6-digit OTP
 OTP=$(shuf -i 100000-999999 -n 1)
@@ -10005,7 +10006,7 @@ fi
 
 ### **5. Authentication Script (`/usr/local/bin/validate_auth.sh`)**
 
-This script prompts the user to select between Pushbullet (email verification) or Twilio (OTP verification) for authentication.
+This script gives the user the choice to use either Pushbullet (email verification) or Twilio (OTP verification) for authentication.
 
 ```bash
 #!/bin/bash
@@ -10017,9 +10018,8 @@ read -p "Enter the number corresponding to your choice: " choice
 
 case $choice in
   1)
-    # Prompt for email address for Pushbullet
-    read -p "Enter your email address for verification: " email
-    /var/www/html/send_email_verification.sh "$email"
+    # Use predefined email for Pushbullet verification
+    /var/www/html/send_email_verification.sh
     ;;
   2)
     # Perform OTP verification via Twilio
@@ -10034,13 +10034,14 @@ esac
 
 **Explanation:**
 
-- This script gives the user the choice between email verification via Pushbullet or OTP verification via Twilio and triggers the respective script accordingly.
+- The script now uses predefined email for Pushbullet authentication.
+- It triggers the corresponding script based on the user’s choice.
 
 ---
 
 ### **6. PHP Script for Email Verification (`/var/www/html/verify_email.php`)**
 
-This PHP script verifies the email address by checking MongoDB Atlas and updates the status once it's verified.
+This PHP script verifies the email address by checking MongoDB Atlas and updates the status once it’s verified.
 
 ```php
 <?php
@@ -10084,9 +10085,7 @@ if (isset($_GET['email']) && isset($_GET['code'])) {
             echo "Invalid verification link or code. Access denied.";
         }
     } catch (Exception $e) {
-        echo "Error: Failed to verify email. " .
-
- $e->getMessage();
+        echo "Error: Failed to verify email. " . $e->getMessage();
     }
 } else {
     echo "Error: Invalid parameters.";
@@ -10096,21 +10095,20 @@ if (isset($_GET['email']) && isset($_GET['code'])) {
 
 **Explanation:**
 
-- Replace `<username>` and `<password>` with MongoDB Atlas credentials.
+- Replace `<username>` and `<password>` with your MongoDB Atlas credentials.
 
 ---
 
-### **7. Testing**
+### **7. Testing
 
-1. Try logging in via SSH. You will be prompted to choose between email verification or OTP verification.
+**
+
+1. Attempt to log in via SSH. You will be prompted to choose between email verification or OTP verification.
 2. Depending on your choice, the system will proceed with the corresponding method to authenticate your login.
 
 ---
 
-This complete setup provides users with two options for SSH authentication: Pushbullet (email verification) and Twilio (OTP verification via SMS or voice).
-
-
-
+This setup now uses predefined email and phone number parameters, as requested, while maintaining the same functionality.
 
 
 
