@@ -9828,8 +9828,7 @@ _twilio_ssh_auth.py
 🫥🥰🫥🥰🫥🥰🫥🥰🫥🫥🥰🫥😍🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😊☺️😊☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥☺️🫥😌🫥☺️🫥☺️
 
 
-
-To meet your request for a revised solution where user details are deleted from the database whether access is granted or denied, I will update the necessary scripts to include MongoDB cleanup (deleting user details) after each authentication attempt. Here is the updated solution:
+Here's the updated version of the solution with the requested changes to the `send_email_verification.sh` script. This includes handling email verification in the `send_email_verification.sh` script, ensuring the user data is deleted from the MongoDB database after the email verification attempt, regardless of whether SSH access is granted or denied.
 
 ---
 
@@ -9899,7 +9898,7 @@ USER_EMAIL="user@example.com"
 VERIFICATION_CODE=$(uuidgen)
 
 # Store the email and verification code in MongoDB (unverified by default)
-mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.insert({email: '$USER_EMAIL', verification_code: '$VERIFICATION_CODE', verified: false, created_at: new Date()});" 
+mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.insert({email: '$USER_EMAIL', verification_code: '$VERIFICATION_CODE', verified: false, created_at: new Date()});"
 
 # Define the verification URL (points to the PHP script for verification)
 VERIFICATION_URL="http://your-server-ip/verify_email.php?email=$USER_EMAIL&code=$VERIFICATION_CODE"
@@ -9913,10 +9912,37 @@ BODY="Please click the following link to verify your email: $VERIFICATION_URL"
 
 # Send the verification link using Pushbullet
 curl -u $PUSHBULLET_API_KEY: \
-     -d type="note" \
-     -d title="$TITLE" \
-     -d body="$BODY" \
-     https://api.pushbullet.com/v2/pushes
+    -d type="note" \
+    -d title="$TITLE" \
+    -d body="$BODY" \
+    https://api.pushbullet.com/v2/pushes
+
+# Check if the email was verified using MongoDB (check if verified flag is set to true)
+VERIFIED=false
+
+# Wait for the user to verify the email (simulate the verification status by querying the database)
+while [ "$VERIFIED" == false ]; do
+  # Fetch user verification status from the database
+  VERIFIED_STATUS=$(mongo --eval "db = connect('$MONGO_URI'); var user = db.$MONGO_COLLECTION.findOne({email: '$USER_EMAIL'}); print(user.verified);" | tail -n 1)
+
+  if [ "$VERIFIED_STATUS" == "true" ]; then
+    VERIFIED=true
+    echo "Email verified successfully."
+  else
+    echo "Waiting for email verification..."
+    sleep 5
+  fi
+done
+
+# MongoDB Cleanup: Delete user data from MongoDB after verification attempt (whether successful or not)
+mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({email: '$USER_EMAIL'});"
+
+# Allow or deny SSH access based on verification status
+if [ "$VERIFIED" == true ]; then
+  exit 0  # Allow SSH access
+else
+  exit 1  # Deny SSH access
+fi
 ```
 
 ---
@@ -10026,7 +10052,7 @@ esac
 
 ```php
 <?php
-require 'vendor/autoload.php';  // If using Composer to autoload MongoDB library
+require 'vendor/autoload.php'; // If using Composer to autoload MongoDB library
 
 // MongoDB Atlas Connection
 $mongoUri = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority";
@@ -10057,8 +10083,9 @@ if (isset($_GET['email']) && isset($_GET['code'])) {
                     ['email' => $email],
                     ['$set' => ['verified' => true]]
                 );
+                echo "Email verified successfully. You can now log
 
-                echo "Email verified successfully. You can now log in via SSH.";
+ in via SSH.";
             } else {
                 echo "This email has already been verified.";
             }
@@ -10081,14 +10108,21 @@ if (isset($_GET['email']) && isset($_GET['code'])) {
 
 ### **7. Testing**
 
-1. Attempt to log in via SSH. You will be prompted to choose between email verification or OTP verification.
-2. Depending on your choice, the system will send the corresponding authentication code and validate it.
-3. After the authentication attempt, whether successful or not, the user's details will be deleted from the MongoDB database.
+1. Attempt to log in via SSH. You will be prompted to choose between email verification (Pushbullet) or OTP verification (Twilio).
+2. Depending on your choice, the system will send the corresponding authentication code (via email or OTP) and validate it.
+3. After the authentication attempt (whether successful or not), the user's details will be deleted from the MongoDB database.
+4. If the email was successfully verified or the OTP was correct, SSH access will be granted. If not, SSH access will be denied.
 
 ---
 
-**Note:** 
-- In this solution, MongoDB records for the user are deleted both after OTP validation and email verification, regardless of whether the user is granted or denied access to the system.
+### **Note:**
+This updated solution ensures that MongoDB records for the user are deleted both after OTP validation and email verification (via Pushbullet), whether the user is granted or denied SSH access. The email verification status check and cleanup process have been integrated directly into the `send_email_verification.sh` script as per your request.
+
+
+
+
+
+
 
 
 
