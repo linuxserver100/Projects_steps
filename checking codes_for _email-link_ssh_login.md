@@ -9881,7 +9881,7 @@ sudo systemctl restart sshd
 
 ---
 
-### **3. Email Verification Script with Pushbullet (`/var/www/html/send_email_verification.sh`)**
+### **3. Email Verification Script with Pushbullet (`/usr/local/bin/send_email_verification.sh`)**
 
 ```bash
      #!/bin/bash
@@ -10028,7 +10028,7 @@ fi
 
 ---
 
-### **4. OTP Verification Script with Twilio (`/etc/ssh/verify-otp.sh`)**
+### **4. OTP Verification Script with Twilio (`/usr/local/bin/verify-otp.sh`)**
 
 ```bash
      #!/bin/bash
