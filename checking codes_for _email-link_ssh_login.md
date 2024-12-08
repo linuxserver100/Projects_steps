@@ -9884,27 +9884,28 @@ sudo systemctl restart sshd
 ### **3. Email Verification Script with Pushbullet (`/var/www/html/send_email_verification.sh`)**
 
 ```bash
-#!/bin/bash
+     #!/bin/bash
 
 # MongoDB Atlas Connection URI
-MONGO_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority"
+MONGO_URI="mongodb+srv://Ansnesmajority"  # Make sure your URI is correct
+
 MONGO_DB="user_verification"
 MONGO_COLLECTION="users"
 
 # Predefined user email address
-USER_EMAIL="user@example.com"
+USER_EMAIL="admin@surfwebtech.site"
 
 # Generate a unique verification code
 VERIFICATION_CODE=$(uuidgen)
 
 # Store the email and verification code in MongoDB (unverified by default)
-mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.insert({email: '$USER_EMAIL', verification_code: '$VERIFICATION_CODE', verified: false, created_at: new Date()});"
+mongosh "$MONGO_URI" --eval "db.getCollection('$MONGO_COLLECTION').insertOne({email: '$USER_EMAIL', verification_code: '$VERIFICATION_CODE', verified: false})" > /dev/null 2>&1
 
 # Define the verification URL (points to the PHP script for verification)
-VERIFICATION_URL="http://your-server-ip/verify_email.php?email=$USER_EMAIL&code=$VERIFICATION_CODE"
+VERIFICATION_URL="http://18.205.162.93/verify_email.php?email=$USER_EMAIL&code=$VERIFICATION_CODE"
 
 # Pushbullet API key (replace with your actual API key)
-PUSHBULLET_API_KEY="your_pushbullet_api_key"
+PUSHBULLET_API_KEY="o.e95YnHTNPEdwSfdSk1ZYb0MoPk3VnR2R"
 
 # Pushbullet notification title and body
 TITLE="Email Verification"
@@ -9915,7 +9916,7 @@ curl -u $PUSHBULLET_API_KEY: \
     -d type="note" \
     -d title="$TITLE" \
     -d body="$BODY" \
-    https://api.pushbullet.com/v2/pushes
+    https://api.pushbullet.com/v2/pushes > /dev/null 2>&1
 
 # Check if the email was verified using MongoDB (check if verified flag is set to true)
 VERIFIED=false
@@ -9923,7 +9924,7 @@ VERIFIED=false
 # Wait for the user to verify the email (simulate the verification status by querying the database)
 while [ "$VERIFIED" == false ]; do
   # Fetch user verification status from the database
-  VERIFIED_STATUS=$(mongo --eval "db = connect('$MONGO_URI'); var user = db.$MONGO_COLLECTION.findOne({email: '$USER_EMAIL'}); print(user.verified);" | tail -n 1)
+  VERIFIED_STATUS=$(mongosh "$MONGO_URI" --eval "var user = db.getCollection('$MONGO_COLLECTION').findOne({email: '$USER_EMAIL'}); user.verified") > /dev/null 2>&1
 
   if [ "$VERIFIED_STATUS" == "true" ]; then
     VERIFIED=true
@@ -9935,14 +9936,94 @@ while [ "$VERIFIED" == false ]; do
 done
 
 # MongoDB Cleanup: Delete user data from MongoDB after verification attempt (whether successful or not)
-mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({email: '$USER_EMAIL'});"
+mongosh "$MONGO_URI" --eval "db.getCollection('$MONGO_COLLECTION').deleteOne({email: '$USER_EMAIL'})" > /dev/null 2>&1
 
 # Allow or deny SSH access based on verification status
 if [ "$VERIFIED" == true ]; then
-  exit 0  # Allow SSH access
+  exec /bin/bash # Allow SSH access
 else
   exit 1  # Deny SSH access
 fi
+    
+```
+
+######the given below script is to use when you are using user ssh login or deny with button actioned php script or using simple verification without button use above code then 
+
+
+```bash
+    
+
+#!/bin/bash  
+
+# MongoDB Atlas Connection URI 
+MONGO_URI="mongodb+srv://Ansmaasd:sbfority"
+
+# Ensure your URI is correct
+MONGO_DB="user_verification"
+MONGO_COLLECTION="users"
+
+# Predefined user email address
+USER_EMAIL="admin@surfwebtech.site"
+
+# Generate a unique verification code
+VERIFICATION_CODE=$(uuidgen)
+
+# Store the email and verification code in MongoDB (unverified by default)
+mongosh "$MONGO_URI" --eval "db.getCollection('$MONGO_COLLECTION').insertOne({email: '$USER_EMAIL', verification_code: '$VERIFICATION_CODE', verified: false})" > /dev/null 2>&1
+
+# Define the verification URL (points to the PHP script for verification)
+VERIFICATION_URL="http://18.205.162.93/verify_email.php?email=$USER_EMAIL&code=$VERIFICATION_CODE"
+
+# Pushbullet API key (replace with your actual API key)
+PUSHBULLET_API_KEY="o.e95YnHTNPEdwSfdSk1ZYb0MoPk3VnR2R"
+
+# Pushbullet notification title and body
+TITLE="Email Verification"
+BODY="Please click the following link to verify your email: $VERIFICATION_URL"
+
+# Send the verification link using Pushbullet
+curl -u $PUSHBULLET_API_KEY: \
+    -d type="note" \
+    -d title="$TITLE" \
+    -d body="$BODY" \
+    https://api.pushbullet.com/v2/pushes > /dev/null 2>&1
+
+# Check if the email was verified using MongoDB (check if verified flag is set to true)
+VERIFIED=false
+
+# Wait for the user to verify the email (simulate the verification status by querying the database)
+while [ "$VERIFIED" == false ]; do
+    # Fetch user verification status from the database
+    VERIFIED_STATUS=$(mongosh "$MONGO_URI" --eval "var user = db.getCollection('$MONGO_COLLECTION').findOne({email: '$USER_EMAIL'}); user.verified") > /dev/null 2>&1
+    
+    if [ "$VERIFIED_STATUS" == "true" ]; then
+        VERIFIED=true
+        echo "Email verified successfully."
+    else
+        # Check if the status is "deny"
+        if [ "$VERIFIED_STATUS" == "deny" ]; then
+            echo "Email verification denied. Denying SSH access."
+            # Cleanup the MongoDB collection by deleting user data
+            mongosh "$MONGO_URI" --eval "db.getCollection('$MONGO_COLLECTION').deleteOne({email: '$USER_EMAIL'})" > /dev/null 2>&1
+            # Exit with status 1 to deny SSH access
+            exit 1
+        else
+            echo "Waiting for email verification..."
+            sleep 5
+        fi
+    fi
+done
+
+# MongoDB Cleanup: Delete user data from MongoDB after verification attempt (whether successful or not)
+mongosh "$MONGO_URI" --eval "db.getCollection('$MONGO_COLLECTION').deleteOne({email: '$USER_EMAIL'})" > /dev/null 2>&1
+
+# Allow or deny SSH access based on verification status
+if [ "$VERIFIED" == true ]; then
+    exec /bin/bash  # Allow SSH access
+else
+    exit 1  # Deny SSH access
+fi   
+    
 ```
 
 ---
@@ -9950,15 +10031,17 @@ fi
 ### **4. OTP Verification Script with Twilio (`/etc/ssh/verify-otp.sh`)**
 
 ```bash
-#!/bin/bash
+     #!/bin/bash
 
 # Twilio Settings
-TWILIO_SID="your_twilio_sid"
-TWILIO_AUTH_TOKEN="your_twilio_auth_token"
-TWILIO_PHONE_NUMBER="your_twilio_phone_number"
+MONGO_URI="mongodb+srv://Ansnesority"
+TWILIO_SID="AC2eb3b07420ae170239"
+TWILIO_AUTH_TOKEN="c4b973bb0c45"
+TWILIO_PHONE_NUMBER="+1494390"
 
 # Predefined user phone number (for example, from a configuration file or environment variable)
-PHONE_NUMBER="+1234567890"  # Use your actual phone number here
+PHONE_NUMBER="+915966485651"  # Use your actual phone number here
+USER_EMAIL="user@example.com" # You need to define this or pass it in
 
 # Generate a random 6-digit OTP
 OTP=$(shuf -i 100000-999999 -n 1)
@@ -9977,16 +10060,20 @@ case $choice in
       --data-urlencode "Body=Your OTP is: $OTP" \
       --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
       --data-urlencode "To=$PHONE_NUMBER" \
-      -u "$TWILIO_SID:$TWILIO_AUTH_TOKEN"
+      -u "$TWILIO_SID:$TWILIO_AUTH_TOKEN" > /dev/null 2>&1
     echo "OTP sent via SMS."
     ;;
   2)
-    # Send OTP via Voice Call using Twilio API
+    # Send OTP via Voice Call using Twilio API with the Say verb
+    TWIML="<Response><Say voice='alice'>Your OTP is $OTP. Please enter this code to complete your verification.</Say></Response>"
+    
+    # Send the voice call with the OTP using the Twilio API
     curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_SID/Calls.json" \
-      --data-urlencode "Url=http://twimlets.com/echo?Twiml=<Response><Say>Your OTP is: $OTP</Say></Response>" \
       --data-urlencode "To=$PHONE_NUMBER" \
       --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-      -u "$TWILIO_SID:$TWILIO_AUTH_TOKEN"
+      --data-urlencode "Twiml=$TWIML" \
+      -u "$TWILIO_SID:$TWILIO_AUTH_TOKEN" > /dev/null 2>&1
+    
     echo "OTP sent via Voice Call."
     ;;
   *)
@@ -10006,16 +10093,34 @@ if [ "$input_otp" == "$OTP" ]; then
 else
   echo "Invalid OTP, access denied."
   access_granted=false
-fi
+fi  
 
 # MongoDB Cleanup: Delete user data from MongoDB after verification attempt (whether successful or not)
-mongo --eval "db = connect('$MONGO_URI'); db.$MONGO_COLLECTION.deleteOne({email: '$USER_EMAIL'});"
+# Make sure that MONGO_COLLECTION is defined elsewhere in your script or environment
+MONGO_COLLECTION="users"  # Define your MongoDB collection here
 
+# Ensure you're connecting to MongoDB properly
+if [ -z "$MONGO_URI" ]; then
+  echo "MongoDB URI is not set. Exiting."
+  exit 1
+fi
+
+if [ -z "$USER_EMAIL" ]; then
+  echo "User email is not set. Exiting."
+  exit 1
+fi
+
+# Ensure mongosh connects to MongoDB Atlas properly and perform the delete operation
+# We pass the full MONGO_URI as a parameter to mongosh, not just the host
+mongosh "$MONGO_URI" --eval "db.$MONGO_COLLECTION.deleteOne({email: '$USER_EMAIL'});" > /dev/null 2>&1
+
+# Exit based on OTP verification
 if [ "$access_granted" = true ]; then
-  exit 0  # Success, allow login
+  exec /bin/bash # Success, allow login
 else
   exit 1  # Deny login
 fi
+
 ```
 
 ---
@@ -10033,11 +10138,11 @@ read -p "Enter the number corresponding to your choice: " choice
 case $choice in
   1)
     # Use predefined email for Pushbullet verification
-    /var/www/html/send_email_verification.sh
+    /usr/local/bin/send_email_verification.sh
     ;;
   2)
     # Perform OTP verification via Twilio
-    /etc/ssh/verify-otp.sh
+    /usr/local/bin/verify-otp.sh
     ;;
   *)
     echo "Invalid choice, exiting."
@@ -10051,57 +10156,133 @@ esac
 ### **6. PHP Script for Email Verification (`/var/www/html/verify_email.php`)**
 
 ```php
-<?php
-require 'vendor/autoload.php'; // If using Composer to autoload MongoDB library
+   <?php
 
-// MongoDB Atlas Connection
-$mongoUri = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/user_verification?retryWrites=true&w=majority";
+// Include MongoDB client connection setup (ensure MongoDB client is properly configured)
+require 'vendor/autoload.php';
+
 try {
-    $client = new MongoDB\Client($mongoUri);
-} catch (Exception $e) {
-    die("Error: Could not connect to MongoDB. " . $e->getMessage());
-}
+    // Retrieve the email from the URL parameters
+    if (isset($_GET['email'])) {
+        $email = $_GET['email'];
+        
+        // Connect to MongoDB and get the collection
+        $client = new MongoDB\Client("mongodb://localhost:27017");
+        $database = $client->myDatabase; // Replace with your actual database name
+        $collection = $database->users; // Replace with your actual collection name
 
-// MongoDB Database and Collection
-$mongoDb = "user_verification";
-$mongoCollection = "users";
-$collection = $client->$mongoDb->$mongoCollection;
+        // Find the user by email
+        $user = $collection->findOne(['email' => $email]);
 
-// Get the email and verification code from the query string
-if (isset($_GET['email']) && isset($_GET['code'])) {
-    $email = $_GET['email'];
-    $code = $_GET['code'];
-
-    // Try to find the email and code document in MongoDB Atlas
-    try {
-        $document = $collection->findOne(['email' => $email, 'verification_code' => $code]);
-
-        if ($document) {
-            if ($document['verified'] == false) {
-                // Update the email to mark it as verified
-                $collection->updateOne(
+        if ($user) {
+            if ($user['verified'] === false) {
+                // Update the user record to mark the email as verified
+                $updateResult = $collection->updateOne(
                     ['email' => $email],
                     ['$set' => ['verified' => true]]
                 );
-                echo "Email verified successfully. You can now log
 
- in via SSH.";
+                if ($updateResult->getModifiedCount() > 0) {
+                    echo "Email verified successfully. You can now log in.";
+                } else {
+                    echo "Error: Failed to update verification status.";
+                }
             } else {
                 echo "This email has already been verified.";
             }
         } else {
-            echo "Invalid verification link or code. Access denied.";
+            echo "Error: User not found.";
         }
-    } catch (Exception $e) {
-        echo "Error: Failed to verify email. " . $e->getMessage();
-    }
 
-    // MongoDB Cleanup: Delete user data after email verification attempt
-    $collection->deleteOne(['email' => $email]);
-} else {
-    echo "Error: Invalid parameters.";
+    } else {
+        echo "Error: Missing email parameter in the URL.";
+    }
+} catch (Exception $e) {
+    echo "Error: Failed to verify email. " . $e->getMessage();
 }
+
 ?>
+    
+```
+#####Or use the script of php which facilitates user to click verify or deny button acoording to which database will be handled and uer would be allowed/denied to access ssh shell 
+
+
+```php
+      <?php
+
+// Include MongoDB client connection setup (ensure MongoDB client is properly configured)
+require 'vendor/autoload.php';
+
+try {
+    // Retrieve the email from the URL parameters
+    if (isset($_GET['email'])) {
+        $email = $_GET['email'];
+        
+        // Connect to MongoDB and get the collection
+        $client = new MongoDB\Client("mongodb://localhost:27017");
+        $database = $client->myDatabase; // Replace with your actual database name
+        $collection = $database->users; // Replace with your actual collection name
+
+        // Find the user by email
+        $user = $collection->findOne(['email' => $email]);
+
+        if ($user) {
+            if ($user['verified'] === false) {
+                // If the email is not verified, show verification options
+                echo "<h3>Email Verification</h3>";
+                echo "<p>Email: $email</p>";
+                echo "<form method='POST'>";
+                echo "<button type='submit' name='verify' value='true'>Verify</button>";
+                echo "<button type='submit' name='verify' value='deny'>Deny</button>";
+                echo "</form>";
+
+                // Handle form submission (Verify or Deny)
+                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                    if (isset($_POST['verify'])) {
+                        if ($_POST['verify'] === 'true') {
+                            // Update the user record to mark the email as verified
+                            $updateResult = $collection->updateOne(
+                                ['email' => $email],
+                                ['$set' => ['verified' => true]]
+                            );
+
+                            if ($updateResult->getModifiedCount() > 0) {
+                                echo "Email verified successfully. You can now log in.";
+                            } else {
+                                echo "Error: Failed to update verification status.";
+                            }
+                        } elseif ($_POST['verify'] === 'deny') {
+                            // Update the user record to mark the email as denied
+                            $updateResult = $collection->updateOne(
+                                ['email' => $email],
+                                ['$set' => ['verified' => 'deny']]
+                            );
+
+                            if ($updateResult->getModifiedCount() > 0) {
+                                echo "Email verification denied. You are not allowed to shell.";
+                            } else {
+                                echo "Error: Failed to update verification status to deny.";
+                            }
+                        }
+                    }
+                }
+
+            } else {
+                echo "This email has already been verified.";
+            }
+        } else {
+            echo "Error: User not found.";
+        }
+
+    } else {
+        echo "Error: Missing email parameter in the URL.";
+    }
+} catch (Exception $e) {
+    echo "Error: Failed to verify email. " . $e->getMessage();
+}
+
+?>
+    
 ```
 
 ---
