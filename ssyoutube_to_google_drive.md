@@ -56,6 +56,8 @@ To upload files to Google Drive, you need to set up Google API credentials.
 #### 2. JavaScript to Handle the Workflow
 
 ```javascript
+
+  
 const fs = require('fs');
 const axios = require('axios');
 const { google } = require('googleapis');
@@ -64,11 +66,11 @@ const fetch = require('node-fetch');
 const { OAuth2 } = google.auth;
 
 // YouTube Channel URL
-const CHANNEL_URL = 'https://www.youtube.com/c/YOUR_CHANNEL_NAME/videos';
+const CHANNEL_URL = 'https://www.youtube.com/@webdev-p2e/videos';
 const DOWNLOAD_URL = 'https://ssyoutube.com/en25/';
 
 // Google Drive OAuth2 Credentials
-const CREDENTIALS_PATH = './credentials.json';
+const CREDENTIALS_PATH = 'credentials.json';
 const TOKEN_PATH = './token.json';
 
 // Path to store the downloaded video
@@ -79,42 +81,82 @@ const oAuth2Client = new OAuth2();
 const drive = google.drive({ version: 'v3', auth: oAuth2Client });
 
 async function authenticateGoogleDrive() {
-  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
-  const { client_id, client_secret, redirect_uris } = credentials.installed;
-  oAuth2Client.setCredentials({
-    client_id,
-    client_secret,
-    redirect_uri: redirect_uris[0],
-  });
+  try {
+    // Load OAuth2 client credentials
+    if (!fs.existsSync(CREDENTIALS_PATH)) {
+      throw new Error('Credentials file not found.');
+    }
 
-  // Check for existing token
-  if (fs.existsSync(TOKEN_PATH)) {
-    const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
-    oAuth2Client.setCredentials(token);
-  } else {
-    // OAuth 2.0 authorization process if token not found
-    console.log('No credentials found, starting OAuth process...');
-    // Implement OAuth flow here...
+    const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
+    const { client_id, client_secret, redirect_uris } = credentials.installed || credentials.web;
+
+    if (!redirect_uris || !redirect_uris[0]) {
+      throw new Error('Redirect URIs are missing in the credentials file.');
+    }
+
+    oAuth2Client.setCredentials({
+      client_id,
+      client_secret,
+      redirect_uri: redirect_uris[0],
+    });
+
+    // Check for existing token
+    if (fs.existsSync(TOKEN_PATH)) {
+      const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+      oAuth2Client.setCredentials(token);
+    } else {
+      console.log('No credentials found. Please complete the OAuth process.');
+      // Implement OAuth flow here if token is not present
+    }
+  } catch (error) {
+    console.error('Error authenticating with Google Drive:', error);
+    process.exit(1);
+  }
+}
+
+async function extractVideoUrl(html) {
+  try {
+    // Implement logic to extract the latest video URL from the YouTube channel HTML
+    const regex = /\/watch\?v=([a-zA-Z0-9_-]+)/;
+    const match = html.match(regex);
+    if (!match || !match[0]) {
+      throw new Error('Failed to extract video URL from channel HTML.');
+    }
+    return `https://www.youtube.com${match[0]}`;
+  } catch (error) {
+    console.error('Error extracting video URL:', error);
+    throw error;
   }
 }
 
 async function downloadLatestVideo() {
   try {
-    // Fetch latest video URL from YouTube Channel (you may need to scrape this or use YouTube API)
     const response = await axios.get(CHANNEL_URL);
-    const videoUrl = extractVideoUrl(response.data); // Implement function to extract video URL
+    const videoUrl = await extractVideoUrl(response.data);
 
-    // Now use ssyoutube to download the video
+    // Use ssyoutube to generate the download URL
     const videoDownloadUrl = `${DOWNLOAD_URL}${videoUrl}`;
     const videoResponse = await fetch(videoDownloadUrl);
+
+    if (!videoResponse.ok) {
+      throw new Error(`Failed to download video. Status: ${videoResponse.status}`);
+    }
+
     const videoStream = videoResponse.body.pipe(fs.createWriteStream(VIDEO_PATH));
 
-    videoStream.on('finish', () => {
-      console.log('Video downloaded successfully.');
-      uploadToGoogleDrive();
+    return new Promise((resolve, reject) => {
+      videoStream.on('finish', () => {
+        console.log('Video downloaded successfully.');
+        resolve();
+      });
+      videoStream.on('error', (err) => {
+        console.error('Error writing video to file:', err);
+        reject(err);
+      });
     });
-  } catch (err) {
-    console.error('Error downloading video:', err);
+  } catch (error) {
+    console.error('Error downloading video:', error);
+    throw error;
   }
 }
 
@@ -122,7 +164,7 @@ async function uploadToGoogleDrive() {
   try {
     const fileMetadata = {
       name: 'latest_video.mp4',
-      parents: ['your_drive_folder_id'],
+      parents: ['1n8P1Yb7FDQYG9AWtcMtVNw6zOelSc-JQ'], // Update with your folder ID
     };
     const media = {
       body: fs.createReadStream(VIDEO_PATH),
@@ -135,18 +177,25 @@ async function uploadToGoogleDrive() {
     });
 
     console.log('Uploaded video to Google Drive with ID:', file.data.id);
-  } catch (err) {
-    console.error('Error uploading video:', err);
+  } catch (error) {
+    console.error('Error uploading video to Google Drive:', error);
+    throw error;
   }
 }
 
 async function run() {
-  await authenticateGoogleDrive();
-  await downloadLatestVideo();
+  try {
+    await authenticateGoogleDrive();
+    await downloadLatestVideo();
+    await uploadToGoogleDrive();
+  } catch (error) {
+    console.error('Error in the run process:', error);
+  }
 }
 
-// Run every 5 minutes using GitHub Actions
+// Run every 5 minutes using setInterval
 setInterval(run, 5 * 60 * 1000);
+
 ```
 
 ### Step 4: GitHub Actions Workflow
